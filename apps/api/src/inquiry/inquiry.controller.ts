@@ -75,8 +75,16 @@ export class InquiryController {
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales', 'purchase_manager', 'purchase')
   @FormalAnyModules('purchase', 'audit')
   @Get('audit-logs')
-  listAuditLogs() {
-    return this.inquiryService.listAuditLogs();
+  listAuditLogs(
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    return this.inquiryService.listAuditLogs(
+      readOptionalFormalSession({
+        'x-erp-role': role,
+        'x-erp-user': user,
+      }),
+    );
   }
 
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
@@ -115,6 +123,15 @@ export class InquiryController {
           productId?: number;
           productSku?: string;
           productStatus?: 'active' | 'inactive' | 'deleted';
+          productSizeCm?: string;
+          productMaterial?: string;
+          productPackaging?: string;
+          productWeightG?: number;
+          bulkLeadTimeDays?: string;
+          cartonQuantity?: number;
+          outerCartonSizeCm?: string;
+          outerCartonGrossWeightKg?: number;
+          remark?: string;
         }>;
       }>;
     },

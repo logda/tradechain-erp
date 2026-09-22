@@ -54,6 +54,15 @@ type InquiryDetail = {
       productId?: number;
       productSku?: string;
       productStatus?: 'active' | 'inactive' | 'deleted';
+      productSizeCm?: string;
+      productMaterial?: string;
+      productPackaging?: string;
+      productWeightG?: number;
+      bulkLeadTimeDays?: string;
+      cartonQuantity?: number;
+      outerCartonSizeCm?: string;
+      outerCartonGrossWeightKg?: number;
+      remark?: string;
     }>;
     confirmedSalePrice: number;
     confirmedSupplierQuoteIndex?: number;
@@ -404,6 +413,29 @@ function formatSupplierQuoteDisplay(
   return `${supplierLabel} - ${supplierQuote.purchasePrice}`;
 }
 
+function renderSupplierQuoteDetails(
+  supplierQuote: InquiryDetail['items'][number]['supplierQuotes'][number],
+) {
+  return (
+    <span style={{ display: 'grid', gap: '3px', color: '#475569', fontSize: '12px' }}>
+      <span>
+        尺寸：{supplierQuote.productSizeCm || '-'} cm；材质：
+        {supplierQuote.productMaterial || '-'}；包装：{supplierQuote.productPackaging || '-'}
+      </span>
+      <span>
+        产品重量：{supplierQuote.productWeightG ?? '-'} g；大货交期：
+        {supplierQuote.bulkLeadTimeDays || '-'} 天；装箱数：
+        {supplierQuote.cartonQuantity ?? '-'} 个
+      </span>
+      <span>
+        外箱尺寸：{supplierQuote.outerCartonSizeCm || '-'} cm；外箱毛重：
+        {supplierQuote.outerCartonGrossWeightKg ?? '-'} kg
+      </span>
+      <span>备注：{supplierQuote.remark || '-'}</span>
+    </span>
+  );
+}
+
 function formatConfirmedSupplier(item: InquiryDetail['items'][number]) {
   if (!item.confirmedSupplierName) {
     return '-';
@@ -679,7 +711,6 @@ export default async function AppFormalInquiryDetailPage({
 	                  <th style={headCellStyle}>最低比价供应数</th>
 	                  <th style={headCellStyle}>供应商 / 采购价</th>
                   <th style={headCellStyle}>最终供应商</th>
-                  <th style={headCellStyle}>老板确认售价</th>
                 </tr>
               </thead>
               <tbody>
@@ -694,8 +725,12 @@ export default async function AppFormalInquiryDetailPage({
                       {item.supplierQuotes.length > 0 ? (
                         <div style={{ display: 'grid', gap: '6px' }}>
                           {item.supplierQuotes.map((supplierQuote, index) => (
-                            <span key={item.itemId + '-' + index}>
-                              {formatSupplierQuoteDisplay(supplierQuote)}
+                            <span
+                              key={item.itemId + '-' + index}
+                              style={{ display: 'grid', gap: '5px' }}
+                            >
+                              <strong>{formatSupplierQuoteDisplay(supplierQuote)}</strong>
+                              {renderSupplierQuoteDetails(supplierQuote)}
                             </span>
                           ))}
                         </div>
@@ -704,7 +739,6 @@ export default async function AppFormalInquiryDetailPage({
                       )}
                     </td>
                     <td style={cellStyle}>{formatConfirmedSupplier(item)}</td>
-                    <td style={cellStyle}>{item.confirmedSalePrice}</td>
                   </tr>
                 ))}
               </tbody>

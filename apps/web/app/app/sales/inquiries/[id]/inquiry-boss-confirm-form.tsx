@@ -31,6 +31,15 @@ type InquiryBossConfirmFormProps = {
       productId?: number;
       productSku?: string;
       productStatus?: 'active' | 'inactive' | 'deleted';
+      productSizeCm?: string;
+      productMaterial?: string;
+      productPackaging?: string;
+      productWeightG?: number;
+      bulkLeadTimeDays?: string;
+      cartonQuantity?: number;
+      outerCartonSizeCm?: string;
+      outerCartonGrossWeightKg?: number;
+      remark?: string;
     }>;
     confirmedSalePrice: number;
     confirmedSupplierQuoteIndex?: number;
@@ -221,6 +230,30 @@ function formatSupplierChoice(
   return `${supplierLabel} / 采购价 ${supplierQuote.purchasePrice}`;
 }
 
+function SupplierQuoteDetails({
+  supplierQuote,
+}: {
+  supplierQuote: InquiryBossConfirmFormProps['items'][number]['supplierQuotes'][number];
+}) {
+  return (
+    <span style={{ display: 'grid', gap: '4px', color: '#475569', fontWeight: 500 }}>
+      <span>
+        尺寸 {supplierQuote.productSizeCm || '-'} cm · 材质 {supplierQuote.productMaterial || '-'} ·
+        包装 {supplierQuote.productPackaging || '-'}
+      </span>
+      <span>
+        产品重量 {supplierQuote.productWeightG ?? '-'} g · 大货交期{' '}
+        {supplierQuote.bulkLeadTimeDays || '-'} 天 · 装箱数 {supplierQuote.cartonQuantity ?? '-'} 个
+      </span>
+      <span>
+        外箱尺寸 {supplierQuote.outerCartonSizeCm || '-'} cm · 外箱毛重{' '}
+        {supplierQuote.outerCartonGrossWeightKg ?? '-'} kg
+      </span>
+      <span>备注 {supplierQuote.remark || '-'}</span>
+    </span>
+  );
+}
+
 export function InquiryBossConfirmForm({
   endpoint,
   label,
@@ -390,7 +423,10 @@ export function InquiryBossConfirmForm({
                       }))
                     }
                   />
-                  <span>{formatSupplierChoice(supplierQuote)}</span>
+                  <span style={{ display: 'grid', gap: '6px' }}>
+                    <span>{formatSupplierChoice(supplierQuote)}</span>
+                    <SupplierQuoteDetails supplierQuote={supplierQuote} />
+                  </span>
                   {supplierQuote.productSku ? (
                     <span style={{ color: '#64748b', fontWeight: 600 }}>
                       产品草稿 {supplierQuote.productSku}
@@ -413,6 +449,7 @@ export function InquiryBossConfirmForm({
               <label style={labelStyle}>
                 行 {item.lineNo} 最终售价
                 <input
+                  className="erp-control"
                   aria-label={`行 ${item.lineNo} 最终售价`}
                   type="number"
                   min="0"
@@ -447,7 +484,7 @@ export function InquiryBossConfirmForm({
       ) : null}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="submit" disabled={isSubmitting || items.length === 0} style={buttonStyle}>
+        <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting || items.length === 0}>
           {isSubmitting ? '确认中...' : label}
         </button>
       </div>

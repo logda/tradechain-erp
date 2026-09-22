@@ -52,6 +52,7 @@ describe('SalesOrderService runtime audit logs', () => {
           },
         ],
       });
+      await quoteService.approveDemand(quote.id, { role: 'boss', user: 'Mia' });
 
       const converted = await salesOrderService.convertConfirmedQuote({
         quoteOrderId: quote.id,

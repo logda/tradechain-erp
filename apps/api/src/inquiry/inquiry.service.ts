@@ -20,10 +20,12 @@ import { PrismaService } from '../storage/prisma.service';
 import { resolveStorageMode } from '../storage/storage-mode';
 import {
   resolveInquiryStore,
-  type InquiryAuditLogRecord,
 } from './inquiry.store';
 import { CounterpartyService } from '../counterparty/counterparty.service';
-import type { QuoteDetailRecord } from '../quote/quote.service';
+import {
+  QuoteService,
+  type QuoteDetailRecord,
+} from '../quote/quote.service';
 
 export type InquiryListQuery = {
   keyword?: string;
@@ -64,6 +66,15 @@ type SubmitPayload = {
       productId?: number;
       productSku?: string;
       productStatus?: 'active' | 'inactive' | 'deleted';
+      productSizeCm?: string;
+      productMaterial?: string;
+      productPackaging?: string;
+      productWeightG?: number;
+      bulkLeadTimeDays?: string;
+      cartonQuantity?: number;
+      outerCartonSizeCm?: string;
+      outerCartonGrossWeightKg?: number;
+      remark?: string;
     }>;
   }>;
 };
@@ -79,6 +90,15 @@ type InquiryItemMutationPayload = {
     productId?: number;
     productSku?: string;
     productStatus?: 'active' | 'inactive' | 'deleted';
+    productSizeCm?: string;
+    productMaterial?: string;
+    productPackaging?: string;
+    productWeightG?: number;
+    bulkLeadTimeDays?: string;
+    cartonQuantity?: number;
+    outerCartonSizeCm?: string;
+    outerCartonGrossWeightKg?: number;
+    remark?: string;
   }>;
   confirmedSalePrice?: number;
   selectedSupplierQuoteIndex?: number;
@@ -147,6 +167,15 @@ function normalizeSupplierQuotes(
     productId?: number;
     productSku?: string;
     productStatus?: 'active' | 'inactive' | 'deleted';
+    productSizeCm?: string;
+    productMaterial?: string;
+    productPackaging?: string;
+    productWeightG?: number;
+    bulkLeadTimeDays?: string;
+    cartonQuantity?: number;
+    outerCartonSizeCm?: string;
+    outerCartonGrossWeightKg?: number;
+    remark?: string;
   }>,
 ): InquirySupplierQuote[] {
   return value
@@ -172,6 +201,25 @@ function normalizeSupplierQuotes(
           item.productStatus === 'active'
             ? item.productStatus
             : undefined,
+        productSizeCm: item.productSizeCm?.trim() || undefined,
+        productMaterial: item.productMaterial?.trim() || undefined,
+        productPackaging: item.productPackaging?.trim() || undefined,
+        productWeightG:
+          Number.isFinite(Number(item.productWeightG)) && Number(item.productWeightG) >= 0
+            ? Number(item.productWeightG)
+            : undefined,
+        bulkLeadTimeDays: item.bulkLeadTimeDays?.trim() || undefined,
+        cartonQuantity:
+          Number.isInteger(Number(item.cartonQuantity)) && Number(item.cartonQuantity) > 0
+            ? Number(item.cartonQuantity)
+            : undefined,
+        outerCartonSizeCm: item.outerCartonSizeCm?.trim() || undefined,
+        outerCartonGrossWeightKg:
+          Number.isFinite(Number(item.outerCartonGrossWeightKg)) &&
+          Number(item.outerCartonGrossWeightKg) >= 0
+            ? Number(item.outerCartonGrossWeightKg)
+            : undefined,
+        remark: item.remark?.trim() || undefined,
       }),
     )
     .filter(
@@ -445,6 +493,100 @@ function countInquirySupplierQuotes(items: InquiryListItem['items']) {
   ).size;
 }
 
+function hideConfirmedSalePrices(
+  item: InquiryListItem,
+  session?: FormalSession,
+): InquiryListItem {
+  if (session?.role !== 'purchase' && session?.role !== 'purchase_manager') {
+    return item;
+  }
+
+  return {
+    ...item,
+    items: item.items.map((entry) => {
+      const visibleEntry = { ...entry };
+      delete (visibleEntry as { confirmedSalePrice?: number }).confirmedSalePrice;
+      return visibleEntry;
+    }),
+  };
+}
+
+function hideConfirmedSalePricesFromValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(hideConfirmedSalePricesFromValue);
+  }
+
+  if (typeof value !== 'object' || value === null) {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key !== 'confirmedSalePrice')
+      .map(([key, entry]) => [key, hideConfirmedSalePricesFromValue(entry)]),
+  );
+}
+
+function hideConfirmedSalePricesFromAuditLog<
+  T extends { beforeData: unknown; afterData: unknown },
+>(
+  log: T,
+  session?: FormalSession,
+): T {
+  if (session?.role !== 'purchase' && session?.role !== 'purchase_manager') {
+    return log;
+  }
+
+  return {
+    ...log,
+    beforeData: hideConfirmedSalePricesFromValue(log.beforeData),
+    afterData: hideConfirmedSalePricesFromValue(log.afterData),
+  } as T;
+}
+
+const inquiryProcurementSensitiveKeys = new Set([
+  'supplierQuotes',
+  'supplierId',
+  'supplierCode',
+  'supplierName',
+  'purchasePrice',
+  'confirmedSupplierQuoteIndex',
+  'confirmedSupplierId',
+  'confirmedSupplierCode',
+  'confirmedSupplierName',
+  'confirmedPurchasePrice',
+  'confirmedProductId',
+  'productSizeCm',
+  'productMaterial',
+  'productPackaging',
+  'productWeightG',
+  'bulkLeadTimeDays',
+  'cartonQuantity',
+  'outerCartonSizeCm',
+  'outerCartonGrossWeightKg',
+]);
+
+function hideProcurementFromValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(hideProcurementFromValue);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !inquiryProcurementSensitiveKeys.has(key))
+      .map(([key, entry]) => [key, hideProcurementFromValue(entry)]),
+  );
+}
+
+function sanitizeInquiryForSession<T>(value: T, session?: FormalSession): T {
+  if (session?.role === 'sales' || session?.role === 'sales_manager') {
+    return hideProcurementFromValue(value) as T;
+  }
+  return value;
+}
+
 function resolveLinkedQuoteStatus(status: InquiryStatus) {
   if (status === 'pending_boss_review') {
     return 'pending_boss_confirm';
@@ -547,12 +689,18 @@ function normalizeQuoteImageItems(value: unknown): QuoteImageSourceItem[] {
 @Injectable()
 export class InquiryService {
   private readonly store = resolveInquiryStore();
+  private readonly quoteService: QuoteService;
 
   constructor(
     @Optional()
     @Inject(PrismaService)
     private readonly prisma?: PrismaService,
-  ) {}
+    @Optional()
+    @Inject(QuoteService)
+    quoteService?: QuoteService,
+  ) {
+    this.quoteService = quoteService ?? new QuoteService(this.prisma);
+  }
 
   private shouldUsePrisma() {
     return resolveStorageMode() === 'prisma' && this.prisma;
@@ -689,7 +837,7 @@ export class InquiryService {
       throw new NotFoundException('询价单不存在');
     }
 
-    return matched;
+    return sanitizeInquiryForSession(hideConfirmedSalePrices(matched, session), session);
   }
 
   async list(
@@ -761,7 +909,11 @@ export class InquiryService {
     const start = (page - 1) * pageSize;
 
     return {
-      items: sorted.slice(start, start + pageSize),
+      items: sorted
+        .slice(start, start + pageSize)
+        .map((item) =>
+          sanitizeInquiryForSession(hideConfirmedSalePrices(item, session), session),
+        ),
       page,
       pageSize,
       total: filtered.length,
@@ -776,7 +928,7 @@ export class InquiryService {
     };
   }
 
-  async listAuditLogs() {
+  async listAuditLogs(session?: FormalSession) {
     if (this.shouldUsePrisma()) {
       const logs = (await this.prismaDb!.operationLog.findMany({
         where: { bizType: 'quote_inquiry' },
@@ -793,12 +945,18 @@ export class InquiryService {
       }>;
 
       return {
-        items: logs.map(toAuditLogRecord),
+        items: logs
+          .map(toAuditLogRecord)
+          .map((log) => hideConfirmedSalePricesFromAuditLog(log, session))
+          .map((log) => sanitizeInquiryForSession(log, session)),
       };
     }
 
     return {
-      items: this.store.listAuditLogs(),
+      items: this.store
+        .listAuditLogs()
+        .map((log) => hideConfirmedSalePricesFromAuditLog(log, session))
+        .map((log) => sanitizeInquiryForSession(log, session)),
     };
   }
 
@@ -895,6 +1053,31 @@ export class InquiryService {
       throw new NotFoundException('询价单不存在');
     }
 
+    if (existingStatus === 'boss_confirmed') {
+      const operatorName = session?.user?.trim() || '老板';
+      let linked: Awaited<ReturnType<QuoteService['completeInquiryPricing']>>;
+      if (this.shouldUsePrisma()) {
+        const apply = (db: PrismaInquiryDb) =>
+          this.quoteService.completeInquiryPricing(inquiry, operatorName, db);
+        const transaction = (this.prisma as unknown as {
+          $transaction?: <T>(callback: (db: PrismaInquiryDb) => Promise<T>) => Promise<T>;
+        })?.$transaction;
+        linked = (typeof transaction === 'function'
+          ? await transaction.call(this.prisma, apply)
+          : await apply(this.prismaDb!)) as Awaited<ReturnType<typeof apply>>;
+      } else {
+        linked = await this.quoteService.completeInquiryPricing(
+          inquiry,
+          operatorName,
+        );
+      }
+      return {
+        id: payload.inquiryId,
+        status: 'boss_confirmed' as const,
+        ...linked,
+      };
+    }
+
     if (inquiry.items.length === 0 || payload.items.length === 0) {
       throw new BadRequestException('询价单至少需要 1 行明细');
     }
@@ -939,13 +1122,36 @@ export class InquiryService {
     const operatorName = session?.user?.trim() || '老板';
 
     if (this.shouldUsePrisma()) {
-      await this.updateInquiryStatus({
-        inquiryId: payload.inquiryId,
-        status: 'boss_confirmed',
-        operationType: 'boss_confirm_inquiry',
-        items: payload.items,
-        operatorName,
-      });
+      const apply = async (db: PrismaInquiryDb) => {
+        const confirmedInquiry = await this.updateInquiryStatus(
+          {
+            inquiryId: payload.inquiryId,
+            status: 'boss_confirmed',
+            operationType: 'boss_confirm_inquiry',
+            items: payload.items,
+            operatorName,
+          },
+          db,
+        );
+        return confirmedInquiry
+          ? this.quoteService.completeInquiryPricing(
+              confirmedInquiry,
+              operatorName,
+              db,
+            )
+          : {};
+      };
+      const transaction = (this.prisma as unknown as {
+        $transaction?: <T>(callback: (db: PrismaInquiryDb) => Promise<T>) => Promise<T>;
+      })?.$transaction;
+      const linked = (typeof transaction === 'function'
+        ? await transaction.call(this.prisma, apply)
+        : await apply(this.prismaDb!)) as Awaited<ReturnType<typeof apply>>;
+      return {
+        id: payload.inquiryId,
+        status: 'boss_confirmed' as const,
+        ...linked,
+      };
     } else {
       const existing = this.store.getInquiry(payload.inquiryId);
       await this.updateRuntimeInquiryStatus(
@@ -968,9 +1174,18 @@ export class InquiryService {
       }
     }
 
+    const confirmedInquiry = await this.loadExistingInquiry(payload.inquiryId);
+    const linked = confirmedInquiry
+      ? await this.quoteService.completeInquiryPricing(
+          confirmedInquiry,
+          operatorName,
+        )
+      : {};
+
     return {
       id: payload.inquiryId,
-      status: 'boss_confirmed',
+      status: 'boss_confirmed' as const,
+      ...linked,
     };
   }
 
@@ -980,13 +1195,13 @@ export class InquiryService {
     operationType: string;
     items?: InquiryItemMutationPayload[];
     operatorName?: string;
-  }) {
-    const existing = (await this.prismaDb!.businessDocument.findUnique({
+  }, prismaDb = this.prismaDb) {
+    const existing = (await prismaDb!.businessDocument.findUnique({
       where: { id: BigInt(payload.inquiryId) },
     })) as PrismaBusinessDocumentRecord | null;
 
     if (!existing || existing.bizType !== 'quote_inquiry') {
-      return;
+      return undefined;
     }
 
     const existingPayload = toInquiryListItem(existing);
@@ -1004,7 +1219,7 @@ export class InquiryService {
       items: nextItems,
     };
     const nextPayload = nextPayloadBase;
-    const updated = (await this.prismaDb!.businessDocument.update({
+    const updated = (await prismaDb!.businessDocument.update({
       where: { id: existing.id },
       data: {
         status: payload.status,
@@ -1012,7 +1227,7 @@ export class InquiryService {
       },
     })) as PrismaBusinessDocumentRecord;
 
-    await this.prismaDb!.operationLog.create({
+    await prismaDb!.operationLog.create({
       data: {
         bizType: 'quote_inquiry',
         bizId: updated.id,
@@ -1023,7 +1238,8 @@ export class InquiryService {
       },
     });
 
-    await this.syncLinkedQuoteFromInquiry(nextPayload);
+    await this.syncLinkedQuoteFromInquiry(nextPayload, prismaDb);
+    return nextPayload;
   }
 
   private async updateRuntimeInquiryStatus(
@@ -1057,7 +1273,10 @@ export class InquiryService {
     await this.syncLinkedQuoteFromInquiry(nextPayload);
   }
 
-  private async syncLinkedQuoteFromInquiry(inquiry: InquiryListItem) {
+  private async syncLinkedQuoteFromInquiry(
+    inquiry: InquiryListItem,
+    prismaDb = this.prismaDb,
+  ) {
     const quoteId = inquiry.sourceQuoteId ?? inquiry.quoteOrderId;
 
     if (!Number.isInteger(quoteId) || quoteId <= 0) {
@@ -1068,7 +1287,7 @@ export class InquiryService {
     const nextProgress = resolveLinkedQuoteProgress(inquiry.status);
 
     if (this.shouldUsePrisma()) {
-      const quoteRecord = (await this.prismaDb!.businessDocument.findUnique({
+      const quoteRecord = (await prismaDb!.businessDocument.findUnique({
         where: { id: BigInt(quoteId) },
       })) as PrismaQuoteBusinessDocumentRecord | null;
 
@@ -1092,10 +1311,23 @@ export class InquiryService {
         ),
       };
 
-      await this.prismaDb!.businessDocument.update({
+      const isCandidateDemand =
+        nextPayload.documentType === 'demand' &&
+        (nextPayload.productSource === 'candidate' ||
+          nextPayload.items.some((item) => !item.productId));
+      const isRepricingQuote = quoteRecord.status === 'repricing_in_progress';
+      if (isCandidateDemand || isRepricingQuote) {
+        nextPayload.status = quoteRecord.status;
+        nextPayload.currentProgress =
+          inquiry.status === 'pending_boss_review'
+            ? '采购比价已提交，等待老板确认最终售价'
+            : nextPayload.currentProgress;
+      }
+
+      await prismaDb!.businessDocument.update({
         where: { id: quoteRecord.id },
         data: {
-          status: quoteStatus,
+          status: nextPayload.status,
           payload: nextPayload,
         },
       });
@@ -1109,11 +1341,22 @@ export class InquiryService {
       return;
     }
 
+    const isCandidateDemand =
+      quote.documentType === 'demand' &&
+      (quote.productSource === 'candidate' ||
+        quote.items.some((item) => !item.productId));
+    const isRepricingQuote = quote.status === 'repricing_in_progress';
+
     quoteStore.upsertQuote({
       ...quote,
-      status: quoteStatus,
+      status:
+        isCandidateDemand || isRepricingQuote ? quote.status : quoteStatus,
       submitMode: 'submit',
-      currentProgress: nextProgress,
+      currentProgress: isCandidateDemand || isRepricingQuote
+        ? inquiry.status === 'pending_boss_review'
+          ? '采购比价已提交，等待老板确认最终售价'
+          : quote.currentProgress
+        : nextProgress,
       linkedInquiryId: inquiry.id,
       linkedInquiryNo: inquiry.inquiryNo,
       linkedInquiryStatus: inquiry.status,

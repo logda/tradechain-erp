@@ -68,6 +68,7 @@ type ProductMasterDataClientProps = {
   canManageMasterData: boolean;
   updatedBy: string;
   codeRule: ProductCodeRule;
+  salesCodeRule: ProductCodeRule;
   supplierOptions: ProductSupplierOption[];
   actorAccessScopes?: {
     modules: string[];
@@ -96,50 +97,9 @@ const sectionCopyStyle = {
   lineHeight: 1.7,
 } satisfies React.CSSProperties;
 
-const filterPanelStyle = {
-  display: 'grid',
-  gap: '14px',
-  marginTop: '16px',
-  padding: '18px',
-  border: '1px solid #dbe4ee',
-  borderRadius: '18px',
-  background: 'rgba(248,250,252,0.9)',
-} satisfies React.CSSProperties;
-
 const filterHeadingStyle = {
   margin: 0,
   fontSize: '18px',
-} satisfies React.CSSProperties;
-
-const filterGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-  gap: '14px',
-} satisfies React.CSSProperties;
-
-const filterLabelStyle = {
-  display: 'grid',
-  gap: '8px',
-  fontSize: '13px',
-  color: '#334155',
-} satisfies React.CSSProperties;
-
-const filterInputStyle = {
-  border: '1px solid #cfd8e3',
-  borderRadius: '12px',
-  padding: '11px 12px',
-  background: '#ffffff',
-} satisfies React.CSSProperties;
-
-const filterButtonStyle = {
-  alignSelf: 'end',
-  border: '1px solid #0f172a',
-  borderRadius: '12px',
-  padding: '11px 14px',
-  background: '#0f172a',
-  color: '#ffffff',
-  fontWeight: 700,
-  cursor: 'pointer',
 } satisfies React.CSSProperties;
 
 const metricsGridStyle = {
@@ -381,6 +341,7 @@ export function ProductMasterDataClient({
   canManageMasterData,
   updatedBy,
   codeRule,
+  salesCodeRule,
   supplierOptions,
   actorAccessScopes,
   requestHeaders,
@@ -521,13 +482,15 @@ export function ProductMasterDataClient({
           这是单据明细行的基础，先把销售、采购和价格资料补齐，便于追溯、报价和采购复用。
         </p>
         <p style={{ color: '#94a3b8', lineHeight: 1.7 }}>
-          当前自动生成规则：{describeProductCodeRule(codeRule)}
+          销售编码自动生成规则：{describeProductCodeRule(salesCodeRule)}；采购编码自动生成规则：
+          {describeProductCodeRule(codeRule)}
         </p>
         {canManageMasterData ? (
           <CreateProductForm
             endpoint={`${apiBaseUrl}/products`}
             createdBy={updatedBy}
             codeRule={codeRule}
+            salesCodeRule={salesCodeRule}
             supplierOptions={supplierOptions}
             actorAccessScopes={actorAccessScopes}
             onSuccess={handleCreated}
@@ -539,10 +502,10 @@ export function ProductMasterDataClient({
 
       <section style={sectionStyle}>
         <h3 style={{ marginTop: 0 }}>商品列表</h3>
-        <form onSubmit={handleFilterSubmit} style={filterPanelStyle}>
+        <form onSubmit={handleFilterSubmit} className="erp-filter-form erp-card">
           <h4 style={filterHeadingStyle}>筛选视图 Product Filters</h4>
-          <div style={filterGridStyle}>
-            <label style={filterLabelStyle}>
+          <div className="erp-form-grid">
+            <label className="erp-form-field">
               关键词 Keyword
               <input
                 name="keyword"
@@ -550,10 +513,10 @@ export function ProductMasterDataClient({
                 onChange={(event) =>
                   setDraftQuery((current) => ({ ...current, keyword: event.target.value }))
                 }
-                style={filterInputStyle}
+                className="erp-control"
               />
             </label>
-            <label style={filterLabelStyle}>
+            <label className="erp-form-field">
               分类 Category
               <select
                 name="category"
@@ -561,7 +524,7 @@ export function ProductMasterDataClient({
                 onChange={(event) =>
                   setDraftQuery((current) => ({ ...current, category: event.target.value }))
                 }
-                style={filterInputStyle}
+                className="erp-control"
               >
                 <option value="">全部 All</option>
                 <option value="electronics">electronics / 电子类</option>
@@ -569,7 +532,7 @@ export function ProductMasterDataClient({
                 <option value="service">service / 服务类</option>
               </select>
             </label>
-            <label style={filterLabelStyle}>
+            <label className="erp-form-field">
               状态 Status
               <select
                 name="status"
@@ -577,14 +540,14 @@ export function ProductMasterDataClient({
                 onChange={(event) =>
                   setDraftQuery((current) => ({ ...current, status: event.target.value }))
                 }
-                style={filterInputStyle}
+                className="erp-control"
               >
                 <option value="">全部 All</option>
                 <option value="active">active / 启用</option>
                 <option value="inactive">inactive / 停用</option>
               </select>
             </label>
-            <label style={filterLabelStyle}>
+            <label className="erp-form-field">
               筛选产品阶段 Product Stage Filter
               <select
                 name="productStage"
@@ -595,14 +558,14 @@ export function ProductMasterDataClient({
                     productStage: event.target.value,
                   }))
                 }
-                style={filterInputStyle}
+                className="erp-control"
               >
                 <option value="">全部 All</option>
                 <option value="formal">formal / 正式阶段筛选</option>
                 <option value="quote_candidate">quote_candidate / 候选阶段筛选</option>
               </select>
             </label>
-            <label style={filterLabelStyle}>
+            <label className="erp-form-field">
               筛选定价方式 Pricing Mode Filter
               <select
                 name="pricingMode"
@@ -613,7 +576,7 @@ export function ProductMasterDataClient({
                     pricingMode: event.target.value,
                   }))
                 }
-                style={filterInputStyle}
+                className="erp-control"
               >
                 <option value="">全部 All</option>
                 <option value="fixed">fixed / 固定模式筛选</option>
@@ -621,8 +584,8 @@ export function ProductMasterDataClient({
               </select>
             </label>
             <button
+              className="erp-button erp-button--primary"
               type="button"
-              style={filterButtonStyle}
               disabled={isLoading}
               onClick={(event) => applyFilters(event.currentTarget.form)}
             >

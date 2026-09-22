@@ -12,6 +12,15 @@ export type InquirySupplierQuote = {
   productId?: number;
   productSku?: string;
   productStatus?: 'active' | 'inactive' | 'deleted';
+  productSizeCm?: string;
+  productMaterial?: string;
+  productPackaging?: string;
+  productWeightG?: number;
+  bulkLeadTimeDays?: string;
+  cartonQuantity?: number;
+  outerCartonSizeCm?: string;
+  outerCartonGrossWeightKg?: number;
+  remark?: string;
 };
 
 export type InquiryListItem = {

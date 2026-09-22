@@ -4,8 +4,11 @@ import { canViewFormalModule, resolveDemoSession } from '../../_lib/demo-session
 import { canUseFormalMasterDataActions } from '../../_lib/formal-access';
 import {
   defaultProductCodeRule,
+  defaultProductCodeRuleSet,
+  defaultSalesProductCodeRule,
   normalizeProductCodeRule,
   type ProductCodeRule,
+  type ProductCodeRuleSet,
 } from '../products/product-code-rule';
 import { ProductCodeRulePageClient } from './product-code-rule-page-client';
 import { buildFormalApiRequestHeaders } from '../../_lib/formal-api-request-headers';
@@ -46,21 +49,41 @@ function hasValidProductCodeRuleResponse(value: unknown): value is ProductCodeRu
 
 async function loadProductCodeRule(session: ReturnType<typeof resolveDemoSession>) {
   try {
-    const response = await fetch(`${getProductApiBaseUrl()}/products/code-rule`, {
+    const response = await fetch(`${getProductApiBaseUrl()}/products/code-rules`, {
       cache: 'no-store',
       headers: buildFormalApiRequestHeaders(session),
     });
 
     if (!response.ok) {
-      return defaultProductCodeRule;
+      return defaultProductCodeRuleSet;
     }
 
     const result = (await response.json().catch(() => null)) as unknown;
-    return hasValidProductCodeRuleResponse(result)
-      ? normalizeProductCodeRule(result)
-      : defaultProductCodeRule;
+    if (
+      typeof result === 'object' &&
+      result !== null &&
+      hasValidProductCodeRuleResponse((result as Partial<ProductCodeRuleSet>).purchase) &&
+      hasValidProductCodeRuleResponse((result as Partial<ProductCodeRuleSet>).sales)
+    ) {
+      return {
+        purchase: normalizeProductCodeRule(
+          (result as ProductCodeRuleSet).purchase,
+        ),
+        sales: normalizeProductCodeRule((result as ProductCodeRuleSet).sales),
+      };
+    }
+    if (hasValidProductCodeRuleResponse(result)) {
+      return {
+        purchase: normalizeProductCodeRule(result),
+        sales: defaultSalesProductCodeRule,
+      };
+    }
+    return defaultProductCodeRuleSet;
   } catch {
-    return defaultProductCodeRule;
+    return {
+      purchase: defaultProductCodeRule,
+      sales: defaultSalesProductCodeRule,
+    };
   }
 }
 
@@ -88,7 +111,7 @@ export default async function AppProductCodeRulePage({
     );
   }
 
-  const rule = await loadProductCodeRule(session);
+  const rules = await loadProductCodeRule(session);
 
   return (
     <AppShell
@@ -102,8 +125,8 @@ export default async function AppProductCodeRulePage({
         </Link>
         {canManageMasterData ? (
           <ProductCodeRulePageClient
-            endpoint={`${getProductApiBaseUrl()}/products/code-rule`}
-            initialRule={rule}
+            endpointBase={`${getProductApiBaseUrl()}/products/code-rules`}
+            initialRules={rules}
             updatedBy={session.user}
             actorAccessScopes={session.accessScopes}
           />

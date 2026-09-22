@@ -62,13 +62,13 @@ export function CounterpartyFilterForm({
   }
 
   return (
-    <form action={pathname} style={filterStyle}>
+    <form action={pathname} className="erp-filter-form erp-form-grid">
       <input type="hidden" name="role" value={role} />
       <input type="hidden" name="user" value={user} />
       <input type="hidden" name="page" value="1" />
       <input type="hidden" name="pageSize" value={String(pageSize)} />
       {access ? <input type="hidden" name="access" value={access} /> : null}
-      <label style={labelStyle}>
+      <label className="erp-form-field">
         类型 Type
         <select
           aria-label="筛选类型 Type"
@@ -77,7 +77,7 @@ export function CounterpartyFilterForm({
           onChange={(event) =>
             handleTypeChange(event.target.value as CounterpartyType | '')
           }
-          style={inputStyle}
+          className="erp-control"
         >
           {!defaultType ? <option value="">全部 All</option> : null}
           {allowedTypes.map((type) => (
@@ -91,37 +91,37 @@ export function CounterpartyFilterForm({
           ))}
         </select>
       </label>
-      <label style={labelStyle}>
+      <label className="erp-form-field">
         状态 Status
         <select
           aria-label="筛选状态 Status"
           name="status"
           defaultValue={initialStatus ?? ''}
-          style={inputStyle}
+          className="erp-control"
         >
           <option value="">全部 All</option>
           <option value="active">active / 启用</option>
           <option value="inactive">inactive / 停用</option>
         </select>
       </label>
-      <label style={labelStyle}>
+      <label className="erp-form-field">
         关键词 Keyword
         <input
           aria-label="筛选关键词 Keyword"
           name="keyword"
           defaultValue={initialKeyword ?? ''}
           placeholder="编码/名称/中文名称/区域/联系人/电话/地址/银行/备注"
-          style={inputStyle}
+          className="erp-control"
         />
       </label>
-      <label style={labelStyle}>
+      <label className="erp-form-field">
         归属人 Owner
         <select
           aria-label="筛选归属人 Owner"
           name="ownerName"
           value={selectedOwner}
           onChange={(event) => setSelectedOwner(event.target.value)}
-          style={inputStyle}
+          className="erp-control"
         >
           <option value="">全部 All</option>
           {filteredOwnerOptions.map((item) => (
@@ -131,9 +131,11 @@ export function CounterpartyFilterForm({
           ))}
         </select>
       </label>
-      <button type="submit" style={filterButtonStyle}>
+      <div className="erp-filter-actions">
+      <button className="erp-button erp-button--primary" type="submit">
         查询
       </button>
+      </div>
     </form>
   );
 }

@@ -19,6 +19,8 @@ describe('QuoteService persistence', () => {
   it('persists created quote details across service instances', async () => {
     const firstService = new QuoteService();
     const created = await firstService.create({
+      documentType: 'quote',
+      productSource: 'existing',
       customerId: 1001,
       salesUserId: 2001,
       sourceCode: 'expo',
@@ -44,6 +46,8 @@ describe('QuoteService persistence', () => {
       customerId: 1001,
       salesUserId: 2001,
       requirements: 'Need 800 units with custom packaging',
+      documentType: 'quote',
+      productSource: 'existing',
     });
     expect(detail.items).toHaveLength(1);
   });

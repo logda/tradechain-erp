@@ -328,12 +328,12 @@ describe('SalesOrderService prisma document storage', () => {
           id: 77n,
           bizType: 'quote',
           docNo: 'Q202607080077',
-          status: 'boss_confirmed',
+          status: 'customer_accepted',
           ownerUserId: 2001n,
           counterpartyId: 1001n,
           payload: {
             id: 77,
-            status: 'boss_confirmed',
+            status: 'customer_accepted',
             currentVersionNo: 2,
           },
           createdBy: 2001n,
@@ -376,5 +376,82 @@ describe('SalesOrderService prisma document storage', () => {
     ).rejects.toThrow('A confirmed quote version can only create one sales order');
 
     expect(prismaMock.businessDocument.create).not.toHaveBeenCalled();
+  });
+
+  it('converts an accepted quote and updates linked records in one Prisma transaction', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const createdAt = new Date('2026-07-13T14:00:00.000Z');
+    const sourceQuote = {
+      id: 77n,
+      bizType: 'quote',
+      docNo: 'Q202607080077',
+      status: 'customer_accepted',
+      ownerUserId: 2001n,
+      counterpartyId: 1001n,
+      payload: {
+        id: 77,
+        quoteNo: 'Q202607080077',
+        documentType: 'quote',
+        status: 'customer_accepted',
+        currentVersionNo: 2,
+        items: [],
+      },
+      createdBy: 2001n,
+      createdAt,
+      updatedAt: createdAt,
+    };
+    const txMock = {
+      businessDocument: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue(sourceQuote),
+        create: jest.fn().mockResolvedValue({ id: 111n, createdAt }),
+        update: jest.fn().mockImplementation(({ where, data }) =>
+          Promise.resolve({ ...sourceQuote, ...data, id: where.id }),
+        ),
+      },
+      operationLog: {
+        create: jest.fn().mockResolvedValue({ id: 1n }),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    const prismaMock = {
+      businessDocument: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue(sourceQuote),
+      },
+      $transaction: jest.fn(async (callback: (db: typeof txMock) => Promise<unknown>) =>
+        callback(txMock),
+      ),
+    };
+    const documentCodeRuleService = {
+      generateCustomerOrderNo: jest.fn().mockResolvedValue('CO202607130001'),
+    };
+    const service = new SalesOrderService(
+      prismaMock as unknown as PrismaService,
+      documentCodeRuleService as never,
+    );
+
+    const converted = await service.convertConfirmedQuote({
+      quoteOrderId: 77,
+      quoteVersionNo: 2,
+      sourceQuoteNo: 'Q202607080077',
+      customerId: 1001,
+      customerName: 'Acme Trading',
+      createdBy: 2001,
+      quoteConfirmed: true,
+      items: [],
+    });
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(txMock.businessDocument.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ bizType: 'sales_order' }),
+    });
+    expect(txMock.businessDocument.update).toHaveBeenCalledTimes(2);
+    expect(txMock.operationLog.create).toHaveBeenCalledTimes(2);
+    expect(converted).toMatchObject({
+      id: 111,
+      sourceQuoteOrderId: 77,
+      sourceQuoteVersionNo: 2,
+    });
   });
 });

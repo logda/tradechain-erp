@@ -13,10 +13,10 @@ import {
   type PurchaseCodeMode,
 } from './create-product-form';
 import {
-  defaultProductCodeRule,
-  describeProductCodeRule,
+  defaultProductCodeRuleSet,
   normalizeProductCodeRule,
   type ProductCodeRule,
+  type ProductCodeRuleSet,
 } from './product-code-rule';
 import {
   fallbackProductSupplierOptions,
@@ -351,23 +351,28 @@ async function loadAuditLogs(session: ReturnType<typeof resolveDemoSession>) {
   }
 }
 
-async function loadProductCodeRule(session: ReturnType<typeof resolveDemoSession>) {
+async function loadProductCodeRules(session: ReturnType<typeof resolveDemoSession>) {
   try {
-    const response = await fetch(`${getProductApiBaseUrl()}/products/code-rule`, {
+    const response = await fetch(`${getProductApiBaseUrl()}/products/code-rules`, {
       cache: 'no-store',
       headers: buildFormalApiRequestHeaders(session),
     });
 
     if (!response.ok) {
-      return defaultProductCodeRule;
+      return defaultProductCodeRuleSet;
     }
 
-    const result = (await response.json().catch(() => null)) as unknown;
-    return hasValidProductCodeRuleResponse(result)
-      ? normalizeProductCodeRule(result)
-      : defaultProductCodeRule;
+    const result = (await response.json().catch(() => null)) as Partial<ProductCodeRuleSet> | null;
+    return result &&
+      hasValidProductCodeRuleResponse(result.purchase) &&
+      hasValidProductCodeRuleResponse(result.sales)
+      ? {
+          purchase: normalizeProductCodeRule(result.purchase),
+          sales: normalizeProductCodeRule(result.sales),
+        }
+      : defaultProductCodeRuleSet;
   } catch {
-    return defaultProductCodeRule;
+    return defaultProductCodeRuleSet;
   }
 }
 
@@ -508,10 +513,10 @@ export default async function AppProductsPage({
     page: normalizePageNumber(readParam(resolvedSearchParams.page), 1),
     pageSize: normalizePageNumber(readParam(resolvedSearchParams.pageSize), 20),
   };
-  const [result, auditLogs, productCodeRule, supplierOptions] = await Promise.all([
+  const [result, auditLogs, productCodeRules, supplierOptions] = await Promise.all([
     loadProducts(query, session),
     loadAuditLogs(session),
-    loadProductCodeRule(session),
+    loadProductCodeRules(session),
     loadSupplierOptions(session),
   ]);
   const productResult =
@@ -559,7 +564,8 @@ export default async function AppProductsPage({
         initialQuery={query}
         canManageMasterData={canManageMasterData}
         updatedBy={session.user}
-        codeRule={productCodeRule}
+        codeRule={productCodeRules.purchase}
+        salesCodeRule={productCodeRules.sales}
         supplierOptions={supplierOptions}
         actorAccessScopes={session.accessScopes}
         requestHeaders={masterDataRequestHeaders}

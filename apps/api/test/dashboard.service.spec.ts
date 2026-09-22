@@ -63,7 +63,7 @@ describe('BossDashboardService', () => {
         requirements: 'Runtime dashboard quote',
         items: [
           {
-            productId: 501,
+            productId: 1,
             sku: 'SKU-LED-001',
             productName: '智能 LED 灯带',
             unit: 'set',

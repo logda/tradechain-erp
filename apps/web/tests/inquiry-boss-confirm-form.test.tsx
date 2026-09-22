@@ -59,6 +59,15 @@ describe('InquiryBossConfirmForm', () => {
                 supplierCode: 'SUP-BRAVO',
                 supplierName: 'Bravo Industrial',
                 purchasePrice: 19.6,
+                productSizeCm: '40×30×10',
+                productMaterial: 'PVC镭射',
+                productPackaging: 'OPP袋/个',
+                productWeightG: 180,
+                bulkLeadTimeDays: '7-10',
+                cartonQuantity: 120,
+                outerCartonSizeCm: '55×45×40',
+                outerCartonGrossWeightKg: 24,
+                remark: '打样信息统一填写在备注',
               },
               {
                 supplierSourceMode: 'manual',
@@ -75,10 +84,19 @@ describe('InquiryBossConfirmForm', () => {
     expect(screen.getByRole('heading', { name: '老板确认' })).toBeInTheDocument();
     expect(screen.getByText('报价单 Q202607080002')).toBeInTheDocument();
     expect(screen.getByText('客户：博瑞零售 / Bravo Retail')).toBeInTheDocument();
+    expect(screen.getByText(/尺寸 40×30×10 cm/)).toBeInTheDocument();
+    expect(screen.getByText(/材质 PVC镭射/)).toBeInTheDocument();
+    expect(screen.getByText(/大货交期 7-10 天/)).toBeInTheDocument();
+    expect(screen.getByText(/备注 打样信息统一填写在备注/)).toBeInTheDocument();
+    expect(screen.getByText(/^尺寸 - cm/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('行 1 最终售价'), {
       target: { value: '28.8' },
     });
+    expect(screen.getByLabelText('行 1 最终售价')).toHaveClass('erp-control');
+    expect(screen.getByRole('button', { name: '老板确认' })).toHaveClass(
+      'erp-button--primary',
+    );
     fireEvent.click(screen.getByRole('button', { name: '老板确认' }));
 
     await waitFor(() => {

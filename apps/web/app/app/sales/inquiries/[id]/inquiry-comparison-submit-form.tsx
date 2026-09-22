@@ -28,6 +28,15 @@ type InquiryComparisonSubmitFormProps = {
       productId?: number;
       productSku?: string;
       productStatus?: 'active' | 'inactive' | 'deleted';
+      productSizeCm?: string;
+      productMaterial?: string;
+      productPackaging?: string;
+      productWeightG?: number;
+      bulkLeadTimeDays?: string;
+      cartonQuantity?: number;
+      outerCartonSizeCm?: string;
+      outerCartonGrossWeightKg?: number;
+      remark?: string;
     }>;
   }>;
 };
@@ -46,6 +55,15 @@ type DraftSupplierQuote = {
   productId?: number;
   productSku?: string;
   productStatus?: 'active' | 'inactive' | 'deleted';
+  productSizeCm: string;
+  productMaterial: string;
+  productPackaging: string;
+  productWeightG: string;
+  bulkLeadTimeDays: string;
+  cartonQuantity: string;
+  outerCartonSizeCm: string;
+  outerCartonGrossWeightKg: string;
+  remark: string;
 };
 
 const initialState: FormState = {
@@ -187,7 +205,37 @@ function createDraftSupplierQuote(
     productId: supplierQuote?.productId,
     productSku: supplierQuote?.productSku,
     productStatus: supplierQuote?.productStatus,
+    productSizeCm: supplierQuote?.productSizeCm ?? '',
+    productMaterial: supplierQuote?.productMaterial ?? '',
+    productPackaging: supplierQuote?.productPackaging ?? '',
+    productWeightG:
+      supplierQuote?.productWeightG !== undefined ? String(supplierQuote.productWeightG) : '',
+    bulkLeadTimeDays: supplierQuote?.bulkLeadTimeDays ?? '',
+    cartonQuantity:
+      supplierQuote?.cartonQuantity !== undefined ? String(supplierQuote.cartonQuantity) : '',
+    outerCartonSizeCm: supplierQuote?.outerCartonSizeCm ?? '',
+    outerCartonGrossWeightKg:
+      supplierQuote?.outerCartonGrossWeightKg !== undefined
+        ? String(supplierQuote.outerCartonGrossWeightKg)
+        : '',
+    remark: supplierQuote?.remark ?? '',
   };
+}
+
+function readOptionalText(value: string) {
+  return value.trim() || undefined;
+}
+
+function readOptionalNumber(value: string) {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function readOptionalPositiveInteger(value: string) {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function buildInitialDraftValues(
@@ -228,6 +276,19 @@ export function InquiryComparisonSubmitForm({
   const [draftValues, setDraftValues] = useState<Record<number, DraftSupplierQuote[]>>(() =>
     buildInitialDraftValues(items),
   );
+
+  function updateDraftEntry(
+    itemId: number,
+    entryKey: string,
+    patch: Partial<DraftSupplierQuote>,
+  ) {
+    setDraftValues((current) => ({
+      ...current,
+      [itemId]: (current[itemId] ?? []).map((quoteEntry) =>
+        quoteEntry.key === entryKey ? { ...quoteEntry, ...patch } : quoteEntry,
+      ),
+    }));
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -270,6 +331,15 @@ export function InquiryComparisonSubmitForm({
               productId: entry.productId,
               productSku: entry.productSku,
               productStatus: entry.productStatus,
+              productSizeCm: readOptionalText(entry.productSizeCm),
+              productMaterial: readOptionalText(entry.productMaterial),
+              productPackaging: readOptionalText(entry.productPackaging),
+              productWeightG: readOptionalNumber(entry.productWeightG),
+              bulkLeadTimeDays: readOptionalText(entry.bulkLeadTimeDays),
+              cartonQuantity: readOptionalPositiveInteger(entry.cartonQuantity),
+              outerCartonSizeCm: readOptionalText(entry.outerCartonSizeCm),
+              outerCartonGrossWeightKg: readOptionalNumber(entry.outerCartonGrossWeightKg),
+              remark: readOptionalText(entry.remark),
             };
           }
 
@@ -285,6 +355,15 @@ export function InquiryComparisonSubmitForm({
             productId: entry.productId,
             productSku: entry.productSku,
             productStatus: entry.productStatus,
+            productSizeCm: readOptionalText(entry.productSizeCm),
+            productMaterial: readOptionalText(entry.productMaterial),
+            productPackaging: readOptionalText(entry.productPackaging),
+            productWeightG: readOptionalNumber(entry.productWeightG),
+            bulkLeadTimeDays: readOptionalText(entry.bulkLeadTimeDays),
+            cartonQuantity: readOptionalPositiveInteger(entry.cartonQuantity),
+            outerCartonSizeCm: readOptionalText(entry.outerCartonSizeCm),
+            outerCartonGrossWeightKg: readOptionalNumber(entry.outerCartonGrossWeightKg),
+            remark: readOptionalText(entry.remark),
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -458,6 +537,7 @@ export function InquiryComparisonSubmitForm({
                       <label style={labelStyle}>
                         {`行 ${item.lineNo} 采购价 ${supplierIndex}`}
                         <input
+                          className="erp-control"
                           type="number"
                           min="0"
                           step="0.01"
@@ -480,6 +560,116 @@ export function InquiryComparisonSubmitForm({
                         />
                       </label>
                     </div>
+
+                    <div style={entryGridStyle}>
+                      <label style={labelStyle}>
+                        {`行 ${item.lineNo} 产品尺寸 ${supplierIndex}`}
+                        <input
+                          aria-label={`行 ${item.lineNo} 产品尺寸 ${supplierIndex}`}
+                          value={entry.productSizeCm}
+                          onChange={(event) => updateDraftEntry(item.itemId, entry.key, { productSizeCm: event.target.value })}
+                          placeholder="例如 40×30×10"
+                          style={inputStyle}
+                        />
+                        <span style={entryMetaStyle}>单位：cm</span>
+                      </label>
+                      <label style={labelStyle}>
+                        {`行 ${item.lineNo} 产品材质 ${supplierIndex}`}
+                        <input
+                          aria-label={`行 ${item.lineNo} 产品材质 ${supplierIndex}`}
+                          value={entry.productMaterial}
+                          onChange={(event) => updateDraftEntry(item.itemId, entry.key, { productMaterial: event.target.value })}
+                          placeholder="请输入产品材质"
+                          style={inputStyle}
+                        />
+                      </label>
+                      <label style={labelStyle}>
+                        {`行 ${item.lineNo} 产品包装 ${supplierIndex}`}
+                        <input
+                          aria-label={`行 ${item.lineNo} 产品包装 ${supplierIndex}`}
+                          value={entry.productPackaging}
+                          onChange={(event) => updateDraftEntry(item.itemId, entry.key, { productPackaging: event.target.value })}
+                          placeholder="请输入产品包装"
+                          style={inputStyle}
+                        />
+                      </label>
+                      <label style={labelStyle}>
+                        {`行 ${item.lineNo} 产品重量 ${supplierIndex}`}
+                        <input
+                          aria-label={`行 ${item.lineNo} 产品重量 ${supplierIndex}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={entry.productWeightG}
+                          onChange={(event) => updateDraftEntry(item.itemId, entry.key, { productWeightG: event.target.value })}
+                          placeholder="请输入产品重量"
+                          style={inputStyle}
+                        />
+                        <span style={entryMetaStyle}>单位：g</span>
+                      </label>
+                      <label style={labelStyle}>
+                        {`行 ${item.lineNo} 大货交期 ${supplierIndex}`}
+                        <input
+                          aria-label={`行 ${item.lineNo} 大货交期 ${supplierIndex}`}
+                          value={entry.bulkLeadTimeDays}
+                          onChange={(event) => updateDraftEntry(item.itemId, entry.key, { bulkLeadTimeDays: event.target.value })}
+                          placeholder="例如 7-10"
+                          style={inputStyle}
+                        />
+                        <span style={entryMetaStyle}>单位：天，支持范围</span>
+                      </label>
+                      <label style={labelStyle}>
+                        {`行 ${item.lineNo} 装箱数 ${supplierIndex}`}
+                        <input
+                          aria-label={`行 ${item.lineNo} 装箱数 ${supplierIndex}`}
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={entry.cartonQuantity}
+                          onChange={(event) => updateDraftEntry(item.itemId, entry.key, { cartonQuantity: event.target.value })}
+                          placeholder="请输入装箱数"
+                          style={inputStyle}
+                        />
+                        <span style={entryMetaStyle}>单位：个</span>
+                      </label>
+                      <label style={labelStyle}>
+                        {`行 ${item.lineNo} 外箱尺寸 ${supplierIndex}`}
+                        <input
+                          aria-label={`行 ${item.lineNo} 外箱尺寸 ${supplierIndex}`}
+                          value={entry.outerCartonSizeCm}
+                          onChange={(event) => updateDraftEntry(item.itemId, entry.key, { outerCartonSizeCm: event.target.value })}
+                          placeholder="例如 55×45×40"
+                          style={inputStyle}
+                        />
+                        <span style={entryMetaStyle}>单位：cm</span>
+                      </label>
+                      <label style={labelStyle}>
+                        {`行 ${item.lineNo} 外箱毛重 ${supplierIndex}`}
+                        <input
+                          aria-label={`行 ${item.lineNo} 外箱毛重 ${supplierIndex}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={entry.outerCartonGrossWeightKg}
+                          onChange={(event) => updateDraftEntry(item.itemId, entry.key, { outerCartonGrossWeightKg: event.target.value })}
+                          placeholder="请输入外箱毛重"
+                          style={inputStyle}
+                        />
+                        <span style={entryMetaStyle}>单位：kg</span>
+                      </label>
+                    </div>
+
+                    <label style={labelStyle}>
+                      {`行 ${item.lineNo} 备注 ${supplierIndex}`}
+                      <textarea
+                        aria-label={`行 ${item.lineNo} 备注 ${supplierIndex}`}
+                        value={entry.remark}
+                        onChange={(event) => updateDraftEntry(item.itemId, entry.key, { remark: event.target.value })}
+                        placeholder="打样时间、打样费用等内容统一填写在这里"
+                        rows={3}
+                        style={{ ...inputStyle, resize: 'vertical' }}
+                      />
+                    </label>
 
                     {entry.supplierSourceMode === 'counterparty' && currentOption ? (
                       <p style={entryMetaStyle}>{`已选：${currentOption.code} / ${currentOption.name}`}</p>
@@ -544,7 +734,7 @@ export function InquiryComparisonSubmitForm({
           询价单没有可提交的明细，请先确认来源报价明细。
         </p>
       ) : null}
-      <button type="submit" disabled={isSubmitting || items.length === 0} style={buttonStyle}>
+      <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting || items.length === 0}>
         {isSubmitting ? '提交中...' : label}
       </button>
     </form>

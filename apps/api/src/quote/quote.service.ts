@@ -26,11 +26,21 @@ import {
   isFormalAdminOrBoss,
   matchesFormalUser,
 } from '../auth/formal-session';
+import {
+  assertCustomerFeedbackTransition,
+  assertQuoteCreationCombination,
+  resolveSubmittedStatus,
+  resolveWorkflowProgress,
+  type CustomerFeedbackResult,
+  type ProductSource,
+  type QuoteVersionSnapshot,
+} from './quote-workflow';
 
 export type QuoteDetailRecord = {
   id: number;
   quoteNo: string;
   documentType?: 'demand' | 'quote';
+  productSource?: ProductSource;
   status: string;
   currentVersionNo: number;
   customerId: number;
@@ -50,6 +60,23 @@ export type QuoteDetailRecord = {
   linkedInquiryId?: number;
   linkedInquiryNo?: string;
   linkedInquiryStatus?: string;
+  sourceDemandId?: number;
+  sourceDemandNo?: string;
+  linkedQuoteId?: number;
+  linkedQuoteNo?: string;
+  linkedInquiryVersionNo?: number;
+  versionHistory?: QuoteVersionSnapshot[];
+  customerFeedbackResult?: CustomerFeedbackResult;
+  customerFeedbackRemark?: string;
+  customerFeedbackBy?: string;
+  customerFeedbackAt?: string;
+  customerFeedbackHistory?: Array<{
+    versionNo: number;
+    result: CustomerFeedbackResult;
+    remark?: string;
+    operatedBy: string;
+    operatedAt: string;
+  }>;
   linkedSalesOrderId?: number;
   linkedSalesOrderNo?: string;
   createdAt: string;
@@ -58,7 +85,8 @@ export type QuoteDetailRecord = {
 
 export type QuoteLineItem = {
   lineNo: number;
-  productId: number;
+  productSource?: ProductSource;
+  productId?: number;
   sku: string;
   productName: string;
   productCategory?: string;
@@ -111,7 +139,7 @@ type PrismaOperationLogRecord = {
   createdAt: Date;
 };
 
-type PrismaQuoteDb = PrismaService & {
+type PrismaQuoteDb = {
   businessDocument: {
     findMany: (...args: any[]) => Promise<unknown>;
     findUnique: (...args: any[]) => Promise<unknown>;
@@ -122,6 +150,7 @@ type PrismaQuoteDb = PrismaService & {
     create: (...args: any[]) => Promise<unknown>;
     findMany: (...args: any[]) => Promise<unknown>;
   };
+  product?: unknown;
 };
 
 function normalizeQuoteSourceType(value: string | undefined) {
@@ -162,6 +191,11 @@ function resolveCurrentProgress(detail: {
   currentVersionNo?: number;
   documentType?: 'demand' | 'quote';
 }) {
+  const explicitProgress = resolveWorkflowProgress(detail.status);
+  if (explicitProgress !== detail.status) {
+    return explicitProgress;
+  }
+
   if (detail.status === 'draft') {
     return '草稿';
   }
@@ -226,75 +260,168 @@ function isDemandEligibleProductRecord(product: {
   return (
     product.status === 'active' &&
     product.productStage === 'formal' &&
-    Number(product.defaultSalePrice) > 0 &&
-    Number(product.defaultPurchasePrice) > 0
+    Number(product.defaultSalePrice) > 0
   );
 }
 
-async function validateDemandQuoteItems(
-  dto: CreateQuoteDto,
-  documentType: 'demand' | 'quote',
-  productService: ProductService,
-) {
-  if (documentType !== 'demand') {
-    return;
+function normalizeQuoteProductSource(
+  dto: Pick<CreateQuoteDto, 'productSource' | 'items'>,
+  fallback?: ProductSource,
+): ProductSource {
+  if (dto.productSource === 'existing' || dto.productSource === 'candidate') {
+    return dto.productSource;
   }
 
   const items = dto.items ?? [];
+  const hasCandidate = items.some((item) => Boolean(item.createCandidateProduct));
+  const hasExisting = items.some((item) => !item.createCandidateProduct);
+  if (hasCandidate && hasExisting) {
+    throw new BadRequestException('同一张单据不能混用产品库产品和手填新产品');
+  }
+
+  if (hasCandidate) {
+    return 'candidate';
+  }
+
+  return fallback ?? 'existing';
+}
+
+function normalizeStoredProductSource(
+  record: Pick<QuoteDetailRecord, 'productSource' | 'items'>,
+): ProductSource {
+  if (record.productSource === 'existing' || record.productSource === 'candidate') {
+    return record.productSource;
+  }
+
+  return record.items.some((item) => !item.productId) ? 'candidate' : 'existing';
+}
+
+function resolveProductSalePrice(
+  product: Awaited<ReturnType<ProductService['findById']>>,
+  quantity: number,
+) {
+  if (!product) {
+    return 0;
+  }
+
+  const matchedTier = [...(product.salePriceTiers ?? [])]
+    .filter(
+      (tier) =>
+        tier.status === 'active' &&
+        Number.isFinite(Number(tier.minQuantity)) &&
+        Number.isFinite(Number(tier.salePrice)) &&
+        quantity >= Number(tier.minQuantity),
+    )
+    .sort((left, right) => Number(right.minQuantity) - Number(left.minQuantity))[0];
+
+  return matchedTier ? Number(matchedTier.salePrice) : Number(product.defaultSalePrice);
+}
+
+const procurementSensitiveKeys = new Set([
+  'supplierQuotes',
+  'supplierId',
+  'supplierCode',
+  'supplierName',
+  'purchasePrice',
+  'confirmedSupplierQuoteIndex',
+  'confirmedSupplierId',
+  'confirmedSupplierCode',
+  'confirmedSupplierName',
+  'confirmedPurchasePrice',
+  'productSizeCm',
+  'productMaterial',
+  'productPackaging',
+  'productWeightG',
+  'bulkLeadTimeDays',
+  'cartonQuantity',
+  'outerCartonSizeCm',
+  'outerCartonGrossWeightKg',
+]);
+
+function sanitizeProcurementValueForSales(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeProcurementValueForSales);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !procurementSensitiveKeys.has(key))
+      .map(([key, entry]) => [key, sanitizeProcurementValueForSales(entry)]),
+  );
+}
+
+function hideProcurementDetailsFromSales(
+  detail: QuoteDetailRecord,
+  session?: FormalSession,
+): QuoteDetailRecord {
+  if (session?.role !== 'sales' && session?.role !== 'sales_manager') {
+    return detail;
+  }
+
+  return sanitizeProcurementValueForSales(detail) as QuoteDetailRecord;
+}
+
+async function validateQuoteItems(
+  dto: CreateQuoteDto,
+  documentType: 'demand' | 'quote',
+  productSource: ProductSource,
+  productService: ProductService,
+) {
+  const items = dto.items ?? [];
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
+    if (productSource === 'candidate') {
+      if (!item.createCandidateProduct) {
+        throw new BadRequestException(`第 ${index + 1} 行必须填写新产品需求`);
+      }
+      continue;
+    }
+
     if (item.createCandidateProduct) {
-      throw new BadRequestException(`需求单第 ${index + 1} 行只能选择产品库产品`);
+      throw new BadRequestException(`第 ${index + 1} 行必须选择产品库产品`);
     }
 
     const productId = Number(item.productId);
     if (!Number.isInteger(productId) || productId <= 0) {
-      throw new BadRequestException(`需求单第 ${index + 1} 行必须选择产品库产品`);
+      throw new BadRequestException(`第 ${index + 1} 行必须选择产品库产品`);
     }
 
     const product = await productService.findById(productId);
-    if (!product || !isDemandEligibleProductRecord(product)) {
+    if (!product || product.status !== 'active') {
+      throw new BadRequestException(`第 ${index + 1} 行只能选择产品库中的有效产品`);
+    }
+
+    if (documentType === 'demand' && !isDemandEligibleProductRecord(product)) {
       throw new BadRequestException(
-        `需求单第 ${index + 1} 行产品必须在产品库中为已启用的正式产品，且同时具备采购价和销售价`,
+        `需求单第 ${index + 1} 行产品必须在产品库中为已启用且有销售价的正式产品`,
       );
     }
   }
 }
 
-function buildSubmittedQuoteRecord(
+function buildSubmittedRecord(
   quote: QuoteDetailRecord,
-  inquiry: {
-    id: number;
-    inquiryNo: string;
-  },
+  inquiry?: { id: number; inquiryNo: string },
 ): QuoteDetailRecord {
+  const documentType = quote.documentType ?? inferQuoteDocumentTypeFromDocNo(quote.quoteNo);
+  const productSource = normalizeStoredProductSource(quote);
+  const status = resolveSubmittedStatus({ documentType, productSource });
   return {
     ...quote,
+    documentType,
+    productSource,
     submitMode: 'submit',
-    status: 'submitted',
+    status,
     currentProgress: resolveCurrentProgress({
-      status: 'submitted',
+      status,
       currentVersionNo: quote.currentVersionNo,
+      documentType,
     }),
-    linkedInquiryId: inquiry.id,
-    linkedInquiryNo: inquiry.inquiryNo,
-    linkedInquiryStatus: 'pending_inquiry',
-  };
-}
-
-function buildSubmittedDemandQuoteRecord(quote: QuoteDetailRecord): QuoteDetailRecord {
-  return {
-    ...quote,
-    submitMode: 'submit',
-    status: 'submitted',
-    currentProgress: resolveCurrentProgress({
-      status: 'submitted',
-      currentVersionNo: quote.currentVersionNo,
-      documentType: 'demand',
-    }),
-    linkedInquiryId: undefined,
-    linkedInquiryNo: undefined,
-    linkedInquiryStatus: undefined,
+    linkedInquiryId: inquiry?.id,
+    linkedInquiryNo: inquiry?.inquiryNo,
+    linkedInquiryStatus: inquiry ? 'pending_inquiry' : undefined,
   };
 }
 
@@ -364,7 +491,8 @@ function withLinkedInquiry(
 
 function buildQuoteLineItem(
   item: {
-    productId: number;
+    productSource: ProductSource;
+    productId?: number;
     sku: string;
     productName: string;
     productCategory?: string;
@@ -381,7 +509,8 @@ function buildQuoteLineItem(
 
   return {
     lineNo: index + 1,
-    productId: Number(item.productId),
+    productSource: item.productSource,
+    ...(item.productId ? { productId: Number(item.productId) } : {}),
     sku: item.sku,
     productName: item.productName,
     productCategory: item.productCategory,
@@ -398,13 +527,16 @@ function buildQuoteLineItem(
 
 async function normalizeQuoteItems(
   dto: CreateQuoteDto,
+  documentType: 'demand' | 'quote',
+  productSource: ProductSource,
+  productService: ProductService,
 ): Promise<QuoteLineItem[]> {
   return Promise.all((dto.items ?? []).map(async (item, index) => {
-    if (item.createCandidateProduct) {
+    if (productSource === 'candidate' && item.createCandidateProduct) {
       const candidate = item.createCandidateProduct;
       return buildQuoteLineItem(
         {
-          productId: 0,
+          productSource,
           sku: candidate.sku,
           productName: candidate.nameCn,
           productCategory: candidate.category,
@@ -418,15 +550,29 @@ async function normalizeQuoteItems(
       );
     }
 
+    const product = await productService.findById(Number(item.productId));
+    if (!product) {
+      throw new BadRequestException(`第 ${index + 1} 行产品不存在`);
+    }
+    const quantity = Number(item.quantity);
+    const salePrice =
+      documentType === 'demand'
+        ? resolveProductSalePrice(product, quantity)
+        : Number.isFinite(Number(item.salePrice))
+          ? Number(item.salePrice)
+          : Number(product.defaultSalePrice);
+
     return buildQuoteLineItem(
       {
-        productId: Number(item.productId),
-        sku: item.sku ?? '',
-        productName: item.productName ?? '',
-        unit: item.unit ?? '',
-        quantity: Number(item.quantity),
+        productSource,
+        productId: product.id,
+        sku: product.sku,
+        productName: product.nameCn,
+        productCategory: product.category,
+        unit: product.unit,
+        quantity,
         targetPrice: item.targetPrice != null ? Number(item.targetPrice) : undefined,
-        salePrice: Number(item.salePrice),
+        salePrice,
         imageUrls: item.imageUrls,
       },
       index,
@@ -465,6 +611,7 @@ function toQuoteListItem(item: QuoteDetailRecord): QuoteListItem {
 
   return {
     documentType,
+    productSource: normalizeStoredProductSource(item),
     moduleLabel: resolveQuoteModuleLabel(documentType),
     quoteId: item.id,
     docNo: item.quoteNo,
@@ -482,7 +629,14 @@ function toQuoteListItem(item: QuoteDetailRecord): QuoteListItem {
     inquiryDate: item.inquiryDate,
     destination: item.destination,
     requirements: item.requirements,
-    bossConfirmed: item.status === 'boss_confirmed',
+    bossConfirmed:
+      item.status === 'boss_confirmed' ||
+      item.status === 'boss_approved' ||
+      item.status === 'pending_customer_feedback' ||
+      item.status === 'customer_accepted' ||
+      item.status === 'customer_no_follow_up' ||
+      item.status === 'repricing_in_progress' ||
+      item.status === 'ordered',
     linkedSalesOrderId: item.linkedSalesOrderId,
     linkedSalesOrderNo: item.linkedSalesOrderNo,
     createdAt: item.createdAt,
@@ -525,12 +679,21 @@ function toAuditLogRecord(record: PrismaOperationLogRecord) {
 function toQuoteDocumentPayload(
   record: PrismaBusinessDocumentRecord,
 ): QuoteDetailRecord {
+  const items = Array.isArray(record.payload.items)
+    ? record.payload.items.map((item) => ({ ...item }))
+    : [];
+  const productSource = normalizeStoredProductSource({
+    productSource: record.payload.productSource,
+    items,
+  });
+
   return {
     ...record.payload,
     id: Number(record.payload.id ?? record.id),
     quoteNo: record.docNo,
     documentType:
       record.payload.documentType ?? inferQuoteDocumentTypeFromDocNo(record.docNo),
+    productSource,
     status: record.status,
     currentVersionNo: record.payload.currentVersionNo ?? 1,
     customerId: Number(record.payload.customerId),
@@ -560,9 +723,10 @@ function toQuoteDocumentPayload(
     linkedSalesOrderId: record.payload.linkedSalesOrderId,
     linkedSalesOrderNo: record.payload.linkedSalesOrderNo,
     createdAt: record.payload.createdAt ?? record.createdAt.toISOString(),
-    items: Array.isArray(record.payload.items)
-      ? record.payload.items.map((item) => ({ ...item }))
-      : [],
+    items: items.map((item) => ({
+      ...item,
+      productSource: item.productSource ?? productSource,
+    })),
   };
 }
 
@@ -823,12 +987,21 @@ export class QuoteService {
     const counterpartyService = new CounterpartyService(this.prisma);
     const submitMode = resolveQuoteSubmitMode(dto.submitMode);
     const documentType = normalizeQuoteDocumentType(dto.documentType);
-    await validateDemandQuoteItems(
+    const productSource = normalizeQuoteProductSource(dto);
+    assertQuoteCreationCombination({ documentType, productSource });
+    const productService = new ProductService(this.prisma);
+    await validateQuoteItems(
       dto,
       documentType,
-      new ProductService(this.prisma),
+      productSource,
+      productService,
     );
-    const items = await normalizeQuoteItems(dto);
+    const items = await normalizeQuoteItems(
+      dto,
+      documentType,
+      productSource,
+      productService,
+    );
     const salesUserName = resolveSalesUserName(dto.salesUserId);
     const quoteCustomer = await resolveQuoteCustomer(dto, counterpartyService);
     const quoteNo =
@@ -869,6 +1042,7 @@ export class QuoteService {
         id: 0,
         quoteNo,
         documentType,
+        productSource,
         status: 'draft',
         currentVersionNo: 1,
         customerId,
@@ -925,29 +1099,6 @@ export class QuoteService {
         },
       });
 
-      if (submitMode === 'submit' && documentType === 'demand') {
-        const submitted = buildSubmittedDemandQuoteRecord(finalPayload);
-        await this.prismaDb!.businessDocument.update({
-          where: { id: updated.id },
-          data: {
-            status: 'submitted',
-            payload: submitted,
-          },
-        });
-        await this.prismaDb!.operationLog.create({
-          data: {
-            bizType: 'quote',
-            bizId: updated.id,
-            operationType: 'submit_demand_quote',
-            operatorId: BigInt(dto.salesUserId),
-            beforeData: finalPayload,
-            afterData: submitted,
-          },
-        });
-
-        return submitted;
-      }
-
       if (submitMode === 'submit') {
         return this.submitDraftQuote(finalPayload.id);
       }
@@ -963,6 +1114,7 @@ export class QuoteService {
       id,
       quoteNo,
       documentType,
+      productSource,
       status: 'draft',
       currentVersionNo: 1,
       customerId,
@@ -995,21 +1147,6 @@ export class QuoteService {
       afterData: created,
     });
 
-    if (submitMode === 'submit' && documentType === 'demand') {
-      const submitted = buildSubmittedDemandQuoteRecord(created);
-      this.store.upsertQuote(submitted);
-      this.store.recordAuditLog({
-        bizType: 'quote',
-        bizId: submitted.id,
-        operationType: 'submit_demand_quote',
-        operatorId: submitted.salesUserId,
-        beforeData: created,
-        afterData: submitted,
-      });
-
-      return submitted;
-    }
-
     if (submitMode === 'submit') {
       return this.submitDraftQuote(created.id);
     }
@@ -1017,9 +1154,12 @@ export class QuoteService {
     return created;
   }
 
-  private async createInquiryFromQuote(quote: QuoteDetailRecord) {
+  private async createInquiryFromQuote(
+    quote: QuoteDetailRecord,
+    prismaDb = this.prismaDb,
+  ) {
     if (this.shouldUsePrisma()) {
-      const created = (await this.prismaDb!.businessDocument.create({
+      const created = (await prismaDb!.businessDocument.create({
         data: {
           bizType: 'quote_inquiry',
           docNo: `PENDING-INQUIRY-${Date.now()}`,
@@ -1038,7 +1178,7 @@ export class QuoteService {
         inquiryNo,
       );
 
-      await this.prismaDb!.businessDocument.update({
+      await prismaDb!.businessDocument.update({
         where: { id: created.id },
         data: {
           docNo: inquiryNo,
@@ -1046,7 +1186,7 @@ export class QuoteService {
         },
       });
 
-      await this.prismaDb!.operationLog.create({
+      await prismaDb!.operationLog.create({
         data: {
           bizType: 'quote_inquiry',
           bizId: created.id,
@@ -1096,38 +1236,32 @@ export class QuoteService {
 
       const detail = toQuoteDocumentPayload(created);
       if (detail.status !== 'draft') {
+        if (
+          detail.status === 'pending_boss_approval' ||
+          detail.status === 'inquiry_in_progress' ||
+          detail.status === 'pending_boss_price_confirmation'
+        ) {
+          return detail;
+        }
         throw new BadRequestException('只有草稿报价单才能正式提交');
       }
-      if (detail.documentType === 'demand') {
-        const submitted = buildSubmittedDemandQuoteRecord(detail);
-        await this.prismaDb!.businessDocument.update({
-          where: { id: created.id },
-          data: {
-            status: 'submitted',
-            payload: submitted,
-          },
-        });
-        await this.prismaDb!.operationLog.create({
-          data: {
-            bizType: 'quote',
-            bizId: created.id,
-            operationType: 'submit_demand_quote',
-            operatorId: BigInt(detail.salesUserId),
-            beforeData: detail,
-            afterData: submitted,
-          },
-        });
-
-        return submitted;
-      }
-
-      const inquiryResult = await this.createInquiryFromQuote(detail);
-      const submitted = buildSubmittedQuoteRecord(detail, inquiryResult);
+      const productSource = normalizeStoredProductSource(detail);
+      const inquiryResult =
+        detail.documentType === 'demand' && productSource === 'candidate'
+          ? await this.createInquiryFromQuote(detail)
+          : undefined;
+      const submitted = buildSubmittedRecord(detail, inquiryResult);
+      const operationType =
+        detail.documentType === 'demand'
+          ? productSource === 'candidate'
+            ? 'submit_candidate_demand_for_inquiry'
+            : 'submit_demand_for_boss_approval'
+          : 'submit_quote_for_boss_price_confirmation';
 
       await this.prismaDb!.businessDocument.update({
         where: { id: created.id },
         data: {
-          status: 'submitted',
+          status: submitted.status,
           payload: submitted,
         },
       });
@@ -1135,7 +1269,7 @@ export class QuoteService {
         data: {
           bizType: 'quote',
           bizId: created.id,
-          operationType: 'submit_quote',
+          operationType,
           operatorId: BigInt(detail.salesUserId),
           beforeData: detail,
           afterData: submitted,
@@ -1151,31 +1285,34 @@ export class QuoteService {
     }
 
     if (created.status !== 'draft') {
+      if (
+        created.status === 'pending_boss_approval' ||
+        created.status === 'inquiry_in_progress' ||
+        created.status === 'pending_boss_price_confirmation'
+      ) {
+        return this.getDetail(id);
+      }
       throw new BadRequestException('只有草稿报价单才能正式提交');
     }
-    if ((created.documentType ?? 'quote') === 'demand') {
-      const submitted = buildSubmittedDemandQuoteRecord(created);
-      this.store.upsertQuote(submitted);
-      this.store.recordAuditLog({
-        bizType: 'quote',
-        bizId: submitted.id,
-        operationType: 'submit_demand_quote',
-        operatorId: submitted.salesUserId,
-        beforeData: created,
-        afterData: submitted,
-      });
-
-      return submitted;
-    }
-
-    const inquiryResult = await this.createInquiryFromQuote(created);
-    const submitted = buildSubmittedQuoteRecord(created, inquiryResult);
+    const documentType = created.documentType ?? inferQuoteDocumentTypeFromDocNo(created.quoteNo);
+    const productSource = normalizeStoredProductSource(created);
+    const inquiryResult =
+      documentType === 'demand' && productSource === 'candidate'
+        ? await this.createInquiryFromQuote(created)
+        : undefined;
+    const submitted = buildSubmittedRecord(created, inquiryResult);
+    const operationType =
+      documentType === 'demand'
+        ? productSource === 'candidate'
+          ? 'submit_candidate_demand_for_inquiry'
+          : 'submit_demand_for_boss_approval'
+        : 'submit_quote_for_boss_price_confirmation';
 
     this.store.upsertQuote(submitted);
     this.store.recordAuditLog({
       bizType: 'quote',
       bizId: submitted.id,
-      operationType: 'submit_quote',
+      operationType,
       operatorId: submitted.salesUserId,
       beforeData: created,
       afterData: submitted,
@@ -1184,10 +1321,577 @@ export class QuoteService {
     return submitted;
   }
 
+  async approveDemand(id: number, session?: FormalSession) {
+    const existing = await this.getDetail(id);
+    const productSource = normalizeStoredProductSource(existing);
+    if (existing.documentType !== 'demand' || productSource !== 'existing') {
+      throw new BadRequestException('只有产品库产品需求单可以执行需求审批');
+    }
+    if (existing.status === 'boss_approved') {
+      return existing;
+    }
+    if (existing.status !== 'pending_boss_approval') {
+      throw new BadRequestException('当前需求单状态不能审批');
+    }
+
+    const approved: QuoteDetailRecord = {
+      ...existing,
+      status: 'boss_approved',
+      currentProgress: resolveWorkflowProgress('boss_approved'),
+    };
+    await this.saveQuoteTransition({
+      before: existing,
+      after: approved,
+      operationType: 'approve_demand',
+      operatorId: existing.salesUserId,
+      operatorName: session?.user,
+    });
+    return approved;
+  }
+
+  async confirmQuotePrice(
+    id: number,
+    payload: {
+      currentVersionNo: number;
+      items: Array<{ lineNo: number; confirmedSalePrice: number }>;
+    },
+    session?: FormalSession,
+  ) {
+    const existing = await this.getDetail(id);
+    if (
+      existing.documentType !== 'quote' ||
+      normalizeStoredProductSource(existing) !== 'existing'
+    ) {
+      throw new BadRequestException('只有产品库报价单可以直接确认售价');
+    }
+    if (existing.status === 'pending_customer_feedback') {
+      return existing;
+    }
+    if (existing.status !== 'pending_boss_price_confirmation') {
+      throw new BadRequestException('当前报价单状态不能确认售价');
+    }
+    if (Number(payload.currentVersionNo) !== existing.currentVersionNo) {
+      throw new BadRequestException('报价版本已更新，请刷新后重试');
+    }
+
+    const priceByLine = new Map(
+      (payload.items ?? []).map((item) => [
+        Number(item.lineNo),
+        Number(item.confirmedSalePrice),
+      ]),
+    );
+    const items = existing.items.map((item) => {
+      const confirmedSalePrice = priceByLine.get(item.lineNo);
+      if (!confirmedSalePrice || !Number.isFinite(confirmedSalePrice) || confirmedSalePrice <= 0) {
+        throw new BadRequestException(`第 ${item.lineNo} 行最终售价必须大于 0`);
+      }
+      return {
+        ...item,
+        confirmedSalePrice,
+        salePrice: confirmedSalePrice,
+        amount: Number((item.quantity * confirmedSalePrice).toFixed(2)),
+      };
+    });
+
+    const confirmed: QuoteDetailRecord = {
+      ...existing,
+      status: 'pending_customer_feedback',
+      currentProgress: resolveWorkflowProgress('pending_customer_feedback'),
+      items,
+      versionHistory: [
+        {
+          versionNo: existing.currentVersionNo,
+          status: 'pending_customer_feedback',
+          confirmedAt: new Date().toISOString(),
+          confirmedBy: session?.user?.trim() || '老板',
+          items: items.map((item) => ({ ...item })),
+        },
+      ],
+    };
+    await this.saveQuoteTransition({
+      before: existing,
+      after: confirmed,
+      operationType: 'boss_confirm_quote_price',
+      operatorId: existing.salesUserId,
+      operatorName: session?.user,
+    });
+    return confirmed;
+  }
+
+  async recordCustomerFeedback(
+    id: number,
+    payload: {
+      currentVersionNo: number;
+      result: CustomerFeedbackResult;
+      remark?: string;
+    },
+    session?: FormalSession,
+  ) {
+    if (
+      session?.role !== 'sales' &&
+      session?.role !== 'sales_manager' &&
+      session?.role !== 'admin'
+    ) {
+      throw new BadRequestException('只有销售角色可以记录客户反馈');
+    }
+    const existing = await this.getDetail(id);
+    if (existing.documentType !== 'quote') {
+      throw new BadRequestException('只有报价单可以记录客户反馈');
+    }
+    if (Number(payload.currentVersionNo) !== existing.currentVersionNo) {
+      throw new BadRequestException('报价版本已更新，请刷新后重试');
+    }
+    if (
+      existing.status === 'repricing_in_progress' &&
+      payload.result === 'price_issue' &&
+      existing.linkedInquiryVersionNo === existing.currentVersionNo + 1
+    ) {
+      return existing;
+    }
+    assertCustomerFeedbackTransition({
+      status: existing.status,
+      result: payload.result,
+    });
+
+    const operatedAt = new Date().toISOString();
+    const operatedBy = session.user?.trim() || '销售';
+    const status =
+      payload.result === 'accepted'
+        ? 'customer_accepted'
+        : payload.result === 'no_follow_up'
+          ? 'customer_no_follow_up'
+          : 'repricing_in_progress';
+    const feedbackEntry = {
+      versionNo: existing.currentVersionNo,
+      result: payload.result,
+      ...(payload.remark?.trim() ? { remark: payload.remark.trim() } : {}),
+      operatedBy,
+      operatedAt,
+    };
+    const persistFeedback = async (prismaDb?: PrismaQuoteDb) => {
+      const inquiryResult = payload.result === 'price_issue'
+        ? await this.createInquiryFromQuote(
+            {
+              ...existing,
+              currentVersionNo: existing.currentVersionNo + 1,
+            },
+            prismaDb ?? this.prismaDb,
+          )
+        : undefined;
+      const updated: QuoteDetailRecord = {
+        ...existing,
+        status,
+        currentProgress: resolveWorkflowProgress(status),
+        customerFeedbackResult: payload.result,
+        customerFeedbackRemark: payload.remark?.trim() ?? '',
+        customerFeedbackBy: operatedBy,
+        customerFeedbackAt: operatedAt,
+        customerFeedbackHistory: [
+          ...(existing.customerFeedbackHistory ?? []),
+          feedbackEntry,
+        ],
+        ...(inquiryResult
+          ? {
+              linkedInquiryId: inquiryResult.id,
+              linkedInquiryNo: inquiryResult.inquiryNo,
+              linkedInquiryStatus: 'pending_inquiry',
+              linkedInquiryVersionNo: existing.currentVersionNo + 1,
+            }
+          : {}),
+      };
+      await this.saveQuoteTransition(
+        {
+          before: existing,
+          after: updated,
+          operationType: 'record_customer_feedback',
+          operatorId: existing.salesUserId,
+          operatorName: operatedBy,
+        },
+        prismaDb,
+      );
+      return updated;
+    };
+
+    if (payload.result === 'price_issue' && this.shouldUsePrisma()) {
+      const transaction = (this.prisma as unknown as {
+        $transaction?: <T>(callback: (db: PrismaQuoteDb) => Promise<T>) => Promise<T>;
+      })?.$transaction;
+      if (typeof transaction === 'function') {
+        return await transaction.call(this.prisma, persistFeedback) as QuoteDetailRecord;
+      }
+    }
+
+    return persistFeedback();
+  }
+
+  async completeInquiryPricing(
+    inquiry: InquiryListItem,
+    operator = '老板',
+    prismaDb = this.prismaDb,
+  ): Promise<{
+    linkedQuoteId?: number;
+    linkedQuoteNo?: string;
+    currentVersionNo?: number;
+    status?: string;
+  }> {
+    const sourceDemandId = Number(inquiry.sourceQuoteId ?? inquiry.quoteOrderId);
+    const sourceDemand = await this.getDetail(sourceDemandId);
+
+    if (sourceDemand.documentType === 'quote') {
+      return this.applyRepricingFromInquiry(
+        sourceDemand,
+        inquiry,
+        operator,
+        prismaDb,
+      );
+    }
+    if (
+      sourceDemand.documentType !== 'demand' ||
+      normalizeStoredProductSource(sourceDemand) !== 'candidate'
+    ) {
+      return {};
+    }
+    if (sourceDemand.linkedQuoteId) {
+      return {
+        linkedQuoteId: sourceDemand.linkedQuoteId,
+        linkedQuoteNo: sourceDemand.linkedQuoteNo,
+      };
+    }
+
+    const productService = new ProductService(
+      (prismaDb ?? this.prisma) as PrismaService | undefined,
+    );
+    const linkedItems: QuoteLineItem[] = [];
+    for (const inquiryItem of inquiry.items) {
+      const sourceItem = sourceDemand.items.find(
+        (item) => item.lineNo === inquiryItem.lineNo,
+      );
+      if (!sourceItem) {
+        throw new BadRequestException(`询价第 ${inquiryItem.lineNo} 行找不到来源需求`);
+      }
+      const selectedIndex = inquiryItem.confirmedSupplierQuoteIndex;
+      const selectedSupplier =
+        selectedIndex === undefined
+          ? undefined
+          : inquiryItem.supplierQuotes[selectedIndex];
+      if (!selectedSupplier || inquiryItem.confirmedSalePrice <= 0) {
+        throw new BadRequestException(`询价第 ${inquiryItem.lineNo} 行尚未完成老板定价`);
+      }
+
+      const product = await productService.findOrCreateQuoteCandidate({
+        sku: inquiryItem.sku?.trim() || `SKU-${sourceDemand.quoteNo}-${inquiryItem.lineNo}`,
+        nameCn: inquiryItem.productName,
+        category: inquiryItem.productCategory ?? sourceItem.productCategory ?? 'electronics',
+        unit: inquiryItem.unit ?? sourceItem.unit,
+        confirmedSalePrice: inquiryItem.confirmedSalePrice,
+        confirmedPurchasePrice: selectedSupplier.purchasePrice,
+        supplierCode: selectedSupplier.supplierCode,
+        operator,
+      });
+      linkedItems.push({
+        ...sourceItem,
+        productSource: 'existing',
+        productId: product.id,
+        sku: product.sku,
+        productName: product.nameCn,
+        productCategory: product.category,
+        unit: product.unit,
+        salePrice: inquiryItem.confirmedSalePrice,
+        confirmedSalePrice: inquiryItem.confirmedSalePrice,
+        confirmedSupplierQuoteIndex: selectedIndex,
+        confirmedSupplierId: selectedSupplier.supplierId,
+        confirmedSupplierCode: selectedSupplier.supplierCode,
+        confirmedSupplierName: selectedSupplier.supplierName,
+        confirmedPurchasePrice: selectedSupplier.purchasePrice,
+        confirmedProductId: product.id,
+        amount: Number(
+          (sourceItem.quantity * inquiryItem.confirmedSalePrice).toFixed(2),
+        ),
+      });
+    }
+
+    const quoteNo = await this.documentCodeRuleService.generateQuoteNo();
+    const quoteBase: QuoteDetailRecord = {
+      ...sourceDemand,
+      id: 0,
+      quoteNo,
+      documentType: 'quote',
+      productSource: 'existing',
+      status: 'pending_customer_feedback',
+      currentVersionNo: 1,
+      currentProgress: resolveWorkflowProgress('pending_customer_feedback'),
+      submitMode: 'submit',
+      sourceDemandId: sourceDemand.id,
+      sourceDemandNo: sourceDemand.quoteNo,
+      linkedInquiryId: inquiry.id,
+      linkedInquiryNo: inquiry.inquiryNo,
+      linkedInquiryStatus: inquiry.status,
+      linkedQuoteId: undefined,
+      linkedQuoteNo: undefined,
+      linkedSalesOrderId: undefined,
+      linkedSalesOrderNo: undefined,
+      createdAt: new Date().toISOString(),
+      items: linkedItems,
+      versionHistory: [
+        {
+          versionNo: 1,
+          status: 'pending_customer_feedback',
+          confirmedAt: new Date().toISOString(),
+          confirmedBy: operator,
+          sourceInquiryId: inquiry.id,
+          items: linkedItems.map((item) => ({ ...item })),
+        },
+      ],
+    };
+
+    if (this.shouldUsePrisma()) {
+      const created = (await prismaDb!.businessDocument.create({
+        data: {
+          bizType: 'quote',
+          docNo: quoteNo,
+          status: quoteBase.status,
+          ownerUserId: BigInt(quoteBase.salesUserId),
+          counterpartyId:
+            quoteBase.customerId > 0 ? BigInt(quoteBase.customerId) : null,
+          payload: quoteBase,
+          createdBy: BigInt(quoteBase.salesUserId),
+        },
+      })) as PrismaBusinessDocumentRecord;
+      const linkedQuote: QuoteDetailRecord = {
+        ...quoteBase,
+        id: Number(created.id),
+      };
+      const convertedDemand: QuoteDetailRecord = {
+        ...sourceDemand,
+        status: 'converted_to_quote',
+        currentProgress: resolveWorkflowProgress('converted_to_quote'),
+        linkedInquiryStatus: inquiry.status,
+        linkedQuoteId: linkedQuote.id,
+        linkedQuoteNo: linkedQuote.quoteNo,
+      };
+      await prismaDb!.businessDocument.update({
+        where: { id: created.id },
+        data: { payload: linkedQuote },
+      });
+      await prismaDb!.businessDocument.update({
+        where: { id: BigInt(sourceDemand.id) },
+        data: { status: convertedDemand.status, payload: convertedDemand },
+      });
+      await prismaDb!.operationLog.create({
+        data: {
+          bizType: 'quote',
+          bizId: created.id,
+          operationType: 'create_quote_from_inquiry',
+          operatorId: BigInt(sourceDemand.salesUserId),
+          beforeData: null,
+          afterData: linkedQuote,
+        },
+      });
+      await prismaDb!.operationLog.create({
+        data: {
+          bizType: 'quote',
+          bizId: BigInt(sourceDemand.id),
+          operationType: 'convert_demand_to_quote',
+          operatorId: BigInt(sourceDemand.salesUserId),
+          beforeData: sourceDemand,
+          afterData: convertedDemand,
+        },
+      });
+      return { linkedQuoteId: linkedQuote.id, linkedQuoteNo: linkedQuote.quoteNo };
+    }
+
+    const linkedQuote: QuoteDetailRecord = {
+      ...quoteBase,
+      id: this.store.nextQuoteId(),
+    };
+    const convertedDemand: QuoteDetailRecord = {
+      ...sourceDemand,
+      status: 'converted_to_quote',
+      currentProgress: resolveWorkflowProgress('converted_to_quote'),
+      linkedInquiryStatus: inquiry.status,
+      linkedQuoteId: linkedQuote.id,
+      linkedQuoteNo: linkedQuote.quoteNo,
+    };
+    this.store.upsertQuote(linkedQuote);
+    this.store.upsertQuote(convertedDemand);
+    this.store.recordAuditLog({
+      bizType: 'quote',
+      bizId: linkedQuote.id,
+      operationType: 'create_quote_from_inquiry',
+      operatorId: sourceDemand.salesUserId,
+      beforeData: null,
+      afterData: linkedQuote,
+    });
+    this.store.recordAuditLog({
+      bizType: 'quote',
+      bizId: sourceDemand.id,
+      operationType: 'convert_demand_to_quote',
+      operatorId: sourceDemand.salesUserId,
+      beforeData: sourceDemand,
+      afterData: convertedDemand,
+    });
+    return { linkedQuoteId: linkedQuote.id, linkedQuoteNo: linkedQuote.quoteNo };
+  }
+
+  private async applyRepricingFromInquiry(
+    quote: QuoteDetailRecord,
+    inquiry: InquiryListItem,
+    operator: string,
+    prismaDb = this.prismaDb,
+  ) {
+    if (
+      inquiry.quoteVersionNo <= quote.currentVersionNo &&
+      quote.status === 'pending_customer_feedback'
+    ) {
+      return {
+        linkedQuoteId: quote.id,
+        linkedQuoteNo: quote.quoteNo,
+        currentVersionNo: quote.currentVersionNo,
+        status: quote.status,
+      };
+    }
+    if (
+      quote.status !== 'repricing_in_progress' ||
+      inquiry.quoteVersionNo !== quote.currentVersionNo + 1
+    ) {
+      return {};
+    }
+
+    const items = quote.items.map((item) => {
+      const inquiryItem = inquiry.items.find(
+        (entry) => entry.lineNo === item.lineNo,
+      );
+      if (!inquiryItem || inquiryItem.confirmedSalePrice <= 0) {
+        throw new BadRequestException(`询价第 ${item.lineNo} 行尚未完成老板定价`);
+      }
+      const selectedIndex = inquiryItem.confirmedSupplierQuoteIndex;
+      const selectedSupplier =
+        selectedIndex === undefined
+          ? undefined
+          : inquiryItem.supplierQuotes[selectedIndex];
+      if (!selectedSupplier) {
+        throw new BadRequestException(`询价第 ${item.lineNo} 行尚未选择最终供应商`);
+      }
+      return {
+        ...item,
+        salePrice: inquiryItem.confirmedSalePrice,
+        confirmedSalePrice: inquiryItem.confirmedSalePrice,
+        confirmedSupplierQuoteIndex: selectedIndex,
+        confirmedSupplierId: selectedSupplier.supplierId,
+        confirmedSupplierCode: selectedSupplier.supplierCode,
+        confirmedSupplierName: selectedSupplier.supplierName,
+        confirmedPurchasePrice: selectedSupplier.purchasePrice,
+        confirmedProductId: item.productId,
+        amount: Number((item.quantity * inquiryItem.confirmedSalePrice).toFixed(2)),
+      };
+    });
+    const versionSnapshot: QuoteVersionSnapshot = {
+      versionNo: inquiry.quoteVersionNo,
+      status: 'pending_customer_feedback',
+      confirmedAt: new Date().toISOString(),
+      confirmedBy: operator,
+      sourceInquiryId: inquiry.id,
+      items: items.map((item) => ({ ...item })),
+    };
+    const updated: QuoteDetailRecord = {
+      ...quote,
+      status: 'pending_customer_feedback',
+      currentVersionNo: inquiry.quoteVersionNo,
+      currentProgress: resolveWorkflowProgress('pending_customer_feedback'),
+      linkedInquiryId: inquiry.id,
+      linkedInquiryNo: inquiry.inquiryNo,
+      linkedInquiryStatus: inquiry.status,
+      linkedInquiryVersionNo: inquiry.quoteVersionNo,
+      customerFeedbackResult: undefined,
+      customerFeedbackRemark: undefined,
+      customerFeedbackBy: undefined,
+      customerFeedbackAt: undefined,
+      items,
+      versionHistory: [
+        ...(quote.versionHistory ?? []).filter(
+          (entry) => entry.versionNo !== inquiry.quoteVersionNo,
+        ),
+        versionSnapshot,
+      ].sort((left, right) => left.versionNo - right.versionNo),
+    };
+    await this.saveQuoteTransition({
+      before: quote,
+      after: updated,
+      operationType: 'advance_quote_version',
+      operatorId: quote.salesUserId,
+      operatorName: operator,
+    }, prismaDb);
+    return {
+      linkedQuoteId: updated.id,
+      linkedQuoteNo: updated.quoteNo,
+      currentVersionNo: updated.currentVersionNo,
+      status: updated.status,
+    };
+  }
+
+  private async saveQuoteTransition(payload: {
+    before: QuoteDetailRecord;
+    after: QuoteDetailRecord;
+    operationType: string;
+    operatorId: number;
+    operatorName?: string;
+  }, prismaDb?: PrismaQuoteDb) {
+    const afterData = payload.operatorName
+      ? { ...payload.after, lastOperatedBy: payload.operatorName }
+      : payload.after;
+    if (this.shouldUsePrisma()) {
+      const apply = async (db: PrismaQuoteDb) => {
+        await db.businessDocument.update({
+          where: { id: BigInt(payload.after.id) },
+          data: { status: payload.after.status, payload: payload.after },
+        });
+        await db.operationLog.create({
+          data: {
+            bizType: 'quote',
+            bizId: BigInt(payload.after.id),
+            operationType: payload.operationType,
+            operatorId: BigInt(payload.operatorId),
+            beforeData: payload.before,
+            afterData,
+          },
+        });
+      };
+      if (prismaDb) {
+        await apply(prismaDb);
+        return;
+      }
+      const transaction = (this.prisma as unknown as {
+        $transaction?: (callback: (db: PrismaQuoteDb) => Promise<unknown>) => Promise<unknown>;
+      })?.$transaction;
+      if (typeof transaction === 'function') {
+        await transaction.call(this.prisma, (db: PrismaQuoteDb) => apply(db));
+      } else {
+        await apply(this.prismaDb!);
+      }
+      return;
+    }
+
+    this.store.upsertQuote(payload.after);
+    this.store.recordAuditLog({
+      bizType: 'quote',
+      bizId: payload.after.id,
+      operationType: payload.operationType,
+      operatorId: payload.operatorId,
+      beforeData: payload.before,
+      afterData,
+    });
+  }
+
   async updateDraft(id: number, dto: UpdateQuoteDraftDto) {
     const counterpartyService = new CounterpartyService(this.prisma);
     const submitMode = resolveQuoteSubmitMode(dto.submitMode);
-    const items = await normalizeQuoteItems(dto);
+    const requestedProductSource = normalizeQuoteProductSource(dto);
+    if (dto.documentType) {
+      assertQuoteCreationCombination({
+        documentType: normalizeQuoteDocumentType(dto.documentType),
+        productSource: requestedProductSource,
+      });
+    }
     const salesUserName = resolveSalesUserName(dto.salesUserId);
     const quoteCustomer = await resolveQuoteCustomer(dto, counterpartyService);
     let customerId = quoteCustomer.customerId;
@@ -1235,15 +1939,29 @@ export class QuoteService {
       const documentType = normalizeQuoteDocumentType(
         dto.documentType ?? before.documentType,
       );
-      await validateDemandQuoteItems(
+      const productSource = normalizeQuoteProductSource(
+        dto,
+        normalizeStoredProductSource(before),
+      );
+      assertQuoteCreationCombination({ documentType, productSource });
+      const productService = new ProductService(this.prisma);
+      await validateQuoteItems(
         dto,
         documentType,
-        new ProductService(this.prisma),
+        productSource,
+        productService,
+      );
+      const items = await normalizeQuoteItems(
+        dto,
+        documentType,
+        productSource,
+        productService,
       );
 
       const saved: QuoteDetailRecord = {
         ...before,
         documentType,
+        productSource,
         status: 'draft',
         customerId,
         customerName,
@@ -1284,29 +2002,6 @@ export class QuoteService {
         },
       });
 
-      if (submitMode === 'submit' && documentType === 'demand') {
-        const submitted = buildSubmittedDemandQuoteRecord(saved);
-        await this.prismaDb!.businessDocument.update({
-          where: { id: existing.id },
-          data: {
-            status: 'submitted',
-            payload: submitted,
-          },
-        });
-        await this.prismaDb!.operationLog.create({
-          data: {
-            bizType: 'quote',
-            bizId: existing.id,
-            operationType: 'submit_demand_quote',
-            operatorId: BigInt(dto.salesUserId),
-            beforeData: saved,
-            afterData: submitted,
-          },
-        });
-
-        return submitted;
-      }
-
       if (submitMode === 'submit') {
         return this.submitDraftQuote(id);
       }
@@ -1325,15 +2020,29 @@ export class QuoteService {
     const documentType = normalizeQuoteDocumentType(
       dto.documentType ?? existing.documentType,
     );
-    await validateDemandQuoteItems(
+    const productSource = normalizeQuoteProductSource(
+      dto,
+      normalizeStoredProductSource(existing),
+    );
+    assertQuoteCreationCombination({ documentType, productSource });
+    const productService = new ProductService(this.prisma);
+    await validateQuoteItems(
       dto,
       documentType,
-      new ProductService(this.prisma),
+      productSource,
+      productService,
+    );
+    const items = await normalizeQuoteItems(
+      dto,
+      documentType,
+      productSource,
+      productService,
     );
 
     const saved: QuoteDetailRecord = {
       ...existing,
       documentType,
+      productSource,
       status: 'draft',
       customerId,
       customerName,
@@ -1364,21 +2073,6 @@ export class QuoteService {
       afterData: saved,
     });
 
-    if (submitMode === 'submit' && documentType === 'demand') {
-      const submitted = buildSubmittedDemandQuoteRecord(saved);
-      this.store.upsertQuote(submitted);
-      this.store.recordAuditLog({
-        bizType: 'quote',
-        bizId: submitted.id,
-        operationType: 'submit_demand_quote',
-        operatorId: submitted.salesUserId,
-        beforeData: saved,
-        afterData: submitted,
-      });
-
-      return submitted;
-    }
-
     if (submitMode === 'submit') {
       return this.submitDraftQuote(saved.id);
     }
@@ -1386,7 +2080,7 @@ export class QuoteService {
     return saved;
   }
 
-  async listAuditLogs() {
+  async listAuditLogs(session?: FormalSession) {
     if (this.shouldUsePrisma()) {
       const logs = (await this.prismaDb!.operationLog.findMany({
         where: { bizType: 'quote' },
@@ -1394,12 +2088,20 @@ export class QuoteService {
       })) as PrismaOperationLogRecord[];
 
       return {
-        items: logs.map(toAuditLogRecord),
+        items: logs.map(toAuditLogRecord).map((log) =>
+          session?.role === 'sales' || session?.role === 'sales_manager'
+            ? (sanitizeProcurementValueForSales(log) as typeof log)
+            : log,
+        ),
       };
     }
 
     return {
-      items: this.store.listAuditLogs(),
+      items: this.store.listAuditLogs().map((log) =>
+        session?.role === 'sales' || session?.role === 'sales_manager'
+          ? (sanitizeProcurementValueForSales(log) as typeof log)
+          : log,
+      ),
     };
   }
 
@@ -1427,18 +2129,27 @@ export class QuoteService {
           ? await counterpartyService.findById(detail.customerId)
           : null;
 
-        return {
+        return hideProcurementDetailsFromSales({
           ...detail,
           customerFullName:
             matchedCounterparty?.shortName ?? detail.customerFullName,
-        };
+        }, session);
       }
     }
 
     const created = this.store.getQuote(id);
 
     if (created) {
-      const listItem = toQuoteListItem(created);
+      const productSource = normalizeStoredProductSource(created);
+      const normalizedCreated: QuoteDetailRecord = {
+        ...created,
+        productSource,
+        items: created.items.map((item) => ({
+          ...item,
+          productSource: item.productSource ?? productSource,
+        })),
+      };
+      const listItem = toQuoteListItem(normalizedCreated);
       if (
         session?.role &&
         !isFormalAdminOrBoss(session?.role) &&
@@ -1448,24 +2159,26 @@ export class QuoteService {
         throw new NotFoundException('报价单不存在');
       }
 
-      const matchedCounterparty = created.customerId
-        ? await counterpartyService.findById(created.customerId)
+      const matchedCounterparty = normalizedCreated.customerId
+        ? await counterpartyService.findById(normalizedCreated.customerId)
         : null;
 
-      return {
-        ...created,
+      return hideProcurementDetailsFromSales({
+        ...normalizedCreated,
         customerFullName:
-          matchedCounterparty?.shortName ?? created.customerFullName,
+          matchedCounterparty?.shortName ?? normalizedCreated.customerFullName,
         currentProgress: resolveCurrentProgress({
-          status: created.status,
-          currentVersionNo: created.currentVersionNo,
+          status: normalizedCreated.status,
+          currentVersionNo: normalizedCreated.currentVersionNo,
         }),
-      };
+      }, session);
     }
 
     const fallback: QuoteDetailRecord = {
       id,
       quoteNo: 'Q202607070001',
+      documentType: 'quote',
+      productSource: 'existing',
       status: 'draft',
       currentVersionNo: 1,
       customerId: 1001,
@@ -1484,6 +2197,7 @@ export class QuoteService {
       items: [
         {
           lineNo: 1,
+          productSource: 'existing',
           productId: 1,
           sku: 'SKU-LED-001',
           productName: '智能 LED 灯带',

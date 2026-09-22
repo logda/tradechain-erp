@@ -44,6 +44,12 @@ export type ProductCodeRule = {
   updatedBy: string;
 };
 
+export type ProductCodeRuleKind = 'purchase' | 'sales';
+export type ProductCodeRuleSet = {
+  purchase: ProductCodeRule;
+  sales: ProductCodeRule;
+};
+
 export type ValidateProductCodeRuleResult =
   | { ok: true }
   | { ok: false; error: string };
@@ -69,6 +75,26 @@ export const defaultProductCodeRule: ProductCodeRule = {
   segments: defaultSegments,
   updatedAt: '2026-07-16T00:00:00.000Z',
   updatedBy: 'system',
+};
+
+export const defaultSalesProductCodeRule: ProductCodeRule = {
+  strategy: 'composed_segments',
+  serialLength: 3,
+  serialScope: 'global_month',
+  segments: [
+    { key: 'prefix', enabled: true, order: 1, value: 'SALE' },
+    { key: 'category_code', enabled: true, order: 2 },
+    { key: 'year', enabled: true, order: 3 },
+    { key: 'month', enabled: true, order: 4 },
+    { key: 'serial', enabled: true, order: 5 },
+  ],
+  updatedAt: '2026-09-22T00:00:00.000Z',
+  updatedBy: 'system',
+};
+
+export const defaultProductCodeRuleSet: ProductCodeRuleSet = {
+  purchase: defaultProductCodeRule,
+  sales: defaultSalesProductCodeRule,
 };
 
 type LegacyProductCodeRuleSerialScope = 'global' | 'per_supplier';
@@ -181,7 +207,10 @@ export function normalizeProductCodeRule(rule: ProductCodeRuleLike): ProductCode
   };
 }
 
-export function validateProductCodeRule(rule: ProductCodeRule): ValidateProductCodeRuleResult {
+export function validateProductCodeRule(
+  rule: ProductCodeRule,
+  options: { kind?: ProductCodeRuleKind } = {},
+): ValidateProductCodeRuleResult {
   const normalizedRule = normalizeProductCodeRule(rule);
 
   if (normalizedRule.strategy !== 'composed_segments') {
@@ -197,6 +226,12 @@ export function validateProductCodeRule(rule: ProductCodeRule): ValidateProductC
   }
 
   const enabledSegments = normalizedRule.segments.filter((segment) => segment.enabled);
+  if (
+    options.kind === 'sales' &&
+    enabledSegments.some((segment) => segment.key === 'supplier_code')
+  ) {
+    return { ok: false, error: '销售编码规则不能使用供应商编码段' };
+  }
   const serialSegment = enabledSegments.find((segment) => segment.key === 'serial');
 
   if (!serialSegment) {

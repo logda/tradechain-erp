@@ -190,6 +190,13 @@ describe('formal counterparty master data page', () => {
     expect(screen.getAllByRole('option', { name: 'Leo / 采购' }).length).toBeGreaterThan(0);
     expect(screen.getAllByText('未填写').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: '新增往来单位' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查询' })).toHaveClass(
+      'erp-button',
+      'erp-button--primary',
+    );
+    expect(screen.getByRole('textbox', { name: '筛选关键词 Keyword' })).toHaveClass(
+      'erp-control',
+    );
     expect(screen.getAllByRole('button', { name: '停用' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: '启用' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: '单位名称 / 中文名称' })).toBeInTheDocument();

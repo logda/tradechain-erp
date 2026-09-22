@@ -151,26 +151,6 @@ const mutedLinkStyle = {
   fontWeight: 700,
 } satisfies React.CSSProperties;
 
-const fieldGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-  gap: '14px',
-} satisfies React.CSSProperties;
-
-const labelStyle = {
-  display: 'grid',
-  gap: '8px',
-  fontSize: '13px',
-  color: '#334155',
-} satisfies React.CSSProperties;
-
-const inputStyle = {
-  border: '1px solid #d7e0ea',
-  borderRadius: '12px',
-  padding: '10px 12px',
-  background: '#fff',
-} satisfies React.CSSProperties;
-
 const chipWrapStyle = {
   display: 'flex',
   gap: '10px',
@@ -206,12 +186,6 @@ const tableCellStyle = {
   fontSize: '14px',
   color: '#0f172a',
   verticalAlign: 'top' as const,
-} satisfies React.CSSProperties;
-
-const rowLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 const deniedStyle = {
@@ -350,45 +324,45 @@ export default async function AppFormalInquiryPage({
         title="当前筛选"
         subtitle="按询价单号、来源报价单号、状态、客户和创建人筛选。"
       >
-        <form method="get" style={fieldGridStyle}>
-          <label style={labelStyle}>
+        <form method="get" className="erp-filter-form erp-form-grid">
+          <label className="erp-form-field">
             关键词 Keyword
-            <input name="keyword" defaultValue={query.keyword} style={inputStyle} />
+            <input className="erp-control" name="keyword" defaultValue={query.keyword} />
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             询价单号 Inquiry No
-            <input name="docNo" defaultValue={query.docNo} style={inputStyle} />
+            <input className="erp-control" name="docNo" defaultValue={query.docNo} />
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             来源报价单号 Quote No
-            <input name="quoteNo" defaultValue={query.quoteNo} style={inputStyle} />
+            <input className="erp-control" name="quoteNo" defaultValue={query.quoteNo} />
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             状态 Status
-            <select name="status" defaultValue={query.status ?? ''} style={inputStyle}>
+            <select className="erp-control" name="status" defaultValue={query.status ?? ''}>
               <option value="">全部</option>
               <option value="pending_inquiry">待询价</option>
               <option value="pending_boss_review">待老板确认</option>
               <option value="boss_confirmed">老板已确认</option>
             </select>
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             客户 Customer
             <input
               name="customerName"
               defaultValue={query.customerName}
-              style={inputStyle}
+              className="erp-control"
             />
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             创建人 Created By
-            <input name="createdBy" defaultValue={query.createdBy} style={inputStyle} />
+            <input className="erp-control" name="createdBy" defaultValue={query.createdBy} />
           </label>
           <input type="hidden" name="page" value="1" />
           <input type="hidden" name="pageSize" value={query.pageSize} />
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <button type="submit">查询</button>
-            <Link href="/app/sales/inquiries">重置</Link>
+          <div className="erp-filter-actions">
+            <button className="erp-button erp-button--primary" type="submit">查询</button>
+            <Link className="erp-button erp-button--secondary" href="/app/sales/inquiries">重置</Link>
           </div>
         </form>
       </FilterPanel>
@@ -447,7 +421,7 @@ export default async function AppFormalInquiryPage({
                   <td style={tableCellStyle}>{item.supplierCount}</td>
                   <td style={tableCellStyle}>{item.createdBy}</td>
                   <td style={tableCellStyle}>
-                    <Link href={item.detailHref} style={rowLinkStyle}>
+                    <Link className="erp-button erp-button--secondary erp-button--compact erp-row-action" href={item.detailHref}>
                       查看详情 {item.inquiryNo}
                     </Link>
                   </td>

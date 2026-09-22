@@ -15,8 +15,17 @@ describe('InquiryService runtime persistence', () => {
               supplierSourceMode: 'counterparty',
               supplierId: 2,
               supplierCode: 'SUP-BRAVO',
-              supplierName: 'Bravo Industrial',
-              purchasePrice: 18.6,
+            supplierName: 'Bravo Industrial',
+            purchasePrice: 18.6,
+            productSizeCm: '40×30×10',
+            productMaterial: 'PVC镭射',
+            productPackaging: 'OPP袋/个',
+            productWeightG: 180,
+            bulkLeadTimeDays: '7-10',
+            cartonQuantity: 120,
+            outerCartonSizeCm: '55×45×40',
+            outerCartonGrossWeightKg: 24,
+            remark: '打样 2 天，费用 200 元',
             },
             {
               supplierSourceMode: 'manual',
@@ -44,6 +53,14 @@ describe('InquiryService runtime persistence', () => {
       pageSize: 20,
     });
     const detail = await service.getById(1);
+    const purchaseAuditLogs = await service.listAuditLogs({
+      role: 'purchase',
+      user: 'Leo',
+    });
+    const bossAuditLogs = await service.listAuditLogs({
+      role: 'boss',
+      user: 'Mia',
+    });
 
     expect(submitted.status).toBe('pending_boss_review');
     expect(confirmed.status).toBe('boss_confirmed');
@@ -54,11 +71,23 @@ describe('InquiryService runtime persistence', () => {
       expect.objectContaining({
         supplierName: 'Bravo Industrial',
         purchasePrice: 18.6,
+        productSizeCm: '40×30×10',
+        productMaterial: 'PVC镭射',
+        productPackaging: 'OPP袋/个',
+        productWeightG: 180,
+        bulkLeadTimeDays: '7-10',
+        cartonQuantity: 120,
+        outerCartonSizeCm: '55×45×40',
+        outerCartonGrossWeightKg: 24,
+        remark: '打样 2 天，费用 200 元',
       }),
       expect.objectContaining({
         supplierName: '深圳快联电子',
         purchasePrice: 19.2,
       }),
     ]);
+    expect(JSON.stringify(purchaseAuditLogs)).not.toContain('confirmedSalePrice');
+    expect(JSON.stringify(bossAuditLogs)).toContain('confirmedSalePrice');
+    expect(JSON.stringify(bossAuditLogs)).toContain('40×30×10');
   });
 });

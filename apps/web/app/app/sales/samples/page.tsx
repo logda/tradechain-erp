@@ -132,8 +132,9 @@ const labelStyle = {
 
 const inputStyle = {
   border: '1px solid #d7e0ea',
-  borderRadius: '12px',
-  padding: '10px 12px',
+  borderRadius: '8px',
+  minHeight: '40px',
+  padding: '8px 12px',
   background: '#fff',
 } satisfies React.CSSProperties;
 
@@ -172,12 +173,6 @@ const tableCellStyle = {
   fontSize: '14px',
   color: '#0f172a',
   verticalAlign: 'top' as const,
-} satisfies React.CSSProperties;
-
-const rowLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 const deniedStyle = {
@@ -320,7 +315,7 @@ export default async function AppSampleOrdersPage({
         title="当前筛选"
         subtitle="按样品单号、客户、负责人、来源报价单号、替代和取消状态筛选。"
       >
-        <form method="get" style={fieldGridStyle}>
+        <form method="get" className="erp-filter-form" style={fieldGridStyle}>
           <label style={labelStyle}>
             关键词 Keyword
             <input name="keyword" defaultValue={query.keyword} style={inputStyle} />
@@ -386,7 +381,7 @@ export default async function AppSampleOrdersPage({
           </label>
           <input type="hidden" name="page" value="1" />
           <input type="hidden" name="pageSize" value={query.pageSize} />
-          <button type="submit">查询</button>
+          <button className="erp-button erp-button--primary" type="submit">查询</button>
         </form>
 
         <div style={chipWrapStyle}>
@@ -440,8 +435,8 @@ export default async function AppSampleOrdersPage({
                 </td>
                 <td style={tableCellStyle}>
                   <Link
+                    className="erp-button erp-button--secondary erp-button--compact erp-row-action"
                     href={toFormalSampleDetailHref(item.detailHref)}
-                    style={rowLinkStyle}
                   >
                     查看详情 {item.docNo}
                   </Link>

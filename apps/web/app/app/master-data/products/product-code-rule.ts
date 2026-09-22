@@ -1,6 +1,8 @@
 export {
   buildProductCodePreview,
   defaultProductCodeRule,
+  defaultProductCodeRuleSet,
+  defaultSalesProductCodeRule,
   describeProductCodeRule,
   normalizeProductCodeRule,
   productCodeCategoryCodeMap,
@@ -8,5 +10,7 @@ export {
   productCodeRuleSerialScopes,
   validateProductCodeRule,
   type ProductCodeRule,
+  type ProductCodeRuleKind,
+  type ProductCodeRuleSet,
   type ProductCodeRuleSegment,
 } from '@erp/shared';

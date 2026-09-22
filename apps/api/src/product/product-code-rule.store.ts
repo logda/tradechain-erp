@@ -2,11 +2,16 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import {
   defaultProductCodeRule,
+  defaultProductCodeRuleSet,
+  defaultSalesProductCodeRule,
   normalizeProductCodeRule,
   type ProductCodeRule,
+  type ProductCodeRuleKind,
+  type ProductCodeRuleSet,
 } from '@erp/shared';
 
 export type ProductCodeRuleRecord = ProductCodeRule;
+export type ProductCodeRuleSetRecord = ProductCodeRuleSet;
 
 const productCodeRuleStoreCache = new Map<string, ProductCodeRuleRuntimeStore>();
 
@@ -17,44 +22,90 @@ function cloneRule(rule: ProductCodeRuleRecord): ProductCodeRuleRecord {
   };
 }
 
-function readRule(filePath: string): ProductCodeRuleRecord {
-  if (!existsSync(filePath)) {
-    return cloneRule(defaultProductCodeRule);
-  }
-
-  const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as ProductCodeRuleRecord;
-  return normalizeProductCodeRule({
-    ...cloneRule(defaultProductCodeRule),
-    ...parsed,
-    segments: Array.isArray(parsed?.segments)
-      ? parsed.segments.map((segment) => ({ ...segment }))
-      : cloneRule(defaultProductCodeRule).segments,
-  } as ProductCodeRuleRecord);
+function cloneRuleSet(ruleSet: ProductCodeRuleSetRecord): ProductCodeRuleSetRecord {
+  return {
+    purchase: cloneRule(ruleSet.purchase),
+    sales: cloneRule(ruleSet.sales),
+  };
 }
 
-function writeRule(filePath: string, rule: ProductCodeRuleRecord) {
+function readRuleSet(filePath: string): ProductCodeRuleSetRecord {
+  if (!existsSync(filePath)) {
+    return cloneRuleSet(defaultProductCodeRuleSet);
+  }
+
+  const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as Record<
+    string,
+    unknown
+  >;
+  const legacyRule =
+    parsed.strategy === 'composed_segments'
+      ? (parsed as ProductCodeRuleRecord)
+      : undefined;
+  const parsedSet = parsed as Partial<ProductCodeRuleSetRecord>;
+  const purchase: ProductCodeRuleRecord | undefined =
+    legacyRule ?? parsedSet.purchase;
+  const sales: ProductCodeRuleRecord | undefined = legacyRule
+    ? undefined
+    : parsedSet.sales;
+  return {
+    purchase: normalizeProductCodeRule({
+      ...cloneRule(defaultProductCodeRule),
+      ...purchase,
+      segments: Array.isArray(purchase?.segments)
+        ? purchase.segments.map((segment) => ({ ...segment }))
+        : cloneRule(defaultProductCodeRule).segments,
+    } as ProductCodeRuleRecord),
+    sales: normalizeProductCodeRule({
+      ...cloneRule(defaultSalesProductCodeRule),
+      ...sales,
+      segments: Array.isArray(sales?.segments)
+        ? sales.segments.map((segment) => ({ ...segment }))
+        : cloneRule(defaultSalesProductCodeRule).segments,
+    } as ProductCodeRuleRecord),
+  };
+}
+
+function writeRuleSet(filePath: string, ruleSet: ProductCodeRuleSetRecord) {
   mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, `${JSON.stringify(rule, null, 2)}\n`, 'utf8');
+  writeFileSync(filePath, `${JSON.stringify(ruleSet, null, 2)}\n`, 'utf8');
 }
 
 export class ProductCodeRuleRuntimeStore {
-  private rule: ProductCodeRuleRecord;
+  private ruleSet: ProductCodeRuleSetRecord;
 
   constructor(private readonly filePath?: string) {
-    this.rule = filePath ? readRule(filePath) : cloneRule(defaultProductCodeRule);
-    if (filePath && !existsSync(filePath)) {
-      writeRule(filePath, this.rule);
+    this.ruleSet = filePath
+      ? readRuleSet(filePath)
+      : cloneRuleSet(defaultProductCodeRuleSet);
+    if (filePath) {
+      writeRuleSet(filePath, this.ruleSet);
     }
   }
 
   getRule() {
-    return cloneRule(this.rule);
+    return this.getRuleByKind('purchase');
+  }
+
+  getRules() {
+    return cloneRuleSet(this.ruleSet);
+  }
+
+  getRuleByKind(kind: ProductCodeRuleKind) {
+    return cloneRule(this.ruleSet[kind]);
   }
 
   updateRule(rule: ProductCodeRuleRecord) {
-    this.rule = cloneRule(normalizeProductCodeRule(rule));
+    return this.updateRuleByKind('purchase', rule);
+  }
+
+  updateRuleByKind(kind: ProductCodeRuleKind, rule: ProductCodeRuleRecord) {
+    this.ruleSet = {
+      ...this.ruleSet,
+      [kind]: cloneRule(normalizeProductCodeRule(rule)),
+    };
     this.persist();
-    return this.getRule();
+    return this.getRuleByKind(kind);
   }
 
   private persist() {
@@ -62,7 +113,7 @@ export class ProductCodeRuleRuntimeStore {
       return;
     }
 
-    writeRule(this.filePath, this.rule);
+    writeRuleSet(this.filePath, this.ruleSet);
   }
 }
 

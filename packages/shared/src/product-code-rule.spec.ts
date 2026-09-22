@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildProductCodePreview,
+  defaultSalesProductCodeRule,
   describeProductCodeRule,
   validateProductCodeRule,
   type ProductCodeRule,
@@ -87,6 +88,25 @@ describe('product code rule', () => {
     ).toEqual({
       ok: false,
       error: '按月流水时，必须同时启用年份段和月份段',
+    });
+  });
+
+  it('builds an independent sales code without a supplier segment', () => {
+    expect(
+      buildProductCodePreview(defaultSalesProductCodeRule, {
+        category: 'electronics',
+        now: '2026-09-22T00:00:00.000Z',
+        sequence: 7,
+      }),
+    ).toBe('SALE-ELEC-2026-09-007');
+  });
+
+  it('rejects supplier segments in a sales code rule', () => {
+    expect(
+      validateProductCodeRule(composedRule, { kind: 'sales' }),
+    ).toEqual({
+      ok: false,
+      error: '销售编码规则不能使用供应商编码段',
     });
   });
 });

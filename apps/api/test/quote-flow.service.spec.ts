@@ -31,7 +31,9 @@ describe('QuoteService operational flow', () => {
     expect(detail.items).toEqual([
       {
         lineNo: 1,
+        productSource: 'existing',
         productId: 1,
+        productCategory: 'electronics',
         sku: 'SKU-LED-001',
         productName: '智能 LED 灯带',
         unit: 'set',

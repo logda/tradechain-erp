@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2800" height="2100" viewBox="0 0 2800 2100" role="img" aria-labelledby="title desc">
+  <title id="title">需求单、报价单与客户反馈流程图</title>
+  <desc id="desc">产品库需求经老板审批后转销售单；手填新产品需求先询价和老板定价，再转报价单；产品库报价单由老板定价。所有报价单经客户反馈决定转销售单、暂无后续或重新采购询价。</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="9" stdDeviation="13" flood-color="#0f172a" flood-opacity="0.10"/></filter>
+    <marker id="arrow-green" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 Z" fill="#0f766e"/></marker>
+    <marker id="arrow-orange" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 Z" fill="#c2410c"/></marker>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 Z" fill="#1d4ed8"/></marker>
+    <marker id="arrow-purple" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 Z" fill="#7c3aed"/></marker>
+    <marker id="arrow-gray" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 Z" fill="#64748b"/></marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+      .title { font-size: 58px; font-weight: 700; fill: #0f172a; }
+      .subtitle { font-size: 25px; font-weight: 400; fill: #64748b; }
+      .lane-title { font-size: 31px; font-weight: 700; }
+      .lane-note { font-size: 20px; font-weight: 600; }
+      .node-title { font-size: 28px; font-weight: 700; fill: #0f172a; }
+      .node-subtitle { font-size: 20px; font-weight: 400; fill: #475569; }
+      .decision { font-size: 27px; font-weight: 700; fill: #ffffff; }
+      .edge-label { font-size: 21px; font-weight: 700; }
+      .final-title { font-size: 30px; font-weight: 700; fill: #ffffff; }
+      .footer { font-size: 20px; font-weight: 400; fill: #64748b; }
+    </style>
+  </defs>
+
+  <rect width="2800" height="2100" fill="#f8fafc"/>
+  <text class="title" x="1400" y="78" text-anchor="middle">需求单、报价单与客户反馈流程图</text>
+  <text class="subtitle" x="1400" y="124" text-anchor="middle">区分产品来源、老板审批 / 定价，并由客户反馈决定报价单后续</text>
+
+  <g>
+    <rect x="70" y="175" width="2660" height="300" rx="34" fill="#f0fdfa" stroke="#99f6e4" stroke-width="3"/>
+    <text class="lane-title" x="115" y="228" fill="#0f766e">路径 A｜需求单 · 产品库产品</text>
+    <text class="lane-note" x="115" y="264" fill="#0f766e">使用产品库现有售价，老板只审批，不重新定价</text>
+    <g filter="url(#shadow)"><rect x="140" y="310" width="400" height="110" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="340" y="353" text-anchor="middle">需求单</text><text class="node-subtitle" x="340" y="389" text-anchor="middle">从产品库选择产品</text>
+    <path d="M540 365 H675" fill="none" stroke="#0f766e" stroke-width="5" marker-end="url(#arrow-green)"/>
+    <g filter="url(#shadow)"><rect x="695" y="310" width="400" height="110" rx="22" fill="#ffffff"/></g><text class="node-title" x="895" y="374" text-anchor="middle">提交需求单</text>
+    <path d="M1095 365 H1230" fill="none" stroke="#0f766e" stroke-width="5" marker-end="url(#arrow-green)"/>
+    <g filter="url(#shadow)"><rect x="1250" y="310" width="430" height="110" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="1465" y="353" text-anchor="middle">老板审批需求单</text><text class="node-subtitle" x="1465" y="389" text-anchor="middle">审批是否通过，不确认售价</text>
+    <path d="M1680 365 H1815" fill="none" stroke="#0f766e" stroke-width="5" marker-end="url(#arrow-green)"/>
+    <g filter="url(#shadow)"><rect x="1835" y="310" width="400" height="110" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="2035" y="353" text-anchor="middle">审批通过</text><text class="node-subtitle" x="2035" y="389" text-anchor="middle">允许转销售单</text>
+    <path d="M2235 365 H2370" fill="none" stroke="#0f766e" stroke-width="5" marker-end="url(#arrow-green)"/>
+    <rect x="2390" y="310" width="280" height="110" rx="22" fill="#0f766e"/><text class="final-title" x="2530" y="376" text-anchor="middle">销售单</text>
+  </g>
+
+  <g>
+    <rect x="70" y="515" width="2660" height="380" rx="34" fill="#fff7ed" stroke="#fed7aa" stroke-width="3"/>
+    <text class="lane-title" x="115" y="568" fill="#c2410c">路径 B｜需求单 · 手填新产品需求</text>
+    <text class="lane-note" x="115" y="604" fill="#c2410c">先询价和比价，老板确定售价后转为报价单</text>
+    <g filter="url(#shadow)"><rect x="120" y="670" width="390" height="120" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="315" y="714" text-anchor="middle">需求单</text><text class="node-subtitle" x="315" y="752" text-anchor="middle">手填新产品需求</text>
+    <path d="M510 730 H625" fill="none" stroke="#c2410c" stroke-width="5" marker-end="url(#arrow-orange)"/>
+    <g filter="url(#shadow)"><rect x="645" y="670" width="360" height="120" rx="22" fill="#ffffff"/></g><text class="node-title" x="825" y="738" text-anchor="middle">提交需求单</text>
+    <path d="M1005 730 H1120" fill="none" stroke="#c2410c" stroke-width="5" marker-end="url(#arrow-orange)"/>
+    <g filter="url(#shadow)"><rect x="1140" y="642" width="500" height="176" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="1390" y="686" text-anchor="middle">采购询价与多供应商比价</text>
+    <text class="node-subtitle" x="1390" y="725" text-anchor="middle">尺寸、材质、包装、重量、交期、装箱数</text>
+    <text class="node-subtitle" x="1390" y="760" text-anchor="middle">外箱尺寸、外箱毛重；打样内容写备注</text>
+    <path d="M1640 730 H1755" fill="none" stroke="#c2410c" stroke-width="5" marker-end="url(#arrow-orange)"/>
+    <g filter="url(#shadow)"><rect x="1775" y="670" width="390" height="120" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="1970" y="714" text-anchor="middle">老板确认最终售价</text><text class="node-subtitle" x="1970" y="752" text-anchor="middle">同时确定最终供应商</text>
+    <path d="M2165 730 H2280" fill="none" stroke="#c2410c" stroke-width="5" marker-end="url(#arrow-orange)"/>
+    <rect x="2300" y="670" width="390" height="120" rx="22" fill="#7c3aed"/>
+    <text class="final-title" x="2495" y="714" text-anchor="middle">转为报价单</text><text x="2495" y="752" text-anchor="middle" font-size="20" font-weight="400" fill="#ede9fe">进入客户确认环节</text>
+  </g>
+
+  <g>
+    <rect x="70" y="935" width="2660" height="300" rx="34" fill="#eff6ff" stroke="#bfdbfe" stroke-width="3"/>
+    <text class="lane-title" x="115" y="988" fill="#1d4ed8">路径 C｜报价单 · 产品库产品</text>
+    <text class="lane-note" x="115" y="1024" fill="#1d4ed8">不做首次采购询价，老板确认售价后进入客户确认</text>
+    <g filter="url(#shadow)"><rect x="300" y="1070" width="430" height="110" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="515" y="1113" text-anchor="middle">报价单</text><text class="node-subtitle" x="515" y="1149" text-anchor="middle">从产品库选择产品</text>
+    <path d="M730 1125 H965" fill="none" stroke="#1d4ed8" stroke-width="5" marker-end="url(#arrow-blue)"/>
+    <g filter="url(#shadow)"><rect x="985" y="1070" width="390" height="110" rx="22" fill="#ffffff"/></g><text class="node-title" x="1180" y="1136" text-anchor="middle">提交报价单</text>
+    <path d="M1375 1125 H1610" fill="none" stroke="#1d4ed8" stroke-width="5" marker-end="url(#arrow-blue)"/>
+    <g filter="url(#shadow)"><rect x="1630" y="1070" width="430" height="110" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="1845" y="1113" text-anchor="middle">老板确认最终售价</text><text class="node-subtitle" x="1845" y="1149" text-anchor="middle">不生成首次询价单</text>
+    <path d="M2060 1125 H2295" fill="none" stroke="#1d4ed8" stroke-width="5" marker-end="url(#arrow-blue)"/>
+    <rect x="2315" y="1070" width="380" height="110" rx="22" fill="#7c3aed"/>
+    <text class="final-title" x="2505" y="1113" text-anchor="middle">确认后的报价单</text><text x="2505" y="1149" text-anchor="middle" font-size="20" font-weight="400" fill="#ede9fe">进入客户确认环节</text>
+  </g>
+
+  <path d="M2495 790 V1280 H390 V1370" fill="none" stroke="#7c3aed" stroke-width="6" marker-end="url(#arrow-purple)"/>
+  <path d="M2505 1180 V1280" fill="none" stroke="#7c3aed" stroke-width="6"/>
+
+  <g>
+    <rect x="70" y="1310" width="2660" height="700" rx="34" fill="#faf5ff" stroke="#ddd6fe" stroke-width="3"/>
+    <text class="lane-title" x="115" y="1363" fill="#7c3aed">报价单统一后续｜客户反馈闭环</text>
+    <text class="lane-note" x="115" y="1399" fill="#7c3aed">客户确认不是老板审批；由销售记录客户反馈结果</text>
+    <g filter="url(#shadow)"><rect x="150" y="1450" width="430" height="120" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="365" y="1494" text-anchor="middle">向客户发送报价单</text><text class="node-subtitle" x="365" y="1532" text-anchor="middle">等待客户反馈价格</text>
+    <path d="M580 1510 H690" fill="none" stroke="#7c3aed" stroke-width="5" marker-end="url(#arrow-purple)"/>
+    <polygon points="825,1425 965,1510 825,1595 685,1510" fill="#7c3aed"/>
+    <text class="decision" x="825" y="1501" text-anchor="middle">客户反馈</text><text x="825" y="1534" text-anchor="middle" font-size="18" font-weight="400" fill="#ede9fe">三种结果</text>
+
+    <path d="M965 1510 H1090" fill="none" stroke="#0f766e" stroke-width="5" marker-end="url(#arrow-green)"/>
+    <text class="edge-label" x="1025" y="1478" text-anchor="middle" fill="#0f766e">接受价格</text>
+    <g filter="url(#shadow)"><rect x="1110" y="1450" width="350" height="120" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="1285" y="1494" text-anchor="middle">客户确认报价</text><text class="node-subtitle" x="1285" y="1532" text-anchor="middle">允许转销售单</text>
+    <path d="M1460 1510 H1570" fill="none" stroke="#0f766e" stroke-width="5" marker-end="url(#arrow-green)"/>
+    <rect x="1590" y="1450" width="300" height="120" rx="22" fill="#0f766e"/><text class="final-title" x="1740" y="1522" text-anchor="middle">销售单</text>
+
+    <path d="M760 1560 V1690" fill="none" stroke="#64748b" stroke-width="5" marker-end="url(#arrow-gray)"/>
+    <text class="edge-label" x="674" y="1640" text-anchor="middle" fill="#64748b">无后续</text>
+    <g filter="url(#shadow)"><rect x="500" y="1710" width="520" height="120" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="760" y="1754" text-anchor="middle">停留在报价单</text><text class="node-subtitle" x="760" y="1792" text-anchor="middle">不进入下一节点，不自动关闭</text>
+
+    <path d="M890 1570 V1640 H1130 V1690" fill="none" stroke="#c2410c" stroke-width="5" marker-end="url(#arrow-orange)"/>
+    <text class="edge-label" x="1055" y="1612" text-anchor="middle" fill="#c2410c">反馈价格有问题</text>
+    <g filter="url(#shadow)"><rect x="1060" y="1710" width="400" height="120" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="1260" y="1754" text-anchor="middle">重新采购询价</text><text class="node-subtitle" x="1260" y="1792" text-anchor="middle">从采购询价处重走流程</text>
+    <path d="M1460 1770 H1550" fill="none" stroke="#c2410c" stroke-width="5" marker-end="url(#arrow-orange)"/>
+    <g filter="url(#shadow)"><rect x="1570" y="1710" width="400" height="120" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="1770" y="1754" text-anchor="middle">采购重新比价</text><text class="node-subtitle" x="1770" y="1792" text-anchor="middle">更新供应商报价资料</text>
+    <path d="M1970 1770 H2060" fill="none" stroke="#c2410c" stroke-width="5" marker-end="url(#arrow-orange)"/>
+    <g filter="url(#shadow)"><rect x="2080" y="1710" width="400" height="120" rx="22" fill="#ffffff"/></g>
+    <text class="node-title" x="2280" y="1754" text-anchor="middle">老板重新确认售价</text><text class="node-subtitle" x="2280" y="1792" text-anchor="middle">确认新的报价方案</text>
+    <path d="M2480 1770 H2550 V1930 H365 V1590" fill="none" stroke="#7c3aed" stroke-width="6" marker-end="url(#arrow-purple)"/>
+    <rect x="2140" y="1880" width="520" height="74" rx="20" fill="#ede9fe"/><text x="2400" y="1927" text-anchor="middle" font-size="22" font-weight="700" fill="#7c3aed">更新同一报价单版本 V2 / V3…，再次发给客户</text>
+  </g>
+
+  <text class="footer" x="1400" y="2068" text-anchor="middle">说明：打样时间、打样费用不设置独立字段，相关内容统一填写在询价备注中。</text>
+</svg>

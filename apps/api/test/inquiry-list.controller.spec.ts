@@ -91,9 +91,12 @@ describe('InquiryController list', () => {
     }).compile();
 
     const controller = moduleRef.get(InquiryController);
-    const result = await controller.listAuditLogs();
+    const result = await controller.listAuditLogs('purchase', 'Leo');
 
-    expect(listAuditLogs).toHaveBeenCalled();
+    expect(listAuditLogs).toHaveBeenCalledWith({
+      role: 'purchase',
+      user: 'Leo',
+    });
     expect(result).toEqual({ items: [] });
   });
 });

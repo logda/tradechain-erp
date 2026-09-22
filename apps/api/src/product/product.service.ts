@@ -10,6 +10,7 @@ import {
   normalizeProductCodeRule,
   validateProductCodeRule,
   type ProductCodeRule,
+  type ProductCodeRuleKind,
   type ProductCodeRuleSegment,
 } from '@erp/shared';
 import { paginateItems } from '../common/pagination';
@@ -127,6 +128,7 @@ export type UpdateProductCodeRulePayload = {
 export type CreateProductPayload = {
   sku: string;
   salesCode?: string;
+  salesCodeMode?: 'manual' | 'generated';
   purchaseCode?: string;
   purchaseCodeMode?: string;
   factorySourceMode?: string;
@@ -152,6 +154,17 @@ export type CreateProductPayload = {
   ownerName: string;
   createdBy: string;
   status?: string;
+};
+
+export type FindOrCreateQuoteCandidatePayload = {
+  sku: string;
+  nameCn: string;
+  category: string;
+  unit: string;
+  confirmedSalePrice: number;
+  confirmedPurchasePrice: number;
+  supplierCode?: string;
+  operator: string;
 };
 
 export type UpdateProductPayload = Partial<
@@ -572,7 +585,18 @@ export class ProductService {
     return this.productCodeRuleStore.getRule();
   }
 
+  async getCodeRules() {
+    return this.productCodeRuleStore.getRules();
+  }
+
   async updateCodeRule(payload: UpdateProductCodeRulePayload) {
+    return this.updateCodeRuleByKind('purchase', payload);
+  }
+
+  async updateCodeRuleByKind(
+    kind: ProductCodeRuleKind,
+    payload: UpdateProductCodeRulePayload,
+  ) {
     const nextRule: ProductCodeRuleRecord = normalizeProductCodeRule({
       strategy: 'composed_segments',
       serialLength: Number(payload.serialLength),
@@ -582,12 +606,12 @@ export class ProductService {
       updatedBy: normalizeText(payload.updatedBy) || 'system',
     } as ProductCodeRuleRecord);
 
-    const validation = validateProductCodeRule(nextRule);
+    const validation = validateProductCodeRule(nextRule, { kind });
     if (!validation.ok) {
       throw new BadRequestException(validation.error);
     }
 
-    return this.productCodeRuleStore.updateRule(nextRule);
+    return this.productCodeRuleStore.updateRuleByKind(kind, nextRule);
   }
 
   async findById(id: number): Promise<ProductRecord | undefined> {
@@ -712,7 +736,9 @@ export class ProductService {
     const category = normalizeText(payload.category);
     const unit = normalizeText(payload.unit);
     const currency = normalizeText(payload.currency) || 'USD';
-    const salesCode = normalizeText(payload.salesCode);
+    let salesCode = normalizeText(payload.salesCode);
+    const salesCodeMode =
+      payload.salesCodeMode === 'generated' ? 'generated' : 'manual';
     const purchaseCode = normalizeText(payload.purchaseCode);
     const defaultSupplierCode = normalizeText(payload.defaultSupplierCode);
     const singleWeight = normalizeOptionalFiniteNumber(
@@ -758,11 +784,15 @@ export class ProductService {
       throw new BadRequestException('商品分类不合法');
     }
 
+    if (salesCodeMode === 'generated') {
+      salesCode = await this.generateSalesCodeByRule(category);
+    }
+
     if (productStage === 'formal' && !salesCode) {
       throw new BadRequestException('销售编码不能为空');
     }
 
-    const rule = this.productCodeRuleStore.getRule();
+    const rule = this.productCodeRuleStore.getRuleByKind('purchase');
     const ruleNeedsSupplierCode = rule.segments.some(
       (segment) => segment.enabled && segment.key === 'supplier_code',
     );
@@ -910,6 +940,43 @@ export class ProductService {
       },
     });
     return record;
+  }
+
+  async findOrCreateQuoteCandidate(
+    payload: FindOrCreateQuoteCandidatePayload,
+  ): Promise<ProductRecord> {
+    const sku = normalizeSku(payload.sku);
+    const existing = await this.findProductByIdOrSku({ sku });
+
+    if (existing) {
+      this.assertProductNotDeleted(existing, '已删除商品不能作为报价候选产品');
+      if (
+        existing.nameCn !== normalizeText(payload.nameCn) ||
+        existing.category !== normalizeText(payload.category)
+      ) {
+        throw new BadRequestException('SKU 已存在，但产品名称或分类不一致');
+      }
+      return existing;
+    }
+
+    return this.create({
+      sku,
+      salesCode: '',
+      purchaseCode: '',
+      purchaseCodeMode: 'manual',
+      productStage: 'quote_candidate',
+      pricingMode: 'fixed',
+      nameCn: payload.nameCn,
+      nameEn: '',
+      category: payload.category,
+      unit: payload.unit,
+      currency: 'USD',
+      defaultSalePrice: payload.confirmedSalePrice,
+      defaultPurchasePrice: payload.confirmedPurchasePrice,
+      ownerName: normalizeText(payload.operator) || 'system',
+      createdBy: normalizeText(payload.operator) || 'system',
+      status: 'active',
+    });
   }
 
   async update(id: number, payload: UpdateProductPayload) {
@@ -1472,6 +1539,15 @@ export class ProductService {
       operatedBy: string;
     },
   ) {
+    return this.ensureFormalForSalesOrder(id, payload);
+  }
+
+  async ensureFormalForSalesOrder(
+    id: number,
+    payload: {
+      operatedBy: string;
+    },
+  ) {
     if (this.shouldUsePrisma()) {
       const record = (await this.prismaProductDelegate.findUnique({
         include: productSalePriceTiersInclude,
@@ -1485,13 +1561,20 @@ export class ProductService {
       this.assertProductNotDeleted(record);
 
       const normalized = toProductRecord(record);
-      this.assertFormalProductReady(normalized);
+      if (normalized.productStage === 'formal') {
+        return normalized;
+      }
+      const salesCode =
+        normalized.salesCode ||
+        (await this.generateSalesCodeByRule(normalized.category));
+      this.assertFormalProductReady({ ...normalized, salesCode });
 
       const updated = (await this.prismaProductDelegate.update({
         include: productSalePriceTiersInclude,
         where: { id: BigInt(id) },
         data: {
           productStage: 'formal',
+          salesCode,
           updatedBy: normalizeText(payload.operatedBy) || 'system',
         },
       })) as unknown as PrismaProductRecord;
@@ -1503,9 +1586,11 @@ export class ProductService {
           operatorId: 0n,
           beforeData: {
             productStage: normalized.productStage,
+            salesCode: normalized.salesCode,
           },
           afterData: {
             productStage: 'formal',
+            salesCode,
             operatedBy: normalizeText(payload.operatedBy) || 'system',
           },
         },
@@ -1522,11 +1607,17 @@ export class ProductService {
 
     this.assertProductNotDeleted(record);
 
-    this.assertFormalProductReady(record);
+    if (record.productStage === 'formal') {
+      return record;
+    }
+    const salesCode =
+      record.salesCode || (await this.generateSalesCodeByRule(record.category));
+    this.assertFormalProductReady({ ...record, salesCode });
 
     const updated: ProductRecord = {
       ...record,
       productStage: 'formal',
+      salesCode,
       updatedBy: normalizeText(payload.operatedBy) || 'system',
       updatedAt: new Date().toISOString(),
     };
@@ -1541,9 +1632,11 @@ export class ProductService {
       operatorId: 0,
       beforeData: {
         productStage: record.productStage,
+        salesCode: record.salesCode,
       },
       afterData: {
         productStage: updated.productStage,
+        salesCode: updated.salesCode,
         operatedBy: updated.updatedBy,
       },
     });
@@ -1747,7 +1840,7 @@ export class ProductService {
     defaultSupplierCode: string;
     category: ProductCategory;
   }) {
-    const rule = this.productCodeRuleStore.getRule();
+    const rule = this.productCodeRuleStore.getRuleByKind('purchase');
     const enabledSegments = rule.segments.filter((segment) => segment.enabled);
 
     if (enabledSegments.some((segment) => segment.key === 'supplier_code') && !input.defaultSupplierCode) {
@@ -1762,6 +1855,36 @@ export class ProductService {
       now: new Date().toISOString(),
       sequence,
     });
+  }
+
+  async generateSalesCodeByRule(category: string) {
+    if (!isProductCategory(category)) {
+      throw new BadRequestException('商品分类不合法');
+    }
+    const rule = this.productCodeRuleStore.getRuleByKind('sales');
+    const validation = validateProductCodeRule(rule, { kind: 'sales' });
+    if (!validation.ok) {
+      throw new BadRequestException(validation.error);
+    }
+    let sequence = (await this.countProductsForCodeRule(rule, '')) + 1;
+    for (;;) {
+      const salesCode = buildProductCodePreview(rule, {
+        category,
+        now: new Date().toISOString(),
+        sequence,
+      });
+      const duplicated = this.shouldUsePrisma()
+        ? Boolean(
+            await this.prismaProductDelegate.findUnique({
+              where: { salesCode },
+            }),
+          )
+        : this.store.listProducts().some((item) => item.salesCode === salesCode);
+      if (!duplicated) {
+        return salesCode;
+      }
+      sequence += 1;
+    }
   }
 
   private async countProductsForCodeRule(

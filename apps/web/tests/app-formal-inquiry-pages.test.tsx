@@ -196,12 +196,20 @@ describe('formal inquiry pages', () => {
     expect(screen.getByText('IQ-RUNTIME-001')).toBeInTheDocument();
     expect(screen.getByLabelText('询价单号 Inquiry No')).toBeInTheDocument();
     expect(screen.getByLabelText('来源报价单号 Quote No')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查询' })).toHaveClass(
+      'erp-button',
+      'erp-button--primary',
+    );
+    expect(screen.getByLabelText('询价单号 Inquiry No')).toHaveClass('erp-control');
     expect(screen.getByText('上海星河贸易有限公司 / Runtime Customer EN')).toBeInTheDocument();
     expect(screen.getByText('pending_boss_review / 待老板确认')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '审计日志' })).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: '查看详情 IQ-RUNTIME-001' }),
     ).toHaveAttribute('href', '/app/sales/inquiries/88');
+    expect(
+      screen.getByRole('link', { name: '查看详情 IQ-RUNTIME-001' }),
+    ).toHaveClass('erp-button--compact', 'erp-row-action');
   });
 
   it('keeps inquiry list filters aligned with inquiry and source quote fields', async () => {
@@ -860,6 +868,9 @@ describe('formal inquiry pages', () => {
     expect(screen.getByRole('heading', { name: '正式询价详情' })).toBeInTheDocument();
     expect(screen.queryByText('无权限访问正式询价单')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '提交比价' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('columnheader', { name: '老板确认售价' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '老板确认' }),
     ).not.toBeInTheDocument();

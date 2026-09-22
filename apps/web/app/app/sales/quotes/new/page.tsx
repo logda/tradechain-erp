@@ -103,7 +103,7 @@ export default async function AppNewFormalQuotePage({
   return (
     <AppShell
       title="正式新建需求和报价"
-      subtitle="需求单选产品库，报价单手填产品，默认带入当前销售视角。"
+      subtitle="需求单可选择产品库产品或手填新产品；报价单只选择产品库产品。"
       session={session}
     >
       <section style={shellBodyStyle}>

@@ -13,6 +13,7 @@ import {
 import {
   buildProductCodePreview,
   defaultProductCodeRule,
+  defaultSalesProductCodeRule,
   describeProductCodeRule,
   type ProductCodeRule,
 } from './product-code-rule';
@@ -31,12 +32,14 @@ export type ProductCategory = 'electronics' | 'consumables' | 'service';
 export type ProductStage = 'quote_candidate' | 'formal';
 export type PricingMode = 'fixed' | 'tiered';
 export type PurchaseCodeMode = 'manual' | 'generated';
+export type SalesCodeMode = 'manual' | 'generated';
 export type FactorySourceMode = 'manual' | 'supplier';
 
 type CreateProductFormProps = {
   endpoint: string;
   createdBy: string;
   codeRule?: ProductCodeRule;
+  salesCodeRule?: ProductCodeRule;
   supplierOptions?: ProductSupplierOption[];
   actorAccessScopes?: {
     modules: string[];
@@ -105,6 +108,11 @@ const pricingModeLabels: Record<PricingMode, string> = {
 };
 
 const purchaseCodeModeLabels: Record<PurchaseCodeMode, string> = {
+  manual: 'manual / 手工填写',
+  generated: 'generated / 自动生成',
+};
+
+const salesCodeModeLabels: Record<SalesCodeMode, string> = {
   manual: 'manual / 手工填写',
   generated: 'generated / 自动生成',
 };
@@ -370,12 +378,14 @@ export function CreateProductForm({
   endpoint,
   createdBy,
   codeRule = defaultProductCodeRule,
+  salesCodeRule = defaultSalesProductCodeRule,
   supplierOptions = fallbackProductSupplierOptions,
   actorAccessScopes,
   onSuccess,
 }: CreateProductFormProps) {
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [salesCodeMode, setSalesCodeMode] = useState<SalesCodeMode>('generated');
   const [purchaseCodeMode, setPurchaseCodeMode] = useState<PurchaseCodeMode>('generated');
   const [factorySourceMode, setFactorySourceMode] = useState<FactorySourceMode>('manual');
   const [pricingMode, setPricingMode] = useState<PricingMode>('fixed');
@@ -413,6 +423,11 @@ export function CreateProductForm({
     now: '2026-07-17T08:00:00.000Z',
     sequence: 1,
   });
+  const salesGenerationPreview = buildProductCodePreview(salesCodeRule, {
+    category: selectedCategory,
+    now: '2026-07-17T08:00:00.000Z',
+    sequence: 1,
+  });
   const requirementText = [
     generationReadySupplier ? '已选择供应商' : '需先选择供应商',
     generationReadyCategory ? '已填写产品分类' : '需先填写产品分类',
@@ -426,7 +441,10 @@ export function CreateProductForm({
 
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const salesCode = String(formData.get('salesCode') ?? '').trim();
+    const salesCode =
+      salesCodeMode === 'manual'
+        ? String(formData.get('salesCode') ?? '').trim()
+        : '';
     const purchaseCode = String(formData.get('purchaseCode') ?? '').trim();
     const derivedSku = salesCode || purchaseCode || `SKU-${Date.now()}`;
     setState(initialState);
@@ -444,6 +462,7 @@ export function CreateProductForm({
     const payload = {
       sku: derivedSku,
       salesCode,
+      salesCodeMode,
       purchaseCode,
       purchaseCodeMode: String(formData.get('purchaseCodeMode') ?? ''),
       factorySourceMode,
@@ -599,19 +618,21 @@ export function CreateProductForm({
         <div style={{ display: 'grid', gap: '8px' }}>
           <h3 style={heroTitleStyle}>新增商品</h3>
           <p style={heroCopyStyle}>
-            这是正式商品主数据的建档入口。销售编码给业务侧使用，采购编码可手填或自动生成，页面只展示业务真正需要维护的字段。
+            这是正式商品主数据的建档入口。销售编码和采购编码均可手填或按各自规则自动生成。
           </p>
         </div>
         <div style={heroMetaGridStyle}>
           <article style={heroMetaCardStyle}>
-            <span style={heroMetaLabelStyle}>采购编码模式</span>
+            <span style={heroMetaLabelStyle}>销售 / 采购编码模式</span>
             <span style={heroMetaValueStyle}>
-              {purchaseCodeMode === 'generated' ? '默认自动生成，可按需切换手填。' : '当前为手工填写模式。'}
+              两类编码均可分别选择手工填写或自动生成。
             </span>
           </article>
           <article style={heroMetaCardStyle}>
             <span style={heroMetaLabelStyle}>当前编码规则</span>
-            <span style={heroMetaValueStyle}>{describeProductCodeRule(codeRule)}。</span>
+            <span style={heroMetaValueStyle}>
+              销售：{describeProductCodeRule(salesCodeRule)}；采购：{describeProductCodeRule(codeRule)}。
+            </span>
           </article>
           <article style={heroMetaCardStyle}>
             <span style={heroMetaLabelStyle}>当前示例</span>
@@ -624,18 +645,46 @@ export function CreateProductForm({
         <div style={sectionHeaderStyle}>
           <h4 style={sectionTitleStyle}>编码与来源</h4>
           <p style={sectionCopyStyle}>
-            先确定销售编码、采购编码模式和工厂来源。采购编码说明已收纳在这一组，不再挤在顶部说明区。
+            先分别确定销售编码、采购编码的生成模式，再维护工厂来源。
           </p>
         </div>
         <div style={codeSourceGridStyle}>
+          <div style={labelStyle}>
+            <input type="hidden" name="salesCodeMode" value={salesCodeMode} />
+            <span>销售编码模式 Sales Code Mode</span>
+            <span role="group" aria-label="销售编码模式 Sales Code Mode" style={segmentedControlStyle}>
+              {Object.entries(salesCodeModeLabels).map(([key, value]) => (
+                <button
+                  className="erp-mode-button"
+                  key={key}
+                  type="button"
+                  aria-pressed={salesCodeMode === key}
+                  style={buildModeButtonStyle(salesCodeMode === key)}
+                  onClick={() => setSalesCodeMode(key as SalesCodeMode)}
+                >
+                  {value}
+                </button>
+              ))}
+            </span>
+            <span style={helperTextStyle}>自动生成规则：{describeProductCodeRule(salesCodeRule)}。</span>
+          </div>
           <label style={labelStyle}>
             {renderRequiredLabel('产品销售编码 Sales Code')}
             <input
+              className="erp-control"
               name="salesCode"
               aria-label="产品销售编码 Sales Code"
               style={inputStyle}
+              disabled={salesCodeMode === 'generated'}
+              placeholder={
+                salesCodeMode === 'generated' ? '系统按规则自动生成' : '请手工填写销售编码'
+              }
             />
-            <span style={mutedTextStyle}>销售侧独立维护，便于报价、订单和客户沟通复用。</span>
+            <span style={mutedTextStyle}>
+              {salesCodeMode === 'generated'
+                ? `当前示例：${salesGenerationPreview}`
+                : '手工编码将直接用于报价、订单和客户沟通。'}
+            </span>
           </label>
           <div style={labelStyle}>
             <input type="hidden" name="purchaseCodeMode" value={purchaseCodeMode} />
@@ -643,6 +692,7 @@ export function CreateProductForm({
             <span role="group" aria-label="采购编码模式 Purchase Code Mode" style={segmentedControlStyle}>
               {Object.entries(purchaseCodeModeLabels).map(([key, value]) => (
                 <button
+                  className="erp-mode-button"
                   key={key}
                   type="button"
                   aria-pressed={purchaseCodeMode === key}
@@ -899,7 +949,7 @@ export function CreateProductForm({
       {state.success ? (
         <p style={{ margin: 0, color: '#166534', fontSize: '13px' }}>{state.success}</p>
       ) : null}
-      <button type="submit" style={buttonStyle} disabled={isSubmitting}>
+      <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting}>
         {isSubmitting ? '提交中...' : '新增商品'}
       </button>
     </form>

@@ -51,11 +51,14 @@ describe('AppProductCodeRulePage', () => {
     expect(
       screen.getByText('固定前缀 + 供应商编码 + 分类编码 + 年 + 月 + 4 位流水号，例如 PD-SUP-BRAVO-ELEC-2026-08-0001'),
     ).toBeInTheDocument();
-    expect(screen.getByText('规则段配置')).toBeInTheDocument();
-    expect(screen.getByText('生成前提与提示')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '保存规则' })).toBeInTheDocument();
-    expect(screen.getByText('年')).toBeInTheDocument();
-    expect(screen.getByText('月')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '采购编码规则' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '销售编码规则' })).toBeInTheDocument();
+    expect(screen.getByText('采购编码规则段配置')).toBeInTheDocument();
+    expect(screen.getByText('销售编码规则段配置')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存采购编码规则' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存销售编码规则' })).toBeInTheDocument();
+    expect(screen.getAllByText('生成前提与提示')).toHaveLength(2);
+    expect(screen.getAllByText('供应商编码')).toHaveLength(1);
   });
 
   it('updates the current-rule summary locally after saving the rule', async () => {
@@ -81,7 +84,7 @@ describe('AppProductCodeRulePage', () => {
         });
       }
 
-      if (url.endsWith('/products/code-rule')) {
+      if (url.endsWith('/products/code-rules')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -123,17 +126,17 @@ describe('AppProductCodeRulePage', () => {
     expect(screen.getByText('最近更新：2026-07-16T08:00:00.000Z / Admin')).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('供应商编码'));
-    fireEvent.click(screen.getByLabelText('月'));
-    fireEvent.change(screen.getByLabelText('流水位数'), {
+    fireEvent.click(screen.getAllByLabelText('月')[0]);
+    fireEvent.change(screen.getAllByLabelText('流水位数')[0], {
       target: { value: '5' },
     });
-    fireEvent.change(screen.getByLabelText('流水范围'), {
+    fireEvent.change(screen.getAllByLabelText('流水范围')[0], {
       target: { value: 'global_year' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存规则' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存采购编码规则' }));
 
     await waitFor(() => {
-      expect(screen.getByText('产品编码规则已保存')).toBeInTheDocument();
+      expect(screen.getByText('采购编码规则已保存')).toBeInTheDocument();
       expect(
         screen.getByText('固定前缀 + 分类编码 + 年 + 5 位流水号，例如 PD-ELEC-2026-00001'),
       ).toBeInTheDocument();

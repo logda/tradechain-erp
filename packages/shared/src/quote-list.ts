@@ -23,6 +23,7 @@ export const quoteSourceTypeOptions = [
 export type QuoteListSortField = (typeof quoteListSortFields)[number];
 export type QuoteSourceType = string;
 export type QuoteDocumentType = 'demand' | 'quote';
+export type QuoteProductSource = 'existing' | 'candidate';
 
 export type QuoteListQuery = Omit<CommonListQuery, 'sortBy'> & {
   documentType?: QuoteDocumentType;
@@ -35,6 +36,7 @@ export type QuoteListQuery = Omit<CommonListQuery, 'sortBy'> & {
 
 export type QuoteListItem = {
   documentType?: QuoteDocumentType;
+  productSource?: QuoteProductSource;
   moduleLabel: string;
   quoteId?: number;
   docNo: string;

@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import React from 'react';
 import type { ReactNode } from 'react';
 import {
   canViewFormalAuditCenter,
@@ -10,168 +9,6 @@ import {
   getDemoRoleLabel,
 } from '../_lib/demo-session';
 import { getFormalTodoCount } from '../_lib/formal-todos';
-
-const shellStyles = {
-  page: {
-    minHeight: '100vh',
-    background:
-      'linear-gradient(180deg, #eef3f8 0%, #f8fafc 28%, #edf2f7 100%)',
-    color: '#0f172a',
-    fontFamily:
-      '"Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
-  },
-  frame: {
-    display: 'grid',
-    gridTemplateColumns: '272px minmax(0, 1fr)',
-    minHeight: '100vh',
-  },
-  sidebar: {
-    borderRight: '1px solid #d6dee8',
-    background:
-      'linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(27,39,58,0.98) 100%)',
-    color: '#e2e8f0',
-    padding: '28px 22px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '22px',
-  },
-  brand: {
-    border: '1px solid rgba(148,163,184,0.28)',
-    background: 'rgba(15, 23, 42, 0.22)',
-    padding: '18px',
-    borderRadius: '18px',
-  },
-  brandTitle: {
-    margin: 0,
-    fontSize: '22px',
-    fontWeight: 700,
-    letterSpacing: '0.08em',
-  },
-  brandSub: {
-    margin: '8px 0 0',
-    fontSize: '13px',
-    lineHeight: 1.6,
-    color: '#94a3b8',
-  },
-  navGroup: {
-    display: 'grid',
-    gap: '10px',
-  },
-  navLink: {
-    color: '#e2e8f0',
-    textDecoration: 'none',
-    border: '1px solid rgba(148,163,184,0.18)',
-    borderRadius: '12px',
-    padding: '12px 14px',
-    background: 'rgba(255,255,255,0.03)',
-  },
-  navMeta: {
-    marginTop: 'auto',
-    fontSize: '12px',
-    color: '#94a3b8',
-    lineHeight: 1.8,
-  },
-  content: {
-    padding: '24px clamp(20px, 2.4vw, 36px) 40px',
-    width: '100%',
-    boxSizing: 'border-box',
-  },
-  topbar: {
-    display: 'flex',
-    flexWrap: 'wrap' as const,
-    justifyContent: 'space-between',
-    alignItems: 'start',
-    gap: '20px 24px',
-    marginBottom: '24px',
-    padding: '24px 26px',
-    border: '1px solid #d8e1ea',
-    borderRadius: '24px',
-    background:
-      'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.92) 100%)',
-    boxShadow: '0 20px 70px rgba(15, 23, 42, 0.07)',
-    backdropFilter: 'blur(14px)',
-  },
-  titleWrap: {
-    display: 'grid',
-    gap: '10px',
-    alignContent: 'start',
-    flex: '1 1 520px',
-    minWidth: '260px',
-  },
-  eyebrow: {
-    margin: 0,
-    fontSize: '12px',
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase' as const,
-    color: '#64748b',
-  },
-  title: {
-    margin: 0,
-    fontSize: 'clamp(30px, 3vw, 44px)',
-    fontWeight: 700,
-    lineHeight: 1.1,
-  },
-  subtitle: {
-    margin: 0,
-    color: '#475569',
-    fontSize: '15px',
-    lineHeight: 1.8,
-    maxWidth: '760px',
-  },
-  userPanel: {
-    display: 'grid',
-    gap: '14px',
-    alignContent: 'start',
-    justifyItems: 'stretch',
-    flex: '1 1 360px',
-    minWidth: '280px',
-    maxWidth: '560px',
-  },
-  metaGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-    gap: '12px',
-  },
-  pill: {
-    border: '1px solid #d8e1ea',
-    borderRadius: '18px',
-    padding: '14px 16px',
-    background:
-      'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,245,249,0.92) 100%)',
-    fontSize: '13px',
-    color: '#334155',
-    fontWeight: 600,
-    minHeight: '54px',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  switchLink: {
-    border: '1px solid #d8e1ea',
-    borderRadius: '999px',
-    padding: '8px 12px',
-    background: '#ffffff',
-    fontSize: '12px',
-    color: '#0f172a',
-    textDecoration: 'none',
-    fontWeight: 700,
-  },
-  logoutLink: {
-    border: '1px solid #d8e1ea',
-    borderRadius: '999px',
-    padding: '10px 14px',
-    background: '#ffffff',
-    fontSize: '13px',
-    color: '#9f1239',
-    textDecoration: 'none',
-    fontWeight: 700,
-    width: 'fit-content',
-    justifySelf: 'end',
-  },
-  body: {
-    display: 'grid',
-    gap: '22px',
-  },
-} satisfies Record<string, React.CSSProperties>;
 
 type NavEntryVisible = FormalModule | 'all' | 'salesOrPurchase';
 
@@ -270,27 +107,31 @@ export function AppShell({
   });
 
   return (
-    <main style={shellStyles.page}>
-      <div style={shellStyles.frame}>
-        <aside style={shellStyles.sidebar}>
-          <div style={shellStyles.brand}>
-            <h1 style={shellStyles.brandTitle}>NEXUS ERP</h1>
-            <p style={shellStyles.brandSub}>
+    <main className="erp-app erp-shell">
+      <div className="erp-shell__frame">
+        <aside className="erp-shell__sidebar">
+          <div className="erp-shell__brand">
+            <h1 className="erp-shell__brand-title">NEXUS ERP</h1>
+            <p className="erp-shell__brand-subtitle">
               正式工作台入口
               <br />
               全链路业务系统
             </p>
           </div>
 
-          <nav style={shellStyles.navGroup} aria-label="formal-app-nav">
+          <nav className="erp-shell__nav" aria-label="formal-app-nav">
             {visibleNavEntries.map((entry) => (
-              <Link key={entry.href} href={buildSessionHref(entry.href, session)} style={shellStyles.navLink}>
+              <Link
+                key={entry.href}
+                href={buildSessionHref(entry.href, session)}
+                className="erp-shell__nav-link"
+              >
                 {entry.label}
               </Link>
             ))}
           </nav>
 
-          <div style={shellStyles.navMeta}>
+          <div className="erp-shell__meta">
             当前角色：{roleLabel}
             <br />
             当前用户：{session.user}
@@ -299,28 +140,31 @@ export function AppShell({
           </div>
         </aside>
 
-        <section style={shellStyles.content}>
-          <header style={shellStyles.topbar}>
-            <div style={shellStyles.titleWrap}>
-              <p style={shellStyles.eyebrow}>正式工作台</p>
-              <h2 style={shellStyles.title}>{title}</h2>
-              {subtitle ? <p style={shellStyles.subtitle}>{subtitle}</p> : null}
+        <section className="erp-shell__content">
+          <header className="erp-shell__topbar" data-backdrop>
+            <div className="erp-shell__title-wrap">
+              <p className="erp-shell__eyebrow">正式工作台</p>
+              <h2 className="erp-shell__title">{title}</h2>
+              {subtitle ? <p className="erp-shell__subtitle">{subtitle}</p> : null}
             </div>
 
-            <div style={shellStyles.userPanel}>
-              <div style={shellStyles.metaGrid}>
-                <span style={shellStyles.pill}>{`角色 Role: ${roleLabel}`}</span>
-                <span style={shellStyles.pill}>{`用户 User: ${session.user}`}</span>
-                <span style={shellStyles.pill}>{`权限 Scope: ${accessScopeLabel}`}</span>
-                <span style={shellStyles.pill}>消息待办 Todo: {todoCount}</span>
+            <div className="erp-shell__user-panel">
+              <div className="erp-shell__meta-grid">
+                <span className="erp-shell__pill">{`角色 Role: ${roleLabel}`}</span>
+                <span className="erp-shell__pill">{`用户 User: ${session.user}`}</span>
+                <span className="erp-shell__pill">{`权限 Scope: ${accessScopeLabel}`}</span>
+                <span className="erp-shell__pill">消息待办 Todo: {todoCount}</span>
               </div>
-              <a href="/app/logout" style={shellStyles.logoutLink}>
+              <a
+                href="/app/logout"
+                className="erp-button erp-button--secondary erp-shell__logout"
+              >
                 退出登录
               </a>
             </div>
           </header>
 
-          <div style={shellStyles.body}>{children}</div>
+          <div className="erp-shell__body">{children}</div>
         </section>
       </div>
     </main>

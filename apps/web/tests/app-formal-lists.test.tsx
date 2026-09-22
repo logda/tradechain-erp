@@ -54,7 +54,7 @@ describe('formal sales list pages', () => {
               quoteId: 77,
               docNo: 'XQ-RUNTIME-001',
               title: 'Runtime API Demand',
-              status: 'submitted',
+              status: 'boss_approved',
               currentVersionNo: 1,
               secondaryStatus: undefined,
               customerName: 'Runtime Customer EN',
@@ -104,11 +104,17 @@ describe('formal sales list pages', () => {
     expect(screen.getByLabelText('单据类型 Document Type')).toBeInTheDocument();
     expect(screen.getByLabelText('单号 Doc No')).toBeInTheDocument();
     expect(screen.getByLabelText('创建人 / 销售 Created By')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查询' })).toHaveClass(
+      'erp-button',
+      'erp-button--primary',
+    );
+    expect(screen.getByLabelText('单号 Doc No')).toHaveClass('erp-control');
     expect(screen.getByText('查询结果')).toBeInTheDocument();
     expect(screen.getByText('XQ-RUNTIME-001')).toBeInTheDocument();
     expect(screen.getByText('类型 Type')).toBeInTheDocument();
     expect(screen.getByText('上海星河贸易有限公司 / Runtime Customer EN')).toBeInTheDocument();
     const quoteDetailLink = screen.getByRole('link', { name: '查看详情' });
+    expect(quoteDetailLink).toHaveClass('erp-button--compact', 'erp-row-action');
     const quoteRow = quoteDetailLink.closest('tr');
     expect(quoteRow).not.toBeNull();
     expect(within(quoteRow as HTMLTableRowElement).getByText('需求单 / Demand')).toBeInTheDocument();
@@ -116,7 +122,7 @@ describe('formal sales list pages', () => {
       within(quoteRow as HTMLTableRowElement).getByText(
         (_, element) =>
           element?.tagName === 'TD' &&
-          (element.textContent?.includes('submitted / 已提交') ?? false),
+          (element.textContent?.includes('boss_approved') ?? false),
       ),
     ).toBeInTheDocument();
     expect(within(quoteRow as HTMLTableRowElement).getByRole('button', { name: '转销售单' })).toBeInTheDocument();

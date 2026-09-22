@@ -216,28 +216,15 @@ const labelStyle = {
 
 const inputStyle = {
   border: '1px solid #d7e0ea',
-  borderRadius: '12px',
+  borderRadius: '8px',
   boxSizing: 'border-box' as const,
   width: '100%',
-  minHeight: '46px',
-  padding: '10px 14px',
+  minHeight: '40px',
+  padding: '8px 12px',
   background: '#fff',
   color: '#0f172a',
   fontSize: '14px',
   outlineColor: '#2563eb',
-} satisfies React.CSSProperties;
-
-const filterButtonStyle = {
-  border: '1px solid #0f172a',
-  borderRadius: '12px',
-  minHeight: '46px',
-  padding: '10px 18px',
-  background: '#0f172a',
-  color: '#ffffff',
-  fontSize: '14px',
-  fontWeight: 700,
-  cursor: 'pointer',
-  boxShadow: '0 10px 24px rgba(15, 23, 42, 0.12)',
 } satisfies React.CSSProperties;
 
 const chipWrapStyle = {
@@ -411,25 +398,6 @@ const statusToneStyles: Record<string, React.CSSProperties> = {
   },
 };
 
-const actionButtonStyle = {
-  display: 'inline-flex',
-  flexDirection: 'column' as const,
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '100%',
-  boxSizing: 'border-box' as const,
-  border: '1px solid #0f172a',
-  borderRadius: '10px',
-  padding: '8px 8px',
-  background: '#0f172a',
-  color: '#ffffff',
-  textDecoration: 'none',
-  fontWeight: 800,
-  fontSize: '13px',
-  lineHeight: 1.25,
-  boxShadow: '0 10px 22px rgba(15, 23, 42, 0.14)',
-} satisfies React.CSSProperties;
-
 const deniedStyle = {
   border: '1px solid #d7e0ea',
   borderRadius: '20px',
@@ -582,7 +550,7 @@ export default async function AppSalesOrdersPage({
         title="当前筛选"
         subtitle="统一强调来源方式、审批履约、发货和售后标记。"
       >
-        <form method="get" style={filterFormStyle}>
+        <form method="get" className="erp-filter-form" style={filterFormStyle}>
           <label style={labelStyle}>
             关键词 Keyword
             <input name="keyword" defaultValue={query.keyword} style={inputStyle} />
@@ -671,7 +639,7 @@ export default async function AppSalesOrdersPage({
           </label>
           <input type="hidden" name="page" value="1" />
           <input type="hidden" name="pageSize" value={query.pageSize} />
-          <button type="submit" style={filterButtonStyle}>
+          <button className="erp-button erp-button--primary" type="submit">
             查询
           </button>
         </form>
@@ -783,7 +751,7 @@ export default async function AppSalesOrdersPage({
                   <td style={stickyActionCellStyle}>
                     <Link
                       href={toFormalSalesOrderDetailHref(item.detailHref)}
-                      style={actionButtonStyle}
+                      className="erp-button erp-button--secondary erp-button--compact erp-row-action"
                       aria-label={`查看详情 ${item.docNo}`}
                     >
                       详情

@@ -1,3 +1,4 @@
+import './formal-ui.css';
 import type { ReactNode } from 'react';
 
 type RootLayoutProps = {
@@ -6,8 +7,8 @@ type RootLayoutProps = {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="zh-CN">
+      <body className="erp-document">{children}</body>
     </html>
   );
 }

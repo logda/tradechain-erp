@@ -304,6 +304,7 @@ describe('formal quote create page', () => {
     await expect(buildCreateFormalQuotePayload(formData)).resolves.toEqual({
       submitMode: 'submit',
       documentType: 'demand',
+      productSource: 'existing',
       customerId: 1,
       customerEntryMode: 'existing',
       customerName: 'Acme Trading',
@@ -328,6 +329,7 @@ describe('formal quote create page', () => {
           ],
         },
       ],
+      quoteAttachments: undefined,
       role: 'sales',
       user: 'Leo',
     });
@@ -368,7 +370,8 @@ describe('formal quote create page', () => {
 
     await expect(buildCreateFormalQuotePayload(formData)).resolves.toEqual({
       submitMode: 'draft',
-      documentType: 'quote',
+      documentType: 'demand',
+      productSource: 'candidate',
       customerEntryMode: 'manual',
       customerName: 'Manual Customer',
       customerCode: 'TEMP-MANUAL',
@@ -391,6 +394,7 @@ describe('formal quote create page', () => {
           imageUrls: [],
         },
       ],
+      quoteAttachments: undefined,
       role: 'sales',
       user: 'Leo',
     });
@@ -408,7 +412,7 @@ describe('formal quote create page', () => {
       </>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '报价单 / 手填产品' }));
+    fireEvent.click(screen.getByRole('button', { name: '手填新产品' }));
 
     expect(
       screen.queryByRole('button', { name: '选择产品库产品 Product Picker' }),
@@ -738,7 +742,7 @@ describe('formal quote create page', () => {
     );
   });
 
-  it('redirects submitted quote documents back to quote detail even when an inquiry is created', async () => {
+  it('redirects submitted candidate demands back to demand detail when an inquiry is created', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       createJsonResponse({
         id: 118,
@@ -776,7 +780,13 @@ describe('formal quote create page', () => {
       'http://127.0.0.1:3001/api/quotes',
       expect.objectContaining({
         method: 'POST',
-        body: expect.stringContaining('"documentType":"quote"'),
+        body: expect.stringContaining('"documentType":"demand"'),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3001/api/quotes',
+      expect.objectContaining({
+        body: expect.stringContaining('"productSource":"candidate"'),
       }),
     );
   });
@@ -844,6 +854,7 @@ describe('formal quote create page', () => {
       body: JSON.stringify({
         submitMode: 'submit',
         documentType: 'demand',
+        productSource: 'existing',
         customerId: 1,
         customerEntryMode: 'existing',
         customerName: 'Acme Trading',

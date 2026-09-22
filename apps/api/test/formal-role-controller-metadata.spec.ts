@@ -192,6 +192,20 @@ describe('formal role controller metadata', () => {
       'sales_manager',
       'sales',
     ]);
+    expect(getMethodRoles(QuoteController, 'approveDemand')).toEqual([
+      'admin',
+      'boss',
+    ]);
+    expect(getMethodActions(QuoteController, 'approveDemand')).toEqual([
+      'boss.confirm',
+    ]);
+    expect(getMethodRoles(QuoteController, 'confirmPrice')).toEqual([
+      'admin',
+      'boss',
+    ]);
+    expect(getMethodActions(QuoteController, 'confirmPrice')).toEqual([
+      'boss.confirm',
+    ]);
     expect(getMethodRoles(SalesOrderController, 'approve')).toEqual([
       'admin',
       'boss',

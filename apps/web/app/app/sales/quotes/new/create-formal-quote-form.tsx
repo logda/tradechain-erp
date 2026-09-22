@@ -53,6 +53,7 @@ export type InitialFormalQuoteFormValue = {
   destination?: string;
   requirements?: string;
   documentType?: 'demand' | 'quote';
+  productSource?: 'existing' | 'candidate';
   quoteAttachments?: QuoteAttachmentDraft[];
   items?: Array<{
     lineNo: number;
@@ -426,16 +427,15 @@ export function CreateFormalQuoteForm({
   const initialProductOption = resolveInitialProductOption(initialQuote, productOptions);
   const initialItem = initialQuote?.items?.[0];
   const initialDocumentType = initialQuote?.documentType;
+  const initialProductSource = initialQuote?.productSource;
   const initialQuoteImageUrls = initialItem?.imageUrls ?? [];
   const initialQuoteAttachments = initialQuote?.quoteAttachments ?? [];
+  const [documentType, setDocumentType] = useState<'demand' | 'quote'>(
+    initialDocumentType ?? 'demand',
+  );
   const [productEntryMode, setProductEntryMode] = useState<'existing' | 'candidate'>(
-    initialDocumentType === 'quote'
-      ? 'candidate'
-      : initialDocumentType === 'demand'
-        ? 'existing'
-        : initialQuote && !initialProductOption
-          ? 'candidate'
-          : 'existing',
+    initialProductSource ??
+      (initialQuote && !initialProductOption ? 'candidate' : 'existing'),
   );
   const [submitMode, setSubmitMode] = useState<'draft' | 'submit'>('draft');
   const [selectedImagePreviews, setSelectedImagePreviews] = useState<
@@ -462,8 +462,6 @@ export function CreateFormalQuoteForm({
     initialItem ? String(initialItem.salePrice) : '0',
   );
   const formMode = draftQuoteId ? 'edit' : 'create';
-  const documentType =
-    initialDocumentType ?? (productEntryMode === 'existing' ? 'demand' : 'quote');
   const fallbackSubmitError =
     formMode === 'edit'
       ? documentType === 'demand'
@@ -495,6 +493,12 @@ export function CreateFormalQuoteForm({
   useEffect(() => {
     isSubmittingRef.current = isSubmitting;
   }, [isSubmitting]);
+
+  useEffect(() => {
+    if (documentType === 'quote' && productEntryMode !== 'existing') {
+      setProductEntryMode('existing');
+    }
+  }, [documentType, productEntryMode]);
 
   useEffect(() => {
     draftQuoteIdRef.current = draftQuoteId;
@@ -833,6 +837,7 @@ export function CreateFormalQuoteForm({
       <input type="hidden" name="user" value={user} />
       <input type="hidden" name="submitMode" value={submitMode} />
       <input type="hidden" name="documentType" value={documentType} />
+      <input type="hidden" name="productSource" value={productEntryMode} />
       <input type="hidden" name="customerEntryMode" value={customerEntryMode} />
       <input
         type="hidden"
@@ -1042,25 +1047,48 @@ export function CreateFormalQuoteForm({
           <input type="hidden" name="productEntryMode" value={productEntryMode} />
           <div style={labelStyle}>
             <span>单据类型 Document Type</span>
-            <span role="group" aria-label="商品录入方式 Product Entry Mode" style={segmentedControlStyle}>
+            <span role="group" aria-label="单据类型 Document Type" style={segmentedControlStyle}>
               <button
                 type="button"
-                aria-pressed={productEntryMode === 'existing'}
-                style={buildModeButtonStyle(productEntryMode === 'existing')}
-                onClick={() => setProductEntryMode('existing')}
+                aria-pressed={documentType === 'demand'}
+                style={buildModeButtonStyle(documentType === 'demand')}
+                onClick={() => setDocumentType('demand')}
               >
-                需求单 / 选产品库
+                需求单
               </button>
               <button
                 type="button"
-                aria-pressed={productEntryMode === 'candidate'}
-                style={buildModeButtonStyle(productEntryMode === 'candidate')}
-                onClick={() => setProductEntryMode('candidate')}
+                aria-pressed={documentType === 'quote'}
+                style={buildModeButtonStyle(documentType === 'quote')}
+                onClick={() => setDocumentType('quote')}
               >
-                报价单 / 手填产品
+                报价单
               </button>
             </span>
           </div>
+          {documentType === 'demand' ? (
+            <div style={labelStyle}>
+              <span>产品来源 Product Source</span>
+              <span role="group" aria-label="产品来源 Product Source" style={segmentedControlStyle}>
+                <button
+                  type="button"
+                  aria-pressed={productEntryMode === 'existing'}
+                  style={buildModeButtonStyle(productEntryMode === 'existing')}
+                  onClick={() => setProductEntryMode('existing')}
+                >
+                  产品库产品
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={productEntryMode === 'candidate'}
+                  style={buildModeButtonStyle(productEntryMode === 'candidate')}
+                  onClick={() => setProductEntryMode('candidate')}
+                >
+                  手填新产品
+                </button>
+              </span>
+            </div>
+          ) : null}
         </div>
         <div style={gridStyle}>
           {productEntryMode === 'existing' ? (
@@ -1388,7 +1416,7 @@ export function CreateFormalQuoteForm({
             }}
           >
             <p style={{ margin: 0, color: '#475569', fontSize: '13px' }}>
-              如报价阶段还没有正式产品，可先录入待建档产品信息；销售提交时只进入询价流程，后续由采购完善并写入产品库。
+              新产品需求可先手填待建档信息；提交需求单后进入采购询价，老板定价后再生成关联报价单。
             </p>
             <div style={gridStyle}>
               <label style={labelStyle}>
@@ -1468,7 +1496,7 @@ export function CreateFormalQuoteForm({
             ? '提交中...'
             : documentType === 'demand'
               ? '提交需求单'
-              : '提交并进入询价'}
+              : '提交报价单'}
         </button>
       </div>
 

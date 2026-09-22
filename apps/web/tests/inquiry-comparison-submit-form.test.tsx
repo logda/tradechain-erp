@@ -68,6 +68,37 @@ describe('InquiryComparisonSubmitForm', () => {
     fireEvent.change(screen.getByLabelText('行 1 采购价 1'), {
       target: { value: '18.6' },
     });
+    expect(screen.getByLabelText('行 1 采购价 1')).toHaveClass('erp-control');
+    expect(screen.getByRole('button', { name: '提交比价' })).toHaveClass(
+      'erp-button--primary',
+    );
+    fireEvent.change(screen.getByLabelText('行 1 产品尺寸 1'), {
+      target: { value: '40×30×10' },
+    });
+    fireEvent.change(screen.getByLabelText('行 1 产品材质 1'), {
+      target: { value: 'PVC镭射' },
+    });
+    fireEvent.change(screen.getByLabelText('行 1 产品包装 1'), {
+      target: { value: 'OPP袋/个' },
+    });
+    fireEvent.change(screen.getByLabelText('行 1 产品重量 1'), {
+      target: { value: '180' },
+    });
+    fireEvent.change(screen.getByLabelText('行 1 大货交期 1'), {
+      target: { value: '7-10' },
+    });
+    fireEvent.change(screen.getByLabelText('行 1 装箱数 1'), {
+      target: { value: '120' },
+    });
+    fireEvent.change(screen.getByLabelText('行 1 外箱尺寸 1'), {
+      target: { value: '55×45×40' },
+    });
+    fireEvent.change(screen.getByLabelText('行 1 外箱毛重 1'), {
+      target: { value: '24' },
+    });
+    fireEvent.change(screen.getByLabelText('行 1 备注 1'), {
+      target: { value: '打样 2 天，费用 200 元' },
+    });
     fireEvent.click(
       within(screen.getByRole('group', { name: '行 1 录入方式 2' })).getByRole('button', {
         name: '手工填写',
@@ -96,11 +127,29 @@ describe('InquiryComparisonSubmitForm', () => {
                   supplierCode: 'SUP-BRAVO',
                   supplierName: 'Bravo Industrial',
                   purchasePrice: 18.6,
+                  productSizeCm: '40×30×10',
+                  productMaterial: 'PVC镭射',
+                  productPackaging: 'OPP袋/个',
+                  productWeightG: 180,
+                  bulkLeadTimeDays: '7-10',
+                  cartonQuantity: 120,
+                  outerCartonSizeCm: '55×45×40',
+                  outerCartonGrossWeightKg: 24,
+                  remark: '打样 2 天，费用 200 元',
                 },
                 {
                   supplierSourceMode: 'manual',
                   supplierName: '深圳快联电子',
                   purchasePrice: 19.2,
+                  productSizeCm: undefined,
+                  productMaterial: undefined,
+                  productPackaging: undefined,
+                  productWeightG: undefined,
+                  bulkLeadTimeDays: undefined,
+                  cartonQuantity: undefined,
+                  outerCartonSizeCm: undefined,
+                  outerCartonGrossWeightKg: undefined,
+                  remark: undefined,
                 },
               ],
             },

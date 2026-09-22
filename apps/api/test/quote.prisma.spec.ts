@@ -16,6 +16,38 @@ describe('QuoteService prisma document storage', () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const createdAt = new Date('2026-07-13T11:00:00.000Z');
     const prismaMock = {
+      product: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 1n,
+          sku: 'SKU-LED-001',
+          salesCode: 'SALE-LED-001',
+          purchaseCode: 'PUR-LED-001',
+          purchaseCodeMode: 'manual',
+          productStage: 'formal',
+          pricingMode: 'fixed',
+          brand: '',
+          factoryName: '',
+          model: '',
+          spec: '',
+          singleWeight: null,
+          cartonSpec: '',
+          cartonQuantity: null,
+          cartonWeight: null,
+          defaultSupplierCode: '',
+          nameCn: '智能 LED 灯带',
+          nameEn: 'Smart LED Strip',
+          category: 'electronics',
+          unit: 'set',
+          currency: 'USD',
+          defaultSalePrice: 15.9,
+          defaultPurchasePrice: 8.5,
+          salePriceTiers: [],
+          ownerName: 'Zoe',
+          status: 'active',
+          createdAt,
+          createdBy: 'system',
+        }),
+      },
       businessDocument: {
         create: jest.fn().mockResolvedValue({
           id: 101n,
@@ -173,6 +205,7 @@ describe('QuoteService prisma document storage', () => {
     expect(detail).toMatchObject({
       id: 102,
       quoteNo: 'BJ202607080102',
+      productSource: 'existing',
       sourceCode: 'website',
       requirements: 'Need 1200 units',
     });
@@ -284,5 +317,116 @@ describe('QuoteService prisma document storage', () => {
     expect(prismaMock.product.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 999n } }),
     );
+  });
+
+  it('rejects quote + candidate before Prisma writes', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const prismaMock = {
+      product: {
+        create: jest.fn(),
+      },
+      businessDocument: {
+        create: jest.fn(),
+      },
+      operationLog: {
+        create: jest.fn(),
+      },
+    };
+    const service = new QuoteService(prismaMock as unknown as PrismaService);
+
+    await expect(
+      service.create({
+        documentType: 'quote',
+        productSource: 'candidate',
+        customerId: 1001,
+        salesUserId: 2001,
+        sourceCode: 'expo',
+        requirements: 'invalid quote candidate',
+        items: [
+          {
+            createCandidateProduct: {
+              sku: 'SKU-PRISMA-INVALID',
+              nameCn: '数据库非法报价新品',
+              category: 'electronics',
+            },
+            quantity: 20,
+            salePrice: 9.9,
+          },
+        ],
+      }),
+    ).rejects.toThrow('报价单只能选择产品库产品');
+
+    expect(prismaMock.product.create).not.toHaveBeenCalled();
+    expect(prismaMock.businessDocument.create).not.toHaveBeenCalled();
+    expect(prismaMock.operationLog.create).not.toHaveBeenCalled();
+  });
+
+  it('persists customer feedback transitions through the Prisma path', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const createdAt = new Date('2026-09-22T10:00:00.000Z');
+    const documentRecord = {
+      id: 301n,
+      bizType: 'quote',
+      docNo: 'BJ-2026-09-22-0301',
+      status: 'pending_customer_feedback',
+      ownerUserId: 2001n,
+      counterpartyId: 1001n,
+      payload: {
+        id: 301,
+        quoteNo: 'BJ-2026-09-22-0301',
+        documentType: 'quote',
+        productSource: 'existing',
+        status: 'pending_customer_feedback',
+        currentVersionNo: 1,
+        customerId: 1001,
+        salesUserId: 2001,
+        sourceCode: 'expo',
+        requirements: 'feedback persistence',
+        createdAt: createdAt.toISOString(),
+        items: [],
+      },
+      createdBy: 2001n,
+      createdAt,
+      updatedAt: createdAt,
+    };
+    const prismaMock: {
+      businessDocument: {
+        findUnique: jest.Mock;
+        update: jest.Mock;
+      };
+      operationLog: { create: jest.Mock };
+      $transaction?: jest.Mock;
+    } = {
+      businessDocument: {
+        findUnique: jest.fn().mockResolvedValue(documentRecord),
+        update: jest.fn().mockResolvedValue(documentRecord),
+      },
+      operationLog: {
+        create: jest.fn().mockResolvedValue({ id: 1n }),
+      },
+    };
+    prismaMock.$transaction = jest.fn(
+      async (callback: (db: unknown) => Promise<unknown>): Promise<unknown> =>
+        callback(prismaMock),
+    );
+    const service = new QuoteService(prismaMock as unknown as PrismaService);
+
+    const result = await service.recordCustomerFeedback(
+      301,
+      { currentVersionNo: 1, result: 'no_follow_up', remark: '暂缓' },
+      { role: 'sales', user: 'Zoe' },
+    );
+
+    expect(result.status).toBe('customer_no_follow_up');
+    expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
+      where: { id: 301n },
+      data: expect.objectContaining({
+        status: 'customer_no_follow_up',
+        payload: expect.objectContaining({
+          customerFeedbackResult: 'no_follow_up',
+          customerFeedbackBy: 'Zoe',
+        }),
+      }),
+    });
   });
 });

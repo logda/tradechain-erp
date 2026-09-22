@@ -179,6 +179,72 @@ describe('ProductService prisma storage', () => {
     ]);
   });
 
+  it('generates the configured sales code during Prisma product creation', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const createdAt = new Date('2026-09-22T09:30:00.000Z');
+    const product = {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockImplementation(async ({ data }) => ({
+        id: 18n,
+        ...data,
+        salesCode: data.salesCode,
+        purchaseCode: data.purchaseCode,
+        brand: null,
+        factoryName: null,
+        model: null,
+        spec: null,
+        singleWeight: null,
+        cartonSpec: null,
+        cartonQuantity: null,
+        cartonWeight: null,
+        defaultSupplierCode: null,
+        defaultSalePrice: { toNumber: () => 28.8 },
+        defaultPurchasePrice: { toNumber: () => 18.6 },
+        createdAt,
+        updatedAt: createdAt,
+        updatedBy: null,
+        deactivatedAt: null,
+        deactivatedBy: null,
+        deactivatedReason: null,
+        salePriceTiers: [],
+      })),
+    };
+    const prisma = {
+      product,
+      operationLog: {
+        create: jest.fn().mockResolvedValue({ id: 1n }),
+      },
+    } as unknown as PrismaService;
+
+    const created = await new ProductService(prisma).create({
+      sku: 'SKU-PRISMA-AUTO-SALES-001',
+      salesCode: '',
+      salesCodeMode: 'generated',
+      purchaseCodeMode: 'manual',
+      productStage: 'formal',
+      pricingMode: 'fixed',
+      nameCn: '数据库自动销售编码产品',
+      nameEn: 'Prisma Automatic Sales Code Product',
+      category: 'electronics',
+      unit: 'pcs',
+      currency: 'USD',
+      defaultSalePrice: 28.8,
+      defaultPurchasePrice: 18.6,
+      ownerName: 'Admin',
+      createdBy: 'Admin',
+    });
+
+    expect(created.salesCode).toMatch(/^SALE-ELEC-\d{4}-\d{2}-\d{3}$/);
+    expect(product.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          salesCode: expect.stringMatching(/^SALE-ELEC-\d{4}-\d{2}-\d{3}$/),
+        }),
+      }),
+    );
+  });
+
   it('translates Prisma sales code uniqueness errors into business validation messages', async () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const prisma = {

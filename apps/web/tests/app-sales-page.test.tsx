@@ -72,7 +72,7 @@ describe('AppSalesPage', () => {
       '/app/sales/quotes',
     );
     expect(
-      screen.getByText('需求单用于选产品库并提交后转销售，报价单用于手填新品并进入询价确认流程。'),
+      screen.getByText('需求单可选择产品库产品或手填新产品；报价单只选择产品库产品，并在老板定价后由销售记录客户反馈。'),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '销售单模块' })).toHaveAttribute(
       'href',

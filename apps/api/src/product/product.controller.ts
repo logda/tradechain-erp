@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -45,6 +46,11 @@ export class ProductController {
     return this.productService.getCodeRule();
   }
 
+  @Get('code-rules')
+  getCodeRules() {
+    return this.productService.getCodeRules();
+  }
+
   @Post()
   @FormalActions('master_data.write')
   create(@Body() body: CreateProductPayload) {
@@ -55,6 +61,18 @@ export class ProductController {
   @FormalActions('master_data.write')
   updateCodeRule(@Body() body: UpdateProductCodeRulePayload) {
     return this.productService.updateCodeRule(body);
+  }
+
+  @Patch('code-rules/:kind')
+  @FormalActions('master_data.write')
+  updateCodeRuleByKind(
+    @Param('kind') kind: string,
+    @Body() body: UpdateProductCodeRulePayload,
+  ) {
+    if (kind !== 'purchase' && kind !== 'sales') {
+      throw new BadRequestException('产品编码规则类型不合法');
+    }
+    return this.productService.updateCodeRuleByKind(kind, body);
   }
 
   @Patch(':id')

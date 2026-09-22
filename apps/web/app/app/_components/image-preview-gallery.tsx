@@ -43,16 +43,11 @@ const overlayStyle = {
 } satisfies React.CSSProperties;
 
 const dialogStyle = {
-  width: 'min(96vw, 1100px)',
-  maxHeight: 'min(92vh, 980px)',
   display: 'grid',
   gridTemplateRows: 'auto 1fr',
   gap: '16px',
   padding: '20px',
-  borderRadius: '24px',
-  border: '1px solid rgba(255,255,255,0.18)',
   background: '#0f172a',
-  boxShadow: '0 30px 100px rgba(15, 23, 42, 0.32)',
 } satisfies React.CSSProperties;
 
 const dialogHeaderStyle = {
@@ -238,7 +233,7 @@ export function ImagePreviewGallery({
           style={overlayStyle}
           onClick={() => setPreviewIndex(null)}
         >
-          <div style={dialogStyle} onClick={(event) => event.stopPropagation()}>
+          <div className="erp-dialog" style={dialogStyle} onClick={(event) => event.stopPropagation()}>
             <div style={dialogHeaderStyle}>
               <div style={{ display: 'grid', gap: '4px' }}>
                 <h3 style={dialogTitleStyle}>{productName}</h3>
@@ -281,6 +276,7 @@ export function ImagePreviewGallery({
 
             <div style={dialogBodyStyle}>
               <img
+                className="erp-media-contain"
                 src={activePreview.src}
                 alt={`${productName} 大图预览 ${activePreview.index + 1}`}
                 style={previewImageStyle}

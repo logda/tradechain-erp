@@ -221,7 +221,7 @@ export default async function AppSalesPage({
           <WorktileCard
             title="需求/报价模块"
             href="/app/sales/quotes"
-            description="需求单用于选产品库并提交后转销售，报价单用于手填新品并进入询价确认流程。"
+            description="需求单可选择产品库产品或手填新产品；报价单只选择产品库产品，并在老板定价后由销售记录客户反馈。"
             badge="Demand / Quote"
           />
           <WorktileCard

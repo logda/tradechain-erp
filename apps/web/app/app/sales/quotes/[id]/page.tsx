@@ -12,6 +12,7 @@ import {
 import {
   canUseFormalSalesOrderActions,
   canUseFormalQuoteActions,
+  canUseFormalInquiryBossConfirmAction,
   canUseFormalSampleSubmitAction,
   canViewFormalQuoteDetail,
   getFormalDetailAccessDeniedLabel,
@@ -28,6 +29,8 @@ import {
   resolveDefaultSalesUserId,
 } from '../../../_lib/sales-user-options';
 import { CreateFormalQuoteForm } from '../new/create-formal-quote-form';
+import { QuoteCustomerFeedbackForm } from './quote-customer-feedback-form';
+import { QuotePriceConfirmForm } from './quote-price-confirm-form';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -42,6 +45,7 @@ type QuoteDetail = {
   id: number;
   quoteNo: string;
   documentType?: 'demand' | 'quote';
+  productSource?: 'existing' | 'candidate';
   status: string;
   currentVersionNo: number;
   customerId: number;
@@ -67,6 +71,28 @@ type QuoteDetail = {
   linkedSalesOrderNo?: string;
   linkedInquiryId?: number;
   linkedInquiryNo?: string;
+  linkedInquiryVersionNo?: number;
+  sourceDemandId?: number;
+  sourceDemandNo?: string;
+  customerFeedbackResult?: 'accepted' | 'no_follow_up' | 'price_issue';
+  customerFeedbackRemark?: string;
+  customerFeedbackBy?: string;
+  customerFeedbackAt?: string;
+  customerFeedbackHistory?: Array<{
+    versionNo: number;
+    result: 'accepted' | 'no_follow_up' | 'price_issue';
+    remark?: string;
+    operatedBy: string;
+    operatedAt: string;
+  }>;
+  versionHistory?: Array<{
+    versionNo: number;
+    status: string;
+    confirmedAt?: string;
+    confirmedBy?: string;
+    sourceInquiryId?: number;
+    items: Array<Record<string, unknown>>;
+  }>;
   items?: Array<{
     lineNo: number;
     productId?: number;
@@ -78,6 +104,7 @@ type QuoteDetail = {
     salePrice: number;
     amount: number;
     imageUrls?: string[];
+    confirmedSalePrice?: number;
     confirmedSupplierId?: number;
     confirmedSupplierCode?: string;
     confirmedSupplierName?: string;
@@ -417,6 +444,19 @@ function resolveQuoteDocumentLabel(documentType?: QuoteDetail['documentType']) {
   return documentType === 'demand' ? '需求单' : '报价单';
 }
 
+function resolveFeedbackLabel(result?: QuoteDetail['customerFeedbackResult']) {
+  if (result === 'accepted') return '客户已接受';
+  if (result === 'no_follow_up') return '暂无后续';
+  if (result === 'price_issue') return '价格有问题';
+  return '待反馈';
+}
+
+function formatOperationTime(value?: string) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN');
+}
+
 export default async function AppQuoteDetailPage({
   params,
   searchParams,
@@ -450,12 +490,21 @@ export default async function AppQuoteDetailPage({
     loadSourceQuoteSampleSummary(id, session),
   ]);
   const isDraftQuote = quote?.status === 'draft';
-  const isBossConfirmedQuote = quote?.status === 'boss_confirmed';
-  const isSubmittedDemandQuote =
-    quote?.documentType === 'demand' &&
-    quote.status === 'submitted' &&
-    !quote.linkedSalesOrderId;
+  const isLegacyBossConfirmedQuote = quote?.status === 'boss_confirmed';
+  const isApprovedDemand =
+    quote?.documentType === 'demand' && quote.status === 'boss_approved';
+  const isAcceptedQuote =
+    quote?.documentType === 'quote' && quote.status === 'customer_accepted';
+  const isConvertible =
+    !quote?.linkedSalesOrderId &&
+    (isApprovedDemand || isAcceptedQuote || isLegacyBossConfirmedQuote);
   const canUseQuoteActions = canUseFormalQuoteActions(session);
+  const canUseBossActions = canUseFormalInquiryBossConfirmAction(session);
+  const canRecordCustomerFeedback =
+    canUseQuoteActions &&
+    (session.role === 'admin' ||
+      session.role === 'sales_manager' ||
+      session.role === 'sales');
   const canConvertToSalesOrder = canUseFormalSalesOrderActions(session);
   const canCreateSampleOrder = canUseFormalSampleSubmitAction(session);
   const actionRequestHeaders = buildFormalRequestHeaders(session);
@@ -570,12 +619,22 @@ export default async function AppQuoteDetailPage({
               </p>
             </article>
           ) : null}
-          {quote.linkedInquiryId && session.role !== 'sales' ? (
+          {quote.linkedInquiryId && session.role !== 'sales' && session.role !== 'sales_manager' ? (
             <article style={infoCardStyle}>
               <p style={labelStyle}>关联询价单 Inquiry</p>
               <p style={valueStyle}>
                 <Link href={`/app/sales/inquiries/${quote.linkedInquiryId}`} style={backLinkStyle}>
                   {quote.linkedInquiryNo ?? `询价单 #${quote.linkedInquiryId}`}
+                </Link>
+              </p>
+            </article>
+          ) : null}
+          {quote.sourceDemandId ? (
+            <article style={infoCardStyle}>
+              <p style={labelStyle}>来源需求单 Source Demand</p>
+              <p style={valueStyle}>
+                <Link href={`/app/sales/quotes/${quote.sourceDemandId}`} style={backLinkStyle}>
+                  {quote.sourceDemandNo ?? `需求单 #${quote.sourceDemandId}`}
                 </Link>
               </p>
             </article>
@@ -651,19 +710,180 @@ export default async function AppQuoteDetailPage({
           </div>
         </article>
 
+        {(quote.items ?? []).some((item) => Number(item.confirmedSalePrice) > 0) ? (
+          <article style={infoCardStyle}>
+            <h3 style={{ marginTop: 0 }}>报价结果</h3>
+            <div style={tableWrapStyle}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={headCellStyle}>行号</th>
+                    <th style={headCellStyle}>SKU</th>
+                    <th style={headCellStyle}>商品</th>
+                    <th style={headCellStyle}>原销售单价</th>
+                    <th style={headCellStyle}>老板确认售价</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(quote.items ?? []).map((item) => (
+                    <tr key={`confirmed-${item.lineNo}-${item.sku}`}>
+                      <td style={cellStyle}>{item.lineNo}</td>
+                      <td style={cellStyle}>{item.sku}</td>
+                      <td style={cellStyle}>{item.productName}</td>
+                      <td style={cellStyle}>{item.salePrice}</td>
+                      <td style={cellStyle}>{item.confirmedSalePrice ?? '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        ) : null}
+
+        {quote.documentType === 'demand' && quote.productSource !== 'candidate' ? (
+          <article style={actionPanelStyle}>
+            <h2 style={{ marginTop: 0 }}>老板审批需求单</h2>
+            <ActionPermissionNote>
+              老板只审批需求是否通过，不在这里填写或修改销售价格。
+            </ActionPermissionNote>
+            {quote.status === 'pending_boss_approval' && canUseBossActions ? (
+              <MutationActionForm
+                endpoint={`${getQuoteApiBaseUrl()}/quotes/${quote.id}/approve-demand`}
+                label="审批通过"
+                successLabel="需求单审批通过"
+                requiredAction="boss.confirm"
+                requiredActionLabel="老板审批"
+                requestHeaders={actionRequestHeaders}
+                fields={[]}
+              />
+            ) : (
+              <p style={detailTextStyle}>
+                {quote.status === 'boss_approved'
+                  ? '需求单已审批通过，可以转为销售单。'
+                  : quote.status === 'pending_boss_approval'
+                    ? '当前账号仅可查看，等待老板审批。'
+                    : `当前状态：${resolveQuoteStatusText(quote)}`}
+              </p>
+            )}
+          </article>
+        ) : null}
+
+        {quote.documentType === 'quote' ? (
+          <article style={actionPanelStyle}>
+            <h2 style={{ marginTop: 0 }}>老板确认报价售价</h2>
+            <ActionPermissionNote>
+              老板确认最终销售价格后，报价单进入销售记录客户反馈环节。
+            </ActionPermissionNote>
+            {quote.status === 'pending_boss_price_confirmation' && canUseBossActions ? (
+              <QuotePriceConfirmForm
+                endpoint={`${getQuoteApiBaseUrl()}/quotes/${quote.id}/confirm-price`}
+                currentVersionNo={quote.currentVersionNo}
+                requestHeaders={actionRequestHeaders}
+                items={quote.items ?? []}
+              />
+            ) : (
+              <p style={detailTextStyle}>
+                {quote.status === 'pending_boss_price_confirmation'
+                  ? '当前账号仅可查看，等待老板确认最终售价。'
+                  : `当前状态：${resolveQuoteStatusText(quote)}`}
+              </p>
+            )}
+          </article>
+        ) : null}
+
+        {quote.documentType === 'quote' ? (
+          <article style={actionPanelStyle}>
+            <h2 style={{ marginTop: 0 }}>销售记录客户反馈</h2>
+            <div style={gridStyle}>
+              <div>
+                <p style={labelStyle}>当前报价版本</p>
+                <p style={valueStyle}>V{quote.currentVersionNo}</p>
+              </div>
+              <div>
+                <p style={labelStyle}>客户反馈状态</p>
+                <p style={valueStyle}>{resolveFeedbackLabel(quote.customerFeedbackResult)}</p>
+              </div>
+              <div>
+                <p style={labelStyle}>记录人 / 时间</p>
+                <p style={detailTextStyle}>
+                  {quote.customerFeedbackBy || '-'} / {formatOperationTime(quote.customerFeedbackAt)}
+                </p>
+              </div>
+            </div>
+            {quote.customerFeedbackRemark ? (
+              <p style={detailTextStyle}>当前备注：{quote.customerFeedbackRemark}</p>
+            ) : null}
+            {(quote.status === 'pending_customer_feedback' ||
+              quote.status === 'customer_no_follow_up') &&
+            canRecordCustomerFeedback ? (
+              <QuoteCustomerFeedbackForm
+                endpoint={`${getQuoteApiBaseUrl()}/quotes/${quote.id}/customer-feedback`}
+                currentVersionNo={quote.currentVersionNo}
+                requestHeaders={actionRequestHeaders}
+              />
+            ) : quote.status === 'repricing_in_progress' ? (
+              <p style={detailTextStyle}>
+                客户反馈价格有问题，采购正在重新询价。完成后仍回到本报价单并升级版本。
+              </p>
+            ) : quote.status === 'customer_accepted' ? (
+              <p style={detailTextStyle}>客户已接受当前版本报价，可以转为销售单。</p>
+            ) : (
+              <p style={detailTextStyle}>老板确认最终售价后，销售可在此记录客户反馈。</p>
+            )}
+
+            {(quote.versionHistory?.length ?? 0) > 0 ? (
+              <div style={{ marginTop: '16px' }}>
+                <h3>报价版本历史</h3>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {quote.versionHistory?.map((version) => (
+                    <div key={`${version.versionNo}-${version.confirmedAt ?? version.status}`} style={infoCardStyle}>
+                      <strong>V{version.versionNo}</strong>
+                      <p style={detailTextStyle}>
+                        {version.status} · {version.confirmedBy || '-'} ·{' '}
+                        {formatOperationTime(version.confirmedAt)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {(quote.customerFeedbackHistory?.length ?? 0) > 0 ? (
+              <div style={{ marginTop: '16px' }}>
+                <h3>客户反馈历史</h3>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {quote.customerFeedbackHistory?.map((feedback, index) => (
+                    <div key={`${feedback.versionNo}-${feedback.operatedAt}-${index}`} style={infoCardStyle}>
+                      <strong>V{feedback.versionNo} · {resolveFeedbackLabel(feedback.result)}</strong>
+                      <p style={detailTextStyle}>
+                        {feedback.operatedBy} · {formatOperationTime(feedback.operatedAt)}
+                        {feedback.remark ? ` · ${feedback.remark}` : ''}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </article>
+        ) : null}
+
         <article style={actionPanelStyle}>
           <ActionPermissionNote>
             {quote.documentType === 'demand' && quote.linkedSalesOrderId
               ? '需求单已转为销售单，可前往销售单继续查看和处理。'
-              : isBossConfirmedQuote
-              ? '老板已确认：销售、销售主管、老板和管理员可转销售单并创建样品单。'
+              : quote.documentType === 'quote' && quote.linkedSalesOrderId
+                ? '报价单已转为销售单，可前往销售单继续查看和处理。'
+              : isConvertible
+              ? quote.documentType === 'demand'
+                ? '需求单已通过老板审批，可以转为销售单。'
+                : '客户已接受报价，可以转为销售单并创建样品单。'
               : isDraftQuote
                 ? quote.documentType === 'demand'
-                  ? '当前为需求单草稿：可继续保存草稿，也可正式提交；提交后可在列表或详情中转销售单。'
-                  : '当前为报价单草稿：可继续保存草稿，也可正式提交并进入询价流程。'
+                  ? '当前为需求单草稿：产品库产品提交后等待老板审批；手填新品提交后进入采购询价。'
+                  : '当前为报价单草稿：提交后等待老板确认最终售价，不生成首次采购询价。'
                 : quote.documentType === 'demand'
-                  ? '需求单已提交：可在当前详情或列表操作栏转为销售单。'
-                  : '当前为待确认状态：需等待老板确认后，才可转销售单或创建样品单。'}
+                  ? '需求单尚未满足转销售单条件，请按当前流程状态继续处理。'
+                  : '报价单尚未满足转销售单条件：必须先由老板确认售价，再由销售记录客户接受。'}
           </ActionPermissionNote>
           {isDraftQuote && draftEditData ? (
             <CreateFormalQuoteForm
@@ -685,7 +905,7 @@ export default async function AppQuoteDetailPage({
             />
           ) : (
             <div style={actionGridStyle}>
-            {(isBossConfirmedQuote || isSubmittedDemandQuote) && canConvertToSalesOrder ? (
+            {isConvertible && canConvertToSalesOrder ? (
             <ConvertQuoteForm
               quoteId={quote.id}
               quoteNo={quote.quoteNo}
@@ -707,7 +927,7 @@ export default async function AppQuoteDetailPage({
               user={session.user}
             />
             ) : null}
-            {isBossConfirmedQuote && canCreateSampleOrder ? (
+            {(isAcceptedQuote || isLegacyBossConfirmedQuote) && canCreateSampleOrder ? (
               <MutationActionForm
                 endpoint={`${getQuoteApiBaseUrl()}/samples`}
                 label="创建样品单"

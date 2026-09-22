@@ -5,8 +5,9 @@ import { SalesOrderService } from '../src/sales-order/sales-order.service';
 import { AfterSalesService } from '../src/after-sales/after-sales.service';
 import { resolveQuoteStore } from '../src/quote/quote.store';
 import { CounterpartyService } from '../src/counterparty/counterparty.service';
+import { ProductService } from '../src/product/product.service';
 
-function seedQuote(status = 'boss_confirmed', id = 7, currentVersionNo = 3) {
+function seedQuote(status = 'customer_accepted', id = 7, currentVersionNo = 3) {
   resolveQuoteStore().upsertQuote({
     id,
     quoteNo: `Q20260708${String(id).padStart(4, '0')}`,
@@ -23,7 +24,7 @@ function seedQuote(status = 'boss_confirmed', id = 7, currentVersionNo = 3) {
     inquiryDate: '2026-07-18',
     destination: '',
     requirements: 'Need 500 units',
-    currentProgress: status === 'boss_confirmed' ? '老板已确认' : '草稿',
+    currentProgress: status === 'customer_accepted' ? '客户已接受' : '草稿',
     submitMode: status === 'draft' ? 'draft' : 'submit',
     createdAt: '2026-07-11T09:00:00.000Z',
     items: [
@@ -46,7 +47,7 @@ function seedSubmittedDemandQuote(id = 88, currentVersionNo = 1) {
     id,
     quoteNo: `XQ20260708${String(id).padStart(4, '0')}`,
     documentType: 'demand',
-    status: 'submitted',
+    status: 'boss_approved',
     currentVersionNo,
     customerId: 1001,
     customerName: 'Acme Trading',
@@ -447,7 +448,7 @@ describe('SalesOrderService', () => {
 
   it('converts one confirmed quote version into one draft sales order', async () => {
     const service = new SalesOrderService();
-    seedQuote('boss_confirmed', 7);
+    seedQuote('customer_accepted', 7);
 
     const result = await service.convertConfirmedQuote({
       quoteOrderId: 7,
@@ -467,7 +468,7 @@ describe('SalesOrderService', () => {
     expect(result.salesNo).not.toBe('S202607080001');
   });
 
-  it('converts one submitted demand document into a draft sales order and marks the demand ordered', async () => {
+  it('converts one boss-approved demand document into a draft sales order and marks the demand ordered', async () => {
     const service = new SalesOrderService();
     seedSubmittedDemandQuote(88, 1);
 
@@ -506,7 +507,7 @@ describe('SalesOrderService', () => {
 
   it('rejects converting the same confirmed quote version twice', async () => {
     const service = new SalesOrderService();
-    seedQuote('boss_confirmed', 70);
+    seedQuote('customer_accepted', 70);
 
     await service.convertConfirmedQuote({
       quoteOrderId: 70,
@@ -529,7 +530,7 @@ describe('SalesOrderService', () => {
 
   it('carries quote line items into converted sales order detail', async () => {
     const service = new SalesOrderService();
-    seedQuote('boss_confirmed', 77, 2);
+    seedQuote('customer_accepted', 77, 2);
 
     const converted = await service.convertConfirmedQuote({
       quoteOrderId: 77,
@@ -594,7 +595,7 @@ describe('SalesOrderService', () => {
 
   it('accepts factoryPicUrls when converting quote items into sales order lines', async () => {
     const service = new SalesOrderService();
-    seedQuote('boss_confirmed', 78, 2);
+    seedQuote('customer_accepted', 78, 2);
 
     const converted = await service.convertConfirmedQuote({
       quoteOrderId: 78,
@@ -641,7 +642,7 @@ describe('SalesOrderService', () => {
 
   it('treats null existingSalesOrderId as absent but rejects a real existing sales order id', async () => {
     const service = new SalesOrderService();
-    seedQuote('boss_confirmed', 7);
+    seedQuote('customer_accepted', 7);
 
     const result = await service.convertConfirmedQuote({
       quoteOrderId: 7,
@@ -681,7 +682,60 @@ describe('SalesOrderService', () => {
         createdBy: 2001,
         quoteConfirmed: true,
       }),
-    ).rejects.toThrow('只有已提交需求单或老板已确认的报价单才能转销售订单');
+    ).rejects.toThrow('当前单据状态不可转销售单');
+  });
+
+  it('generates a sales code and formalizes a quote candidate after accepted conversion', async () => {
+    const productService = new ProductService();
+    const candidate = await productService.create({
+      sku: 'SKU-AUTO-SALES-CODE-001',
+      salesCode: '',
+      productStage: 'quote_candidate',
+      pricingMode: 'fixed',
+      nameCn: '自动销售编码候选品',
+      nameEn: '',
+      category: 'electronics',
+      unit: 'pcs',
+      currency: 'USD',
+      defaultSalePrice: 20,
+      defaultPurchasePrice: 10,
+      ownerName: 'Zoe',
+      createdBy: 'Boss',
+    });
+    seedQuote('customer_accepted', 79, 1);
+    const quoteStore = resolveQuoteStore();
+    const quote = quoteStore.getQuote(79)!;
+    quoteStore.upsertQuote({
+      ...quote,
+      items: [{
+        ...quote.items[0],
+        productId: candidate.id,
+        sku: candidate.sku,
+        productName: candidate.nameCn,
+      }],
+    });
+
+    await new SalesOrderService().convertConfirmedQuote({
+      quoteOrderId: 79,
+      quoteVersionNo: 1,
+      customerId: 1001,
+      createdBy: 2001,
+      quoteConfirmed: true,
+      items: [{
+        lineNo: 1,
+        productId: candidate.id,
+        sku: candidate.sku,
+        productName: candidate.nameCn,
+        unit: candidate.unit,
+        quantity: 10,
+        salePrice: 20,
+      }],
+    });
+
+    await expect(productService.findById(candidate.id)).resolves.toMatchObject({
+      productStage: 'formal',
+      salesCode: expect.stringMatching(/^SALE-ELEC-\d{4}-\d{2}-\d{3}$/),
+    });
   });
 
   it('submits a draft sales order into pending sales manager approval', async () => {

@@ -3,6 +3,7 @@ export const requiredCustomerError = '请选择往来单位';
 export const requiredManualCustomerError = '请填写客户名称';
 export const requiredProductError = '请选择商品';
 export const requiredCandidateProductError = '请填写候选产品名称';
+export const invalidQuoteCandidateError = '报价单只能选择产品库产品';
 
 function readTrimmedString(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
@@ -30,9 +31,21 @@ export function validateCreateFormalQuoteFormData(formData: FormData) {
       ? 'manual'
       : 'existing';
   const productEntryMode =
-    String(formData.get('productEntryMode') ?? 'existing') === 'candidate'
+    String(
+      formData.get('productSource') ??
+        formData.get('productEntryMode') ??
+        'existing',
+    ) === 'candidate'
       ? 'candidate'
       : 'existing';
+  const documentType =
+    String(formData.get('documentType') ?? 'demand') === 'quote'
+      ? 'quote'
+      : 'demand';
+
+  if (documentType === 'quote' && productEntryMode === 'candidate') {
+    return invalidQuoteCandidateError;
+  }
 
   const hasCustomer =
     customerEntryMode === 'manual'

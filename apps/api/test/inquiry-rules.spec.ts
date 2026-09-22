@@ -217,6 +217,40 @@ describe('InquiryService', () => {
     ).rejects.toThrow('Inquiry items must be an array');
   });
 
+  it('redacts supplier comparison details from sales audit logs', async () => {
+    const service = new InquiryService();
+    await service.submitForComparison({
+      inquiryId: 1,
+      items: [{
+        itemId: 10,
+        supplierQuotes: [
+          {
+            supplierSourceMode: 'manual',
+            supplierName: '内部供应商 A',
+            purchasePrice: 12.5,
+            productMaterial: 'PVC',
+          },
+          {
+            supplierSourceMode: 'manual',
+            supplierName: '内部供应商 B',
+            purchasePrice: 12.8,
+          },
+        ],
+      }],
+    });
+
+    const salesLogs = JSON.stringify(
+      await service.listAuditLogs({ role: 'sales', user: 'Zoe' }),
+    );
+    const bossLogs = JSON.stringify(
+      await service.listAuditLogs({ role: 'boss', user: 'Boss' }),
+    );
+    expect(salesLogs).not.toContain('内部供应商 A');
+    expect(salesLogs).not.toContain('purchasePrice');
+    expect(salesLogs).not.toContain('supplierQuotes');
+    expect(bossLogs).toContain('内部供应商 A');
+  });
+
   it('uses ParseIntPipe for both inquiry id params', () => {
     const submitMetadata = Reflect.getMetadata(
       ROUTE_ARGS_METADATA,

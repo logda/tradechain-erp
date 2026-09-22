@@ -204,6 +204,58 @@ describe('ProductService', () => {
     });
   });
 
+  it('generates the sales code when a manually created product selects automatic mode', async () => {
+    const service = new ProductService();
+
+    const created = await service.create({
+      sku: 'SKU-AUTO-SALES-001',
+      salesCode: '',
+      salesCodeMode: 'generated',
+      purchaseCodeMode: 'manual',
+      productStage: 'formal',
+      pricingMode: 'fixed',
+      nameCn: '自动销售编码产品',
+      nameEn: 'Automatic Sales Code Product',
+      category: 'electronics',
+      unit: 'pcs',
+      currency: 'USD',
+      defaultSalePrice: 28.8,
+      defaultPurchasePrice: 18.6,
+      ownerName: 'Admin',
+      createdBy: 'Admin',
+    } as any);
+
+    expect(created.salesCode).toMatch(/^SALE-ELEC-\d{4}-\d{2}-\d{3}$/);
+  });
+
+  it('creates one active quote candidate and reuses it by normalized SKU', async () => {
+    const service = new ProductService();
+    const input = {
+      sku: ' sku-flow-candidate-001 ',
+      nameCn: '流程候选产品',
+      category: 'electronics',
+      unit: 'pcs',
+      confirmedSalePrice: 28.8,
+      confirmedPurchasePrice: 18.6,
+      supplierCode: 'SUP-BRAVO',
+      operator: 'Boss',
+    };
+
+    const first = await service.findOrCreateQuoteCandidate(input);
+    const second = await service.findOrCreateQuoteCandidate(input);
+    const listed = await service.list({ keyword: 'SKU-FLOW-CANDIDATE-001' });
+
+    expect(first).toMatchObject({
+      sku: 'SKU-FLOW-CANDIDATE-001',
+      productStage: 'quote_candidate',
+      status: 'active',
+      defaultSalePrice: 28.8,
+      defaultPurchasePrice: 18.6,
+    });
+    expect(second.id).toBe(first.id);
+    expect(listed.items).toHaveLength(1);
+  });
+
   it('returns and updates the product code rule', async () => {
     const service = new ProductService();
 
@@ -238,6 +290,47 @@ describe('ProductService', () => {
     await expect(service.getCodeRule()).resolves.toMatchObject({
       serialLength: 4,
     });
+  });
+
+  it('keeps purchase and sales code rules independent', async () => {
+    const service = new ProductService();
+    const before = await service.getCodeRules();
+
+    await service.updateCodeRuleByKind('sales', {
+      strategy: 'composed_segments',
+      serialLength: 4,
+      serialScope: 'global_year',
+      segments: [
+        { key: 'prefix', enabled: true, order: 1, value: 'SAL' },
+        { key: 'category_code', enabled: true, order: 2 },
+        { key: 'year', enabled: true, order: 3 },
+        { key: 'serial', enabled: true, order: 4 },
+      ],
+      updatedBy: 'Admin',
+    });
+
+    const after = await service.getCodeRules();
+    expect(after.purchase).toEqual(before.purchase);
+    expect(after.sales).toMatchObject({
+      serialLength: 4,
+      serialScope: 'global_year',
+      updatedBy: 'Admin',
+    });
+    await expect(service.generateSalesCodeByRule('electronics')).resolves.toMatch(
+      /^SAL-ELEC-\d{4}-\d{4}$/,
+    );
+    await expect(
+      service.updateCodeRuleByKind('sales', {
+        strategy: 'composed_segments',
+        serialLength: 3,
+        serialScope: 'global_total',
+        segments: [
+          { key: 'supplier_code', enabled: true, order: 1 },
+          { key: 'serial', enabled: true, order: 2 },
+        ],
+        updatedBy: 'Admin',
+      }),
+    ).rejects.toThrow('销售编码规则不能使用供应商编码段');
   });
 
   it('generates purchase code from supplier code and sequence', async () => {

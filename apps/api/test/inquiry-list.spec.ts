@@ -130,6 +130,29 @@ describe('InquiryService list', () => {
     ]);
   });
 
+  it('hides boss-confirmed sale prices from purchase responses', async () => {
+    const service = new InquiryService();
+
+    const purchaseDetail = await service.getById(3, {
+      role: 'purchase',
+      user: 'Leo',
+    });
+    const purchaseList = await service.list(
+      { page: 1, pageSize: 20 },
+      { role: 'purchase_manager', user: 'Mia' },
+    );
+    const bossDetail = await service.getById(3, {
+      role: 'boss',
+      user: 'Mia',
+    });
+
+    expect(purchaseDetail.items[0]).not.toHaveProperty('confirmedSalePrice');
+    expect(
+      purchaseList.items.find((item) => item.id === 3)?.items[0],
+    ).not.toHaveProperty('confirmedSalePrice');
+    expect(bossDetail.items[0]).toHaveProperty('confirmedSalePrice', 56.2);
+  });
+
   it('normalizes empty prisma audit operators so inquiry log pages can render', async () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const service = new InquiryService({

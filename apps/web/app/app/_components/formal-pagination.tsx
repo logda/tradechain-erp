@@ -1,64 +1,6 @@
 import Link from 'next/link';
 import { buildPaginationSearchParams } from '../_lib/formal-pagination';
 
-const wrapStyle = {
-  marginTop: '14px',
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '12px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-  color: '#475569',
-  fontSize: '13px',
-} satisfies React.CSSProperties;
-
-const actionWrapStyle = {
-  display: 'flex',
-  gap: '8px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const pageSizeWrapStyle = {
-  display: 'flex',
-  gap: '6px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const actionStyle = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minWidth: '76px',
-  border: '1px solid #cbd5e1',
-  borderRadius: '999px',
-  padding: '8px 12px',
-  color: '#0f172a',
-  background: '#ffffff',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
-const pageSizeActionStyle = {
-  ...actionStyle,
-  minWidth: 'auto',
-  padding: '7px 10px',
-} satisfies React.CSSProperties;
-
-const activePageSizeActionStyle = {
-  ...pageSizeActionStyle,
-  border: '1px solid #0f172a',
-  color: '#ffffff',
-  background: '#0f172a',
-} satisfies React.CSSProperties;
-
-const disabledActionStyle = {
-  ...actionStyle,
-  color: '#94a3b8',
-  background: '#f8fafc',
-} satisfies React.CSSProperties;
-
 function buildPageHref(
   pathname: string,
   params: Record<string, string | number | undefined>,
@@ -104,10 +46,10 @@ export function FormalPagination({
   return (
     <nav
       aria-label={summaryLabel ? `${summaryLabel}分页` : '列表分页'}
-      style={wrapStyle}
+      className="erp-pagination"
     >
       <span>{`${summaryPrefix}第 ${currentPage} / ${totalPages} 页，共 ${total} 条`}</span>
-      <div style={actionWrapStyle}>
+      <div className="erp-pagination__actions">
         {currentPage > 1 ? (
           <Link
             href={buildPageHref(
@@ -118,12 +60,17 @@ export function FormalPagination({
               pageParamName,
               pageSizeParamName,
             )}
-            style={actionStyle}
+            className="erp-button erp-button--secondary erp-button--compact"
           >
             上一页
           </Link>
         ) : (
-          <span style={disabledActionStyle}>上一页</span>
+          <span
+            className="erp-button erp-button--secondary erp-button--compact erp-pagination__disabled"
+            aria-disabled="true"
+          >
+            上一页
+          </span>
         )}
         {currentPage < totalPages ? (
           <Link
@@ -135,20 +82,28 @@ export function FormalPagination({
               pageParamName,
               pageSizeParamName,
             )}
-            style={actionStyle}
+            className="erp-button erp-button--secondary erp-button--compact"
           >
             下一页
           </Link>
         ) : (
-          <span style={disabledActionStyle}>下一页</span>
+          <span
+            className="erp-button erp-button--secondary erp-button--compact erp-pagination__disabled"
+            aria-disabled="true"
+          >
+            下一页
+          </span>
         )}
-        <span style={pageSizeWrapStyle}>
+        <span className="erp-pagination__page-sizes">
           每页
           {pageSizeOptions.map((option) => {
             const isActive = option === pageSize;
 
             return isActive ? (
-              <span key={option} style={activePageSizeActionStyle}>
+              <span
+                key={option}
+                className="erp-button erp-button--primary erp-button--compact"
+              >
                 {option}
               </span>
             ) : (
@@ -162,7 +117,7 @@ export function FormalPagination({
                   pageParamName,
                   pageSizeParamName,
                 )}
-                style={pageSizeActionStyle}
+                className="erp-button erp-button--secondary erp-button--compact"
               >
                 {option}
               </Link>

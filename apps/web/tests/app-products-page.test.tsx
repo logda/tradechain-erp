@@ -115,6 +115,13 @@ describe('formal product master data page', () => {
     expect(screen.queryByText('Owner: Zoe')).not.toBeInTheDocument();
     expect(screen.queryByText('USD')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '新增商品' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查询' })).toHaveClass(
+      'erp-button',
+      'erp-button--primary',
+    );
+    expect(screen.getByRole('textbox', { name: '关键词 Keyword' })).toHaveClass(
+      'erp-control',
+    );
     expect(screen.getAllByRole('button', { name: '停用' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: '审计日志' })).toBeInTheDocument();
     expect(screen.getByText('创建商品 / create_product')).toBeInTheDocument();
@@ -666,6 +673,28 @@ describe('formal product master data page', () => {
 
     expect(screen.queryByLabelText('内部编码 Internal Code')).not.toBeInTheDocument();
     expect(screen.getByText('产品销售编码 Sales Code')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+        'button',
+        { name: 'generated / 自动生成' },
+      ),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('产品销售编码 Sales Code')).toHaveClass('erp-control');
+    expect(
+      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+        'button',
+        { name: 'generated / 自动生成' },
+      ),
+    ).toHaveClass('erp-mode-button');
+    expect(screen.getByRole('button', { name: '新增商品' })).toHaveClass(
+      'erp-button--primary',
+    );
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+        'button',
+        { name: 'manual / 手工填写' },
+      ),
+    );
     expect(screen.getByText('产品名称 Product Name')).toBeInTheDocument();
     expect(screen.getByText('分类 Category')).toBeInTheDocument();
     expect(screen.getByText('单位 Unit')).toBeInTheDocument();
@@ -833,9 +862,13 @@ describe('formal product master data page', () => {
         name: 'supplier / 选择供应商自动带出',
       }),
     );
-    fireEvent.change(screen.getByLabelText('产品销售编码 Sales Code'), {
-      target: { value: 'SALE-GENERATED-031' },
-    });
+    expect(
+      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+        'button',
+        { name: 'generated / 自动生成' },
+      ),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('产品销售编码 Sales Code')).toBeDisabled();
     fireEvent.change(screen.getByLabelText('产品名称 Product Name'), {
       target: { value: '测试商品自动采购编码031' },
     });
@@ -868,6 +901,12 @@ describe('formal product master data page', () => {
         }),
       );
     });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3001/api/products',
+      expect.objectContaining({
+        body: expect.stringContaining('"salesCodeMode":"generated"'),
+      }),
+    );
   });
 
   it('submits tiered sale prices in create product payload', async () => {
@@ -898,6 +937,12 @@ describe('formal product master data page', () => {
     ).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(
       within(screen.getByRole('group', { name: '采购编码模式 Purchase Code Mode' })).getByRole(
+        'button',
+        { name: 'manual / 手工填写' },
+      ),
+    );
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
         'button',
         { name: 'manual / 手工填写' },
       ),
@@ -984,6 +1029,12 @@ describe('formal product master data page', () => {
       />,
     );
 
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+        'button',
+        { name: 'manual / 手工填写' },
+      ),
+    );
     fireEvent.change(screen.getByLabelText('产品销售编码 Sales Code'), {
       target: { value: 'SALE-NO-PRICE-001' },
     });
@@ -1112,6 +1163,12 @@ describe('formal product master data page', () => {
 
     fireEvent.click(
       within(screen.getByRole('group', { name: '采购编码模式 Purchase Code Mode' })).getByRole(
+        'button',
+        { name: 'manual / 手工填写' },
+      ),
+    );
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
         'button',
         { name: 'manual / 手工填写' },
       ),

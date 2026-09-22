@@ -20,6 +20,7 @@ import { QuoteService } from './quote.service';
 import { ConvertQuoteToSalesDto } from '../sales-order/dto/convert-quote-to-sales.dto';
 import { SalesOrderService } from '../sales-order/sales-order.service';
 import { readOptionalFormalSession } from '../auth/formal-session';
+import type { CustomerFeedbackResult } from './quote-workflow';
 
 function normalizePositiveInteger(value: string | undefined, fallback: number) {
   const parsed = value ? Number(value) : NaN;
@@ -82,8 +83,16 @@ export class QuoteController {
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
   @Get('audit-logs')
-  listAuditLogs() {
-    return this.quoteService.listAuditLogs();
+  listAuditLogs(
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    return this.quoteService.listAuditLogs(
+      readOptionalFormalSession({
+        'x-erp-role': role,
+        'x-erp-user': user,
+      }),
+    );
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
@@ -136,7 +145,12 @@ export class QuoteController {
       createdBy: dto.createdBy ?? quote.salesUserId,
       existingSalesOrderId: dto.existingSalesOrderId,
       quoteConfirmed: dto.quoteConfirmed,
-      items: dto.items ?? quote.items,
+      items:
+        dto.items ??
+        quote.items.map((item) => ({
+          ...item,
+          productId: item.productId ?? 0,
+        })),
       quoteAttachments: dto.quoteAttachments ?? quote.quoteAttachments,
     });
   }
@@ -149,6 +163,70 @@ export class QuoteController {
     @Body() _body: { currentStatus: string },
   ) {
     return this.quoteService.submitDraftQuote(id);
+  }
+
+  @FormalRoles('admin', 'boss')
+  @FormalActions('boss.confirm')
+  @Post(':id/approve-demand')
+  approveDemand(
+    @Param('id', ParseIntPipe) id: number,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    return this.quoteService.approveDemand(
+      id,
+      readOptionalFormalSession({
+        'x-erp-role': role,
+        'x-erp-user': user,
+      }),
+    );
+  }
+
+  @FormalRoles('admin', 'boss')
+  @FormalActions('boss.confirm')
+  @Post(':id/confirm-price')
+  confirmPrice(
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      currentVersionNo: number;
+      items: Array<{ lineNo: number; confirmedSalePrice: number }>;
+    },
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    return this.quoteService.confirmQuotePrice(
+      id,
+      body,
+      readOptionalFormalSession({
+        'x-erp-role': role,
+        'x-erp-user': user,
+      }),
+    );
+  }
+
+  @FormalRoles('admin', 'sales_manager', 'sales')
+  @FormalActions('sales.quote.write')
+  @Post(':id/customer-feedback')
+  recordCustomerFeedback(
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      currentVersionNo: number;
+      result: CustomerFeedbackResult;
+      remark?: string;
+    },
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    return this.quoteService.recordCustomerFeedback(
+      id,
+      body,
+      readOptionalFormalSession({
+        'x-erp-role': role,
+        'x-erp-user': user,
+      }),
+    );
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')

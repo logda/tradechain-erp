@@ -27,6 +27,7 @@ export class QuoteAttachmentDto {
 export class CreateQuoteDto {
   submitMode?: 'draft' | 'submit';
   documentType?: 'demand' | 'quote';
+  productSource?: 'existing' | 'candidate';
   customerId?: number;
   customerEntryMode?: 'existing' | 'manual';
   customerName?: string;

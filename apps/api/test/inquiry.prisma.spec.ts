@@ -351,6 +351,11 @@ describe('InquiryService prisma document storage', () => {
         create: jest.fn().mockResolvedValue({ id: 1n }),
       },
     };
+    Object.assign(prismaMock, {
+      $transaction: jest.fn(async (callback: (db: typeof prismaMock) => Promise<unknown>) =>
+        callback(prismaMock),
+      ),
+    });
     const prisma = prismaMock as unknown as PrismaService;
 
     const service = new InquiryService(prisma);
@@ -366,6 +371,15 @@ describe('InquiryService prisma document storage', () => {
               supplierCode: 'SUP-BRAVO',
               supplierName: 'Bravo Industrial',
               purchasePrice: 18.6,
+              productSizeCm: '40×30×10',
+              productMaterial: 'PVC镭射',
+              productPackaging: 'OPP袋/个',
+              productWeightG: 180,
+              bulkLeadTimeDays: '7-10',
+              cartonQuantity: 120,
+              outerCartonSizeCm: '55×45×40',
+              outerCartonGrossWeightKg: 24,
+              remark: '打样 2 天，费用 200 元',
             },
             {
               supplierSourceMode: 'manual',
@@ -400,6 +414,13 @@ describe('InquiryService prisma document storage', () => {
             expect.objectContaining({
               itemId: 10,
               confirmedSalePrice: 12.5,
+              supplierQuotes: expect.arrayContaining([
+                expect.objectContaining({
+                  productSizeCm: '40×30×10',
+                  productMaterial: 'PVC镭射',
+                  remark: '打样 2 天，费用 200 元',
+                }),
+              ]),
             }),
           ]),
         }),
@@ -438,5 +459,8 @@ describe('InquiryService prisma document storage', () => {
     });
     expect(submitted.status).toBe('pending_boss_review');
     expect(confirmed.status).toBe('boss_confirmed');
+    expect(
+      (prismaMock as typeof prismaMock & { $transaction: jest.Mock }).$transaction,
+    ).toHaveBeenCalledTimes(1);
   });
 });

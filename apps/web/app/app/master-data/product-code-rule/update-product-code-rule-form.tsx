@@ -11,10 +11,12 @@ import {
   describeProductCodeRule,
   validateProductCodeRule,
   type ProductCodeRule,
+  type ProductCodeRuleKind,
   type ProductCodeRuleSegment,
 } from '../products/product-code-rule';
 
 type UpdateProductCodeRuleFormProps = {
+  kind?: ProductCodeRuleKind;
   endpoint: string;
   item: ProductCodeRule;
   updatedBy: string;
@@ -163,19 +165,23 @@ function buildSegments(config: {
 }
 
 export function UpdateProductCodeRuleForm({
+  kind = 'purchase',
   endpoint,
   item,
   updatedBy,
   actorAccessScopes,
   onSuccess,
 }: UpdateProductCodeRuleFormProps) {
+  const isSalesRule = kind === 'sales';
   const [serialLength, setSerialLength] = useState(String(item.serialLength));
   const [serialScope, setSerialScope] = useState<ProductCodeRule['serialScope']>(
     item.serialScope,
   );
   const [prefixEnabled, setPrefixEnabled] = useState(hasEnabledSegment(item, 'prefix'));
   const [prefixValue, setPrefixValue] = useState(getSegmentValue(item, 'prefix') || 'PD');
-  const [supplierEnabled, setSupplierEnabled] = useState(hasEnabledSegment(item, 'supplier_code'));
+  const [supplierEnabled, setSupplierEnabled] = useState(
+    !isSalesRule && hasEnabledSegment(item, 'supplier_code'),
+  );
   const [categoryEnabled, setCategoryEnabled] = useState(hasEnabledSegment(item, 'category_code'));
   const [yearEnabled, setYearEnabled] = useState(hasEnabledSegment(item, 'year'));
   const [monthEnabled, setMonthEnabled] = useState(hasEnabledSegment(item, 'month'));
@@ -190,7 +196,7 @@ export function UpdateProductCodeRuleForm({
     segments: buildSegments({
       prefixEnabled,
       prefixValue,
-      supplierEnabled,
+      supplierEnabled: !isSalesRule && supplierEnabled,
       categoryEnabled,
       yearEnabled,
       monthEnabled,
@@ -198,7 +204,7 @@ export function UpdateProductCodeRuleForm({
     updatedAt: item.updatedAt,
     updatedBy,
   };
-  const validation = validateProductCodeRule(previewRule);
+  const validation = validateProductCodeRule(previewRule, { kind });
   const previewCode = buildProductCodePreview(previewRule, {
     prefix: prefixValue,
     supplierCode: 'SUP-BRAVO',
@@ -245,7 +251,7 @@ export function UpdateProductCodeRuleForm({
         onSuccess?.(normalizeSavedRule(result.result, previewRule, updatedBy));
       }
 
-      setMessage('产品编码规则已保存');
+      setMessage(`${isSalesRule ? '销售' : '采购'}编码规则已保存`);
     } catch {
       setError('保存产品编码规则失败');
     } finally {
@@ -257,9 +263,11 @@ export function UpdateProductCodeRuleForm({
     <form onSubmit={handleSubmit} style={formStyle}>
       <section style={cardStyle}>
         <div>
-          <h3 style={{ margin: '0 0 6px' }}>规则段配置</h3>
+          <h3 style={{ margin: '0 0 6px' }}>{isSalesRule ? '销售编码规则段配置' : '采购编码规则段配置'}</h3>
           <p style={helperStyle}>
-            可自由组合固定前缀、供应商编码、分类编码、年、月，流水号固定放在最后。
+            {isSalesRule
+              ? '可组合固定前缀、分类编码、年、月，流水号固定放在最后。销售编码不使用供应商编码。'
+              : '可自由组合固定前缀、供应商编码、分类编码、年、月，流水号固定放在最后。'}
           </p>
         </div>
         <div style={gridStyle}>
@@ -280,14 +288,16 @@ export function UpdateProductCodeRuleForm({
               placeholder="例如 PD"
             />
           </label>
-          <label style={inlineLabelStyle}>
-            <input
-              type="checkbox"
-              checked={supplierEnabled}
-              onChange={(event) => setSupplierEnabled(event.target.checked)}
-            />
-            供应商编码
-          </label>
+          {!isSalesRule ? (
+            <label style={inlineLabelStyle}>
+              <input
+                type="checkbox"
+                checked={supplierEnabled}
+                onChange={(event) => setSupplierEnabled(event.target.checked)}
+              />
+              供应商编码
+            </label>
+          ) : null}
           <label style={inlineLabelStyle}>
             <input
               type="checkbox"
@@ -342,9 +352,9 @@ export function UpdateProductCodeRuleForm({
               }
               style={inputStyle}
             >
-              <option value="per_supplier_total">按供应商总流水</option>
-              <option value="per_supplier_year">按供应商按年流水</option>
-              <option value="per_supplier_month">按供应商按月流水</option>
+              {!isSalesRule ? <option value="per_supplier_total">按供应商总流水</option> : null}
+              {!isSalesRule ? <option value="per_supplier_year">按供应商按年流水</option> : null}
+              {!isSalesRule ? <option value="per_supplier_month">按供应商按月流水</option> : null}
               <option value="global_total">全局总流水</option>
               <option value="global_year">全局按年流水</option>
               <option value="global_month">全局按月流水</option>
@@ -363,7 +373,7 @@ export function UpdateProductCodeRuleForm({
             示例预览：{previewCode}
           </p>
           <p style={helperStyle}>保存约束：流水号必选，且除流水号外至少启用一个业务段。</p>
-          <p style={helperStyle}>按供应商独立流水时，必须启用供应商编码段。</p>
+          {!isSalesRule ? <p style={helperStyle}>按供应商独立流水时，必须启用供应商编码段。</p> : null}
           <p style={helperStyle}>按年流水时，必须启用年份段；按月流水时，必须同时启用年份段和月份段。</p>
         </div>
       </section>
@@ -377,7 +387,9 @@ export function UpdateProductCodeRuleForm({
         <p style={{ margin: 0, color: '#166534', fontSize: '13px' }}>{message}</p>
       ) : null}
       <button type="submit" style={buttonStyle} disabled={isSubmitting}>
-        {isSubmitting ? '保存中...' : '保存规则'}
+        {isSubmitting
+          ? '保存中...'
+          : `保存${isSalesRule ? '销售' : '采购'}编码规则`}
       </button>
     </form>
   );

@@ -114,8 +114,8 @@ function canConvertQuoteListItemToSales(item: QuoteListItem) {
   }
 
   return (
-    (item.documentType === 'demand' && item.status === 'submitted') ||
-    (item.documentType === 'quote' && item.status === 'boss_confirmed')
+    (item.documentType === 'demand' && item.status === 'boss_approved') ||
+    (item.documentType === 'quote' && item.status === 'customer_accepted')
   );
 }
 
@@ -213,26 +213,6 @@ const chipStyle = {
   background: '#f8fafc',
 } satisfies React.CSSProperties;
 
-const fieldGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-  gap: '14px',
-} satisfies React.CSSProperties;
-
-const labelStyle = {
-  display: 'grid',
-  gap: '8px',
-  fontSize: '13px',
-  color: '#334155',
-} satisfies React.CSSProperties;
-
-const inputStyle = {
-  border: '1px solid #d7e0ea',
-  borderRadius: '12px',
-  padding: '10px 12px',
-  background: '#fff',
-} satisfies React.CSSProperties;
-
 const tableStyle = {
   width: '100%',
   borderCollapse: 'collapse' as const,
@@ -296,7 +276,7 @@ const quoteFilterLabels: Record<string, string> = {
   customerName: '客户',
   createdBy: '创建人 / 销售',
   sourceType: '来源类型',
-  bossConfirmed: '老板确认',
+  bossConfirmed: '老板环节完成',
 };
 
 export default async function AppQuoteListPage({
@@ -418,40 +398,40 @@ export default async function AppQuoteListPage({
       <StatStrip
         items={[
           { label: '全部', value: visibleItems.length },
-          { label: '已确认', value: confirmedCount },
-          { label: '待确认', value: pendingCount },
+          { label: '老板环节完成', value: confirmedCount },
+          { label: '老板环节待处理', value: pendingCount },
           { label: '修订中', value: revisedCount },
         ]}
       />
 
       <FilterPanel
         title="当前筛选"
-        subtitle="按单据类型、单号、客户、来源类型、销售和老板确认状态筛选。"
+        subtitle="按单据类型、单号、客户、来源类型、销售和老板环节是否完成筛选。"
       >
-        <form method="get" style={fieldGridStyle}>
-          <label style={labelStyle}>
+        <form method="get" className="erp-filter-form erp-form-grid">
+          <label className="erp-form-field">
             关键词 Keyword
-            <input name="keyword" defaultValue={query.keyword} style={inputStyle} />
+            <input className="erp-control" name="keyword" defaultValue={query.keyword} />
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             单号 Doc No
-            <input name="docNo" defaultValue={query.docNo} style={inputStyle} />
+            <input className="erp-control" name="docNo" defaultValue={query.docNo} />
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             单据类型 Document Type
             <select
               name="documentType"
               defaultValue={query.documentType ?? ''}
-              style={inputStyle}
+              className="erp-control"
             >
               <option value="">全部</option>
               <option value="demand">需求单 / Demand</option>
               <option value="quote">报价单 / Quote</option>
             </select>
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             状态 Status
-            <select name="status" defaultValue={query.status ?? ''} style={inputStyle}>
+            <select className="erp-control" name="status" defaultValue={query.status ?? ''}>
               <option value="">全部</option>
               {QUOTE_STATUSES.map((status) => (
                 <option key={status} value={status}>
@@ -460,12 +440,12 @@ export default async function AppQuoteListPage({
               ))}
             </select>
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             来源类型 Source Type
             <select
               name="sourceType"
               defaultValue={query.sourceType ?? ''}
-              style={inputStyle}
+              className="erp-control"
             >
               <option value="">全部</option>
               {sourceOptions.map((option) => (
@@ -475,12 +455,12 @@ export default async function AppQuoteListPage({
               ))}
             </select>
           </label>
-          <label style={labelStyle}>
-            老板确认 Boss Confirmed
+          <label className="erp-form-field">
+            老板环节完成 Boss Step Completed
             <select
               name="bossConfirmed"
               defaultValue={query.bossConfirmed}
-              style={inputStyle}
+              className="erp-control"
             >
               {quoteBossConfirmedOptions.map((value) => (
                 <option key={value} value={value}>
@@ -489,21 +469,23 @@ export default async function AppQuoteListPage({
               ))}
             </select>
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             客户 Customer
             <input
               name="customerName"
               defaultValue={query.customerName}
-              style={inputStyle}
+              className="erp-control"
             />
           </label>
-          <label style={labelStyle}>
+          <label className="erp-form-field">
             创建人 / 销售 Created By
-            <input name="createdBy" defaultValue={query.createdBy} style={inputStyle} />
+            <input className="erp-control" name="createdBy" defaultValue={query.createdBy} />
           </label>
           <input type="hidden" name="page" value="1" />
           <input type="hidden" name="pageSize" value={query.pageSize} />
-          <button type="submit">查询</button>
+          <div className="erp-filter-actions">
+            <button className="erp-button erp-button--primary" type="submit">查询</button>
+          </div>
         </form>
 
         <div style={chipWrapStyle}>
@@ -564,7 +546,7 @@ export default async function AppQuoteListPage({
                   <div style={actionStackStyle}>
                     <Link
                       href={toFormalQuoteDetailHref(item.detailHref)}
-                      style={rowLinkStyle}
+                      className="erp-button erp-button--secondary erp-button--compact erp-row-action"
                     >
                       查看详情
                     </Link>

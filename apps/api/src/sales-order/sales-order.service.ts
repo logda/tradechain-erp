@@ -30,6 +30,8 @@ import {
   type CounterpartyRecord,
 } from '../counterparty/counterparty.service';
 import { DocumentCodeRuleService } from '../document-code-rule/document-code-rule.service';
+import { ProductService } from '../product/product.service';
+import { isQuoteConvertibleToSales } from '../quote/quote-workflow';
 
 export type ConvertConfirmedQuotePayload = {
   quoteOrderId: number;
@@ -50,7 +52,7 @@ export type ConvertConfirmedQuotePayload = {
   quoteConfirmed?: boolean;
   items?: Array<{
     lineNo: number;
-    productId: number;
+    productId?: number;
     sku: string;
     productName: string;
     unit: string;
@@ -211,6 +213,7 @@ type PrismaSalesDb = PrismaService & {
 
 type SourceQuoteLineSelection = {
   lineNo?: number;
+  productId?: number;
   confirmedSupplierId?: number;
   confirmedSupplierCode?: string;
   confirmedSupplierName?: string;
@@ -1340,7 +1343,9 @@ export class SalesOrderService {
   };
 }
 
-  async convertConfirmedQuote(payload: ConvertConfirmedQuotePayload) {
+  async convertConfirmedQuote(
+    payload: ConvertConfirmedQuotePayload,
+  ): Promise<ConvertedSalesOrderRecord> {
     if (payload.quoteConfirmed === false) {
       throw new BadRequestException(
         'Only confirmed quote versions can convert to sales orders',
@@ -1361,7 +1366,7 @@ export class SalesOrderService {
     await this.assertSourceQuoteConvertibleToSales(
       payload.quoteOrderId,
       payload.quoteVersionNo,
-      '只有已提交需求单或老板已确认的报价单才能转销售订单',
+      '当前单据状态不可转销售单',
     );
     const createdAt = new Date().toISOString();
     const sourceQuoteNo = payload.sourceQuoteNo?.trim() || undefined;
@@ -1370,7 +1375,9 @@ export class SalesOrderService {
     const sourceDocumentLabel = sourceDocumentType === 'demand' ? '需求单' : '报价单';
 
     if (this.shouldUsePrisma()) {
-      const payloadRecord: ConvertedSalesOrderRecord = {
+      const customerOrderNo = await this.resolveCustomerOrderNo();
+      const apply = async (db: PrismaSalesDb) => {
+        const payloadRecord: ConvertedSalesOrderRecord = {
         id: payload.quoteOrderId,
         salesNo: 'PENDING-SALES',
         status: 'draft',
@@ -1402,7 +1409,7 @@ export class SalesOrderService {
         customerCode: payload.customerCode?.trim().toUpperCase() || undefined,
         customerEntryMode: payload.customerEntryMode ?? 'existing',
         orderingUnit: payload.customerName?.trim() || `客户 ${payload.customerId}`,
-        customerOrderNo: await this.resolveCustomerOrderNo(),
+        customerOrderNo,
         storeName: payload.sourceCode?.trim() || undefined,
         orderDate: payload.inquiryDate?.trim() || undefined,
         shipTo: payload.destination?.trim() || undefined,
@@ -1414,7 +1421,7 @@ export class SalesOrderService {
         salesUserId: payload.createdBy,
         items: normalizeSalesOrderItems(payload.items),
       };
-      const created = (await this.prismaDb!.businessDocument.create({
+        const created = (await db.businessDocument.create({
         data: {
           bizType: 'sales_order',
           docNo: `PENDING-SALES-${Date.now()}`,
@@ -1425,19 +1432,19 @@ export class SalesOrderService {
           createdBy: BigInt(payload.createdBy),
         },
       })) as PrismaBusinessDocumentRecord;
-      const finalPayload: ConvertedSalesOrderRecord = {
+        const finalPayload: ConvertedSalesOrderRecord = {
         ...payloadRecord,
         id: Number(created.id),
         salesNo: `S20260711${String(Number(created.id)).padStart(4, '0')}`,
       };
-      const updated = (await this.prismaDb!.businessDocument.update({
+        const updated = (await db.businessDocument.update({
         where: { id: created.id },
         data: {
           docNo: finalPayload.salesNo,
           payload: finalPayload,
         },
       })) as PrismaBusinessDocumentRecord;
-      await this.prismaDb!.operationLog.create({
+        await db.operationLog.create({
         data: {
           bizType: 'sales_order',
           bizId: updated.id,
@@ -1448,9 +1455,17 @@ export class SalesOrderService {
         },
       });
 
-      await this.markSourceQuoteConvertedToSales(payload, finalPayload);
+        await this.formalizeCandidateProducts(payload, db);
+        await this.markSourceQuoteConvertedToSales(payload, finalPayload, db);
 
-      return finalPayload;
+        return finalPayload;
+      };
+      const transaction = (this.prisma as unknown as {
+        $transaction?: <T>(callback: (db: PrismaSalesDb) => Promise<T>) => Promise<T>;
+      })?.$transaction;
+      return (typeof transaction === 'function'
+        ? await transaction.call(this.prisma, apply)
+        : await apply(this.prismaDb!)) as ConvertedSalesOrderRecord;
     }
 
     const id = this.store.nextSalesOrderId();
@@ -1500,6 +1515,7 @@ export class SalesOrderService {
       items: normalizeSalesOrderItems(payload.items),
     };
 
+    await this.formalizeCandidateProducts(payload);
     this.store.upsertSalesOrder(converted);
     this.store.recordAuditLog({
       bizType: 'sales_order',
@@ -1572,9 +1588,10 @@ export class SalesOrderService {
 
   private async loadSourceQuoteLineSelections(
     quoteOrderId: number,
+    prismaDb = this.prismaDb,
   ): Promise<SourceQuoteLineSelection[]> {
     if (this.shouldUsePrisma()) {
-      const record = (await this.prismaDb!.businessDocument.findUnique({
+      const record = (await prismaDb!.businessDocument.findUnique({
         where: { id: BigInt(quoteOrderId) },
       })) as SourceQuoteDocumentRecord | null;
 
@@ -1604,10 +1621,7 @@ export class SalesOrderService {
       const isConvertible =
         record?.bizType === 'quote' &&
         versionMatches &&
-        (
-          status === 'boss_confirmed' ||
-          (documentType === 'demand' && status === 'submitted')
-        );
+        isQuoteConvertibleToSales({ documentType, status: status ?? '' });
 
       if (!isConvertible) {
         throw new BadRequestException(errorMessage);
@@ -1620,22 +1634,51 @@ export class SalesOrderService {
     const isConvertible =
       quote &&
       quote.currentVersionNo === quoteVersionNo &&
-      (
-        quote.status === 'boss_confirmed' ||
-        ((quote.documentType ?? 'quote') === 'demand' && quote.status === 'submitted')
-      );
+      isQuoteConvertibleToSales({
+        documentType: quote.documentType ?? 'quote',
+        status: quote.status,
+      });
 
     if (!isConvertible) {
       throw new BadRequestException(errorMessage);
     }
   }
 
+  private async formalizeCandidateProducts(
+    payload: ConvertConfirmedQuotePayload,
+    prismaDb = this.prismaDb,
+  ) {
+    const productService = new ProductService(
+      (prismaDb ?? this.prisma) as PrismaService | undefined,
+    );
+    const sourceItems = payload.items?.length
+      ? payload.items
+      : await this.loadSourceQuoteLineSelections(payload.quoteOrderId, prismaDb);
+    const productIds = Array.from(
+      new Set(
+        sourceItems
+          .map((item) => Number(item.productId ?? item.confirmedProductId ?? 0))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    );
+
+    for (const productId of productIds) {
+      const product = await productService.findById(productId);
+      if (product?.productStage === 'quote_candidate') {
+        await productService.ensureFormalForSalesOrder(productId, {
+          operatedBy: String(payload.createdBy),
+        });
+      }
+    }
+  }
+
   private async markSourceQuoteConvertedToSales(
     payload: ConvertConfirmedQuotePayload,
     salesOrder: { id: number; salesNo: string },
+    prismaDb = this.prismaDb,
   ) {
     if (this.shouldUsePrisma()) {
-      const record = (await this.prismaDb!.businessDocument.findUnique({
+      const record = (await prismaDb!.businessDocument.findUnique({
         where: { id: BigInt(payload.quoteOrderId) },
       })) as SourceQuoteDocumentRecord | null;
 
@@ -1656,14 +1699,14 @@ export class SalesOrderService {
         linkedSalesOrderNo: salesOrder.salesNo,
       };
 
-      await this.prismaDb!.businessDocument.update({
+      await prismaDb!.businessDocument.update({
         where: { id: BigInt(payload.quoteOrderId) },
         data: {
           status: 'ordered',
           payload: afterData,
         },
       });
-      await this.prismaDb!.operationLog.create({
+      await prismaDb!.operationLog.create({
         data: {
           bizType: 'quote',
           bizId: BigInt(payload.quoteOrderId),

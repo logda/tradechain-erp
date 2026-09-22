@@ -43,7 +43,7 @@ describe('QuoteDetailPage', () => {
       screen.getByRole('button', { name: '转为销售订单' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '转为销售订单' })).toHaveStyle(
-      'border-radius: 16px',
+      'border-radius: 8px',
     );
   });
 

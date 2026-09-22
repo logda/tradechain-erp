@@ -192,6 +192,12 @@ describe('formal detail pages', () => {
     expect(
       screen.getByRole('dialog', { name: '智能 LED 灯带 图片预览' }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: '智能 LED 灯带 图片预览' }).firstElementChild,
+    ).toHaveClass('erp-dialog');
+    expect(screen.getByAltText('智能 LED 灯带 大图预览 1')).toHaveClass(
+      'erp-media-contain',
+    );
     expect(screen.getByAltText('智能 LED 灯带 大图预览 1')).toHaveAttribute(
       'src',
       'http://127.0.0.1:3001/uploads/formal-quotes/2026/07/21/quote-led.png',
@@ -226,7 +232,7 @@ describe('formal detail pages', () => {
     expect(screen.getByLabelText('销售单价 Sale Price')).toHaveValue(15.9);
     expect(screen.getByLabelText('需求说明 Requirements')).toHaveValue('Need 500 units');
     expect(screen.getByRole('button', { name: '保存报价草稿' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '提交并进入询价' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '提交报价单' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '转为销售订单' }),
     ).not.toBeInTheDocument();
@@ -234,7 +240,7 @@ describe('formal detail pages', () => {
       screen.queryByRole('button', { name: '创建样品单' }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText('当前为报价单草稿：可继续保存草稿，也可正式提交并进入询价流程。'),
+      screen.getByText('当前为报价单草稿：提交后等待老板确认最终售价，不生成首次采购询价。'),
     ).toBeInTheDocument();
 
     expect(
@@ -259,7 +265,9 @@ describe('formal detail pages', () => {
         json: async () => ({
           id: 101,
           quoteNo: 'Q202607080101',
-          status: 'submitted',
+          documentType: 'quote',
+          productSource: 'existing',
+          status: 'pending_boss_price_confirmation',
           currentVersionNo: 1,
           customerId: 1001,
           salesUserId: 2001,
@@ -311,11 +319,93 @@ describe('formal detail pages', () => {
       screen.queryByRole('button', { name: '创建样品单' }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText('当前为待确认状态：需等待老板确认后，才可转销售单或创建样品单。'),
+      screen.getByText('报价单尚未满足转销售单条件：必须先由老板确认售价，再由销售记录客户接受。'),
     ).toBeInTheDocument();
   });
 
-  it('shows conversion action for submitted demand documents', async () => {
+  it('shows boss-confirmed prices and the sales customer-feedback area', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url.includes('/quotes/audit-logs')) {
+          return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+        }
+
+        if (url.includes('/samples/source-quotes/103/summary')) {
+          return Promise.resolve({ ok: false, json: async () => null });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 103,
+            quoteNo: 'Q202607080103',
+            documentType: 'quote',
+            productSource: 'existing',
+            status: 'pending_customer_feedback',
+            currentVersionNo: 1,
+            customerId: 1001,
+            customerName: 'Acme Trading',
+            salesUserId: 2001,
+            sourceCode: 'expo',
+            requirements: 'Need 500 units',
+            versionHistory: [
+              {
+                versionNo: 1,
+                status: 'pending_customer_feedback',
+                confirmedAt: '2026-07-08T12:00:00.000Z',
+                confirmedBy: 'Mia',
+                items: [],
+              },
+            ],
+            items: [
+              {
+                lineNo: 1,
+                productId: 1,
+                sku: 'SKU-LED-001',
+                productName: '智能 LED 灯带',
+                unit: 'set',
+                quantity: 500,
+                salePrice: 15.9,
+                confirmedSalePrice: 18.8,
+                amount: 7950,
+              },
+            ],
+          }),
+        });
+      }),
+    );
+
+    const { default: AppQuoteDetailPage } = await import(
+      '../app/app/sales/quotes/[id]/page'
+    );
+
+    render(
+      <>
+        {await AppQuoteDetailPage({
+          params: Promise.resolve({ id: '103' }),
+          searchParams: Promise.resolve({
+            role: 'sales',
+            user: 'Zoe',
+          }),
+        })}
+      </>,
+    );
+
+    expect(screen.getByRole('heading', { name: '报价结果' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '老板确认售价' })).toBeInTheDocument();
+    expect(screen.getByText('18.8')).toBeInTheDocument();
+    expect(screen.queryByText('最终供应商')).not.toBeInTheDocument();
+    expect(screen.queryByText('采购价')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '老板确认报价售价' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '销售记录客户反馈' })).toBeInTheDocument();
+    expect(screen.getAllByText('V1').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: '保存客户反馈' })).toBeInTheDocument();
+  });
+
+  it('shows conversion action for boss-approved demand documents', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -324,7 +414,8 @@ describe('formal detail pages', () => {
           id: 102,
           quoteNo: 'XQ202607080102',
           documentType: 'demand',
-          status: 'submitted',
+          productSource: 'existing',
+          status: 'boss_approved',
           currentVersionNo: 1,
           customerId: 1001,
           customerName: 'Acme Trading',
@@ -372,7 +463,7 @@ describe('formal detail pages', () => {
 
     expect(screen.getByRole('button', { name: '转为销售订单' })).toBeInTheDocument();
     expect(
-      screen.getByText('需求单已提交：可在当前详情或列表操作栏转为销售单。'),
+      screen.getByText('需求单已通过老板审批，可以转为销售单。'),
     ).toBeInTheDocument();
   });
 

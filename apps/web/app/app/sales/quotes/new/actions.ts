@@ -370,8 +370,12 @@ export async function buildCreateFormalQuotePayload(
   const submitMode =
     String(formData.get('submitMode') ?? 'draft') === 'submit' ? 'submit' : 'draft';
   const productEntryMode = String(formData.get('productEntryMode') ?? 'existing');
+  const productSource =
+    String(formData.get('productSource') ?? productEntryMode) === 'candidate'
+      ? 'candidate'
+      : 'existing';
   const documentType =
-    String(formData.get('documentType') ?? (productEntryMode === 'existing' ? 'demand' : 'quote')) ===
+    String(formData.get('documentType') ?? 'demand') ===
     'demand'
       ? 'demand'
       : 'quote';
@@ -388,7 +392,7 @@ export async function buildCreateFormalQuotePayload(
     String(formData.get('access') ?? '') || null,
   );
   const items =
-    productEntryMode === 'candidate'
+    productSource === 'candidate'
       ? [
           {
             createCandidateProduct: buildCandidateProductDraft(formData),
@@ -414,6 +418,7 @@ export async function buildCreateFormalQuotePayload(
   return {
     submitMode,
     documentType,
+    productSource,
     ...(customerEntryMode === 'existing'
       ? { customerId: Number(formData.get('customerId')) }
       : {}),
@@ -469,6 +474,7 @@ export async function createFormalQuoteAction(
       body: JSON.stringify({
         submitMode: payload.submitMode,
         documentType: payload.documentType,
+        productSource: payload.productSource,
         customerId: payload.customerId,
         customerEntryMode: payload.customerEntryMode,
         customerName: payload.customerName,
@@ -534,6 +540,7 @@ export async function autosaveFormalQuoteDraftAction(
     const requestBody = {
       submitMode: 'draft' as const,
       documentType: payload.documentType,
+      productSource: payload.productSource,
       customerId: payload.customerId,
       customerEntryMode: payload.customerEntryMode,
       customerName: payload.customerName,
