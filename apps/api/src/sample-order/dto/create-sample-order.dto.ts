@@ -1,0 +1,22 @@
+export type CreateSampleOrderDto = {
+  quoteOrderId: number;
+  quoteVersionNo: number;
+  customerId: number;
+  createdBy: number;
+  sampleRequirements: string;
+  samplingCost?: number;
+  quoteConfirmed?: boolean;
+  importantEnglishTitle?: string;
+  orderCode?: string;
+  purchaseUnit?: string;
+  salesProductCode?: string;
+  internalProductCode?: string;
+  imageUrls?: string[];
+  sampleQuantity?: number;
+  estimatedCompletionDate?: string;
+  freightForwarder?: string;
+  domesticTrackingNo?: string;
+  domesticCourierFee?: number;
+  internationalCourierFee?: number;
+  estimatedArrivalDate?: string;
+};

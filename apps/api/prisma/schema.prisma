@@ -1,0 +1,509 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id                BigInt    @id @default(autoincrement())
+  username          String    @unique @db.VarChar(64)
+  realName          String    @db.VarChar(64)
+  passwordHash      String    @db.VarChar(128)
+  roleCode          String    @db.VarChar(32)
+  status            String    @db.VarChar(16)
+  fullAccess        Boolean   @default(false)
+  createdBy         String    @db.VarChar(64)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deactivatedAt     DateTime?
+  deactivatedBy     String?   @db.VarChar(64)
+  deactivatedReason String?   @db.VarChar(255)
+}
+
+model RolePermission {
+  id        BigInt   @id @default(autoincrement())
+  roleCode  String   @unique @db.VarChar(32)
+  modules   Json
+  actions   Json
+  dataScope String   @db.VarChar(32)
+  updatedBy String   @db.VarChar(64)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dataScope])
+}
+
+model Counterparty {
+  id                BigInt    @id @default(autoincrement())
+  type              String    @db.VarChar(16)
+  code              String    @unique @db.VarChar(64)
+  name              String    @db.VarChar(128)
+  shortName         String?   @db.VarChar(64)
+  contactName       String?   @db.VarChar(64)
+  phone             String?   @db.VarChar(64)
+  address           String?   @db.VarChar(255)
+  bankName          String?   @db.VarChar(128)
+  bankAccount       String?   @db.VarChar(128)
+  remark            String?   @db.VarChar(255)
+  email             String?   @db.VarChar(128)
+  region            String?   @db.VarChar(64)
+  paymentTerms      String?   @db.VarChar(255)
+  ownerName         String    @db.VarChar(64)
+  status            String    @db.VarChar(16)
+  createdBy         String    @db.VarChar(64)
+  createdAt         DateTime  @default(now())
+  updatedBy         String?   @db.VarChar(64)
+  updatedAt         DateTime  @updatedAt
+  deactivatedAt     DateTime?
+  deactivatedBy     String?   @db.VarChar(64)
+  deactivatedReason String?   @db.VarChar(255)
+
+  @@index([type, status])
+  @@index([ownerName])
+}
+
+model Product {
+  id                   BigInt    @id @default(autoincrement())
+  sku                  String    @unique @db.VarChar(64)
+  salesCode            String?   @unique @db.VarChar(64)
+  purchaseCode         String?   @unique @db.VarChar(64)
+  purchaseCodeMode     String    @default("manual") @db.VarChar(16)
+  productStage         String    @default("formal") @db.VarChar(32)
+  pricingMode          String    @default("fixed") @db.VarChar(16)
+  brand                String?   @db.VarChar(64)
+  factoryName          String?   @db.VarChar(128)
+  model                String?   @db.VarChar(128)
+  spec                 String?   @db.VarChar(255)
+  singleWeight         Decimal?  @db.Decimal(18, 3)
+  cartonSpec           String?   @db.VarChar(255)
+  cartonQuantity       Int?
+  cartonWeight         Decimal?  @db.Decimal(18, 3)
+  defaultSupplierCode  String?   @db.VarChar(64)
+  nameCn               String    @db.VarChar(128)
+  nameEn               String    @db.VarChar(128)
+  category             String    @db.VarChar(32)
+  unit                 String    @db.VarChar(32)
+  currency             String    @db.VarChar(16)
+  defaultSalePrice     Decimal   @db.Decimal(18, 2)
+  defaultPurchasePrice Decimal   @db.Decimal(18, 2)
+  ownerName            String    @db.VarChar(64)
+  status               String    @db.VarChar(16)
+  createdBy            String    @db.VarChar(64)
+  createdAt            DateTime  @default(now())
+  updatedBy            String?   @db.VarChar(64)
+  updatedAt            DateTime  @updatedAt
+  deactivatedAt        DateTime?
+  deactivatedBy        String?   @db.VarChar(64)
+  deactivatedReason    String?   @db.VarChar(255)
+  salePriceTiers       ProductSalePriceTier[]
+
+  @@index([category, status])
+  @@index([ownerName])
+}
+
+model ProductSalePriceTier {
+  id         BigInt   @id @default(autoincrement())
+  productId   BigInt
+  minQuantity Int
+  salePrice   Decimal  @db.Decimal(18, 2)
+  currency    String   @db.VarChar(16)
+  status      String   @db.VarChar(16)
+  createdBy   String   @db.VarChar(64)
+  createdAt   DateTime @default(now())
+  updatedBy   String?  @db.VarChar(64)
+  updatedAt   DateTime @updatedAt
+  product     Product  @relation(fields: [productId], references: [id])
+
+  @@unique([productId, minQuantity])
+  @@index([productId, status])
+}
+
+model BusinessDocument {
+  id             BigInt   @id @default(autoincrement())
+  bizType        String   @db.VarChar(32)
+  docNo          String   @unique @db.VarChar(64)
+  status         String   @db.VarChar(64)
+  ownerUserId    BigInt?
+  counterpartyId BigInt?
+  payload        Json
+  createdBy      BigInt?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([bizType, status])
+  @@index([ownerUserId])
+  @@index([counterpartyId])
+}
+
+model QuoteOrder {
+  id                 BigInt              @id @default(autoincrement())
+  quoteNo            String              @unique @db.VarChar(64)
+  customerId         BigInt
+  salesUserId        BigInt
+  currentVersionNo   Int
+  confirmedVersionNo Int?
+  status             String              @db.VarChar(64)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  versions           QuoteOrderVersion[]
+  inquiries          QuoteInquirySheet[]
+}
+
+model QuoteOrderVersion {
+  id            BigInt     @id @default(autoincrement())
+  quoteOrderId  BigInt
+  versionNo     Int
+  requirements  String     @db.Text
+  changeReason  String?    @db.VarChar(255)
+  confirmedFlag Boolean    @default(false)
+  createdBy     BigInt
+  createdAt     DateTime   @default(now())
+  quoteOrder    QuoteOrder @relation(fields: [quoteOrderId], references: [id])
+
+  @@unique([quoteOrderId, versionNo])
+}
+
+model QuoteInquirySheet {
+  id                BigInt   @id @default(autoincrement())
+  inquiryNo         String   @unique @db.VarChar(64)
+  quoteOrderId      BigInt
+  quoteVersionId    BigInt
+  status            String   @db.VarChar(64)
+  supplierCount     Int      @default(0)
+  comparisonSummary String?  @db.Text
+  confirmedBy       BigInt?
+  confirmedAt       DateTime?
+  createdBy         BigInt
+  createdAt         DateTime @default(now())
+  quoteOrder        QuoteOrder @relation(fields: [quoteOrderId], references: [id])
+}
+
+model QuoteInquiryItem {
+  id                          BigInt   @id @default(autoincrement())
+  inquirySheetId              BigInt
+  quoteVersionItemId          BigInt
+  lineNo                      Int
+  productId                   BigInt
+  requiredSupplierCount       Int      @default(2)
+  bossConfirmedSalePrice      Decimal? @db.Decimal(18, 2)
+  bossSelectedSupplierQuoteId BigInt?
+  bossPricingRemark           String?  @db.VarChar(255)
+  bossPricedBy                BigInt?
+  bossPricedAt                DateTime?
+  createdAt                   DateTime @default(now())
+}
+
+model QuoteInquirySupplierQuote {
+  id                  BigInt   @id @default(autoincrement())
+  inquiryItemId       BigInt
+  supplierId          BigInt
+  supplierProductName String?  @db.VarChar(128)
+  quotePrice          Decimal  @db.Decimal(18, 2)
+  currencyCode        String   @db.VarChar(16)
+  quoteDate           DateTime
+  attachmentUrl       String?  @db.VarChar(255)
+  remark              String?  @db.VarChar(255)
+  createdAt           DateTime @default(now())
+}
+
+model SampleOrder {
+  id                   BigInt               @id @default(autoincrement())
+  sampleNo             String               @unique @db.VarChar(64)
+  sourceQuoteOrderId   BigInt
+  sourceQuoteVersionId BigInt               @unique
+  customerId           BigInt
+  currentVersionNo     Int
+  currentStatus        String               @db.VarChar(64)
+  createdBy            BigInt
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  versions             SampleOrderVersion[]
+}
+
+model SampleOrderVersion {
+  id                 BigInt      @id @default(autoincrement())
+  sampleOrderId      BigInt
+  versionNo          Int
+  status             String      @db.VarChar(64)
+  sampleRequirements String      @db.Text
+  samplingCost       Decimal?    @db.Decimal(18, 2)
+  changeReason       String?     @db.VarChar(255)
+  cancelReason       String?     @db.VarChar(255)
+  replacedVersionNo  Int?
+  createdBy          BigInt
+  createdAt          DateTime    @default(now())
+  sampleOrder        SampleOrder @relation(fields: [sampleOrderId], references: [id])
+
+  @@unique([sampleOrderId, versionNo])
+}
+
+model SalesOrder {
+  id                      BigInt              @id @default(autoincrement())
+  salesNo                 String              @unique @db.VarChar(64)
+  sourceQuoteOrderId   BigInt?
+  sourceQuoteVersionId BigInt?             @unique
+  customerId              BigInt
+  currentVersionNo        Int
+  confirmedVersionNo      Int?
+  status                  String              @db.VarChar(64)
+  purchaseAggregateStatus String              @db.VarChar(64)
+  shipmentAggregateStatus String              @db.VarChar(64)
+  receiptStatus           String              @db.VarChar(64)
+  afterSalesEndStatus     String              @db.VarChar(64)
+  financeStatus           String              @db.VarChar(64)
+  lockedFlag              Boolean             @default(false)
+  createdBy               BigInt
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  versions           SalesOrderVersion[]
+  purchaseOrders          PurchaseOrder[]
+}
+
+model SalesOrderVersion {
+  id             BigInt            @id @default(autoincrement())
+  salesOrderId   BigInt
+  versionNo      Int
+  status         String            @db.VarChar(64)
+  changeReason   String?           @db.VarChar(255)
+  createdBy      BigInt
+  createdAt      DateTime          @default(now())
+  salesOrder     SalesOrder        @relation(fields: [salesOrderId], references: [id])
+  items          SalesOrderItem[]
+
+  @@unique([salesOrderId, versionNo])
+}
+
+model SalesOrderItem {
+  id                  BigInt            @id @default(autoincrement())
+  salesOrderVersionId BigInt
+  lineNo              Int
+  productId           BigInt
+  quantity            Int
+  unitPrice           Decimal           @db.Decimal(18, 2)
+  totalAmount         Decimal           @db.Decimal(18, 2)
+  directEntry         Boolean           @default(false)
+  chosenSupplierId    BigInt?
+  sourceInquiryItemId BigInt?
+  createdAt           DateTime          @default(now())
+  salesOrderVersion   SalesOrderVersion @relation(fields: [salesOrderVersionId], references: [id])
+
+  @@unique([salesOrderVersionId, lineNo])
+}
+
+model PurchaseOrder {
+  id               BigInt                   @id @default(autoincrement())
+  purchaseNo       String                   @unique @db.VarChar(64)
+  sourceSalesOrderId   BigInt
+  supplierId       BigInt
+  currentVersionNo Int
+  confirmedVersionNo Int?
+  status           String                   @db.VarChar(64)
+  createdBy        BigInt
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  salesOrder       SalesOrder               @relation(fields: [sourceSalesOrderId], references: [id])
+  versions           PurchaseOrderVersion[]
+}
+
+model PurchaseOrderVersion {
+  id              BigInt                 @id @default(autoincrement())
+  purchaseOrderId BigInt
+  versionNo       Int
+  status          String                 @db.VarChar(64)
+  changeReason    String?                @db.VarChar(255)
+  createdBy       BigInt
+  createdAt       DateTime               @default(now())
+  purchaseOrder   PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id])
+  items           PurchaseOrderItem[]
+
+  @@unique([purchaseOrderId, versionNo])
+}
+
+model PurchaseOrderItem {
+  id                     BigInt               @id @default(autoincrement())
+  purchaseOrderVersionId BigInt
+  lineNo                 Int
+  sourceSalesItemId    BigInt
+  productId              BigInt
+  quantity               Int
+  unitPrice              Decimal              @db.Decimal(18, 2)
+  totalAmount            Decimal              @db.Decimal(18, 2)
+  createdAt              DateTime             @default(now())
+  purchaseOrderVersion   PurchaseOrderVersion @relation(fields: [purchaseOrderVersionId], references: [id])
+
+  @@unique([purchaseOrderVersionId, lineNo])
+}
+
+model ShipmentBatch {
+  id                BigInt   @id @default(autoincrement())
+  batchNo           String   @unique @db.VarChar(64)
+  salesOrderId      BigInt
+  purchaseOrderId   BigInt
+  status            String   @db.VarChar(64)
+  shippedQty        Int
+  accumulatedQty    Int
+  remainingQty      Int
+  shippedAt         DateTime
+  receiptSendStatus String   @db.VarChar(16)
+  receiptDocUrl     String?  @db.VarChar(255)
+  receiptSentAt     DateTime?
+  receiptSentBy     BigInt?
+  createdBy         BigInt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model AfterSalesOrder {
+  id                  BigInt   @id @default(autoincrement())
+  afterSalesNo        String   @unique @db.VarChar(64)
+  salesOrderId        BigInt
+  purchaseOrderId     BigInt?
+  shipmentBatchId     BigInt?
+  type                String   @db.VarChar(32)
+  status              String   @db.VarChar(64)
+  financeReviewStatus String   @db.VarChar(64)
+  issueDescription    String   @db.Text
+  createdBy           BigInt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model ApprovalRecord {
+  id           BigInt   @id @default(autoincrement())
+  bizType      String   @db.VarChar(32)
+  bizId        BigInt
+  bizVersionNo Int?
+  actionType   String   @db.VarChar(32)
+  approverId   BigInt?
+  result       String?  @db.VarChar(16)
+  remark       String?  @db.VarChar(255)
+  createdAt    DateTime @default(now())
+}
+
+model OperationLog {
+  id            BigInt   @id @default(autoincrement())
+  bizType       String   @db.VarChar(32)
+  bizId         BigInt
+  operationType String   @db.VarChar(32)
+  operatorId    BigInt
+  beforeData    Json?
+  afterData     Json?
+  createdAt     DateTime @default(now())
+}
+
+model AttachmentMeta {
+  id          BigInt   @id @default(autoincrement())
+  bizType     String   @db.VarChar(32)
+  bizId       BigInt
+  fileName    String   @db.VarChar(255)
+  mimeType    String   @db.VarChar(128)
+  fileSize    BigInt
+  storageKey  String   @db.VarChar(255)
+  visibility  String   @db.VarChar(32)
+  uploadedBy  BigInt
+  uploadedAt  DateTime @default(now())
+
+  @@index([bizType, bizId])
+}
+
+model Warehouse {
+  id         BigInt             @id @default(autoincrement())
+  code       String             @unique @db.VarChar(64)
+  name       String             @db.VarChar(128)
+  status     String             @db.VarChar(16)
+  ownerName   String             @db.VarChar(64)
+  createdBy   String             @db.VarChar(64)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  locations   WarehouseLocation[]
+  stockInOrders  StockInOrder[]
+  stockOutOrders StockOutOrder[]
+
+  @@index([status])
+}
+
+model WarehouseLocation {
+  id          BigInt   @id @default(autoincrement())
+  warehouseId BigInt
+  code        String   @db.VarChar(64)
+  name        String   @db.VarChar(128)
+  status      String   @db.VarChar(16)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  stockInOrders  StockInOrder[]
+  stockOutOrders StockOutOrder[]
+
+  @@unique([warehouseId, code])
+  @@index([warehouseId, status])
+}
+
+model InventoryBalance {
+  id           BigInt   @id @default(autoincrement())
+  productId    BigInt
+  warehouseId  BigInt
+  locationId   BigInt
+  onHandQty    Int
+  availableQty Int
+  updatedAt    DateTime @updatedAt
+
+  @@unique([productId, warehouseId, locationId])
+  @@index([warehouseId, locationId])
+}
+
+model InventoryLedger {
+  id            BigInt   @id @default(autoincrement())
+  movementType  String   @db.VarChar(64)
+  sourceBizType String   @db.VarChar(32)
+  sourceBizId   BigInt
+  sourceDocNo   String   @db.VarChar(64)
+  productId     BigInt
+  warehouseId   BigInt
+  locationId    BigInt
+  quantityDelta Int
+  createdBy     String   @db.VarChar(64)
+  createdAt     DateTime @default(now())
+
+  @@index([sourceBizType, sourceBizId])
+  @@index([productId, warehouseId, locationId])
+}
+
+model StockInOrder {
+  id            BigInt   @id @default(autoincrement())
+  stockInNo     String   @unique @db.VarChar(64)
+  sourceBizType String   @db.VarChar(32)
+  sourceBizId   BigInt
+  sourceDocNo   String   @db.VarChar(64)
+  warehouseId   BigInt
+  locationId    BigInt
+  status        String   @db.VarChar(32)
+  createdBy     String   @db.VarChar(64)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+  location      WarehouseLocation @relation(fields: [locationId], references: [id])
+
+  @@index([sourceBizType, sourceBizId])
+  @@index([warehouseId, locationId])
+}
+
+model StockOutOrder {
+  id            BigInt   @id @default(autoincrement())
+  stockOutNo    String   @unique @db.VarChar(64)
+  sourceBizType String   @db.VarChar(32)
+  sourceBizId   BigInt
+  sourceDocNo   String   @db.VarChar(64)
+  warehouseId   BigInt
+  locationId    BigInt
+  status        String   @db.VarChar(32)
+  createdBy     String   @db.VarChar(64)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+  location      WarehouseLocation @relation(fields: [locationId], references: [id])
+
+  @@index([sourceBizType, sourceBizId])
+  @@index([warehouseId, locationId])
+}

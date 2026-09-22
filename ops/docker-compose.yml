@@ -1,0 +1,44 @@
+services:
+  api:
+    # 仓库路径 logda/tradechain-erp-api 必须与 .github/workflows/release.yml 推送的一致。
+    # IMAGE_REGISTRY 默认 ghcr.io，可在同目录 .env 里换成国内代理（私有包限制见 .env.example）
+    image: ${IMAGE_REGISTRY:-ghcr.io}/logda/tradechain-erp-api:${TAG:-latest}
+    container_name: erp-api
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      ERP_DATA_DIR: /data
+    # 容器内经 host.docker.internal 访问宿主机（宝塔）上的 MySQL
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # 上传附件持久化，重部署不丢
+    volumes:
+      - erp-data:/data
+    ports:
+      - "127.0.0.1:3001:3001"
+    restart: unless-stopped
+
+  web:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/logda/tradechain-erp-web:${TAG:-latest}
+    container_name: erp-web
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      # web 服务端经 compose 内网直连 api，浏览器不直接访问 api
+      ERP_API_BASE_URL: http://api:3001/api
+      # Server Action 回环调用自身 API Route 的基址（容器内 Next.js 监听 3000）
+      ERP_WEB_BASE_URL: http://127.0.0.1:3000
+      # 必须与 api 取到同一个值（api 经 env_file 读 .env），否则 api 验签失败 → 403 正式会话签名无效。
+      # web 没有 env_file，所以要在这里显式透传；未设置时两侧都会在启动后拒绝服务而不是回落到内置密钥。
+      ERP_FORMAL_SESSION_SECRET: ${ERP_FORMAL_SESSION_SECRET:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  erp-data:
+    name: erp-data

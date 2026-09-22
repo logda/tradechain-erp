@@ -1,0 +1,17 @@
+ALTER TABLE `BusinessDocument` MODIFY `status` VARCHAR(64) NOT NULL;
+ALTER TABLE `QuoteOrder` MODIFY `status` VARCHAR(64) NOT NULL;
+ALTER TABLE `QuoteInquirySheet` MODIFY `status` VARCHAR(64) NOT NULL;
+ALTER TABLE `SampleOrder` MODIFY `currentStatus` VARCHAR(64) NOT NULL;
+ALTER TABLE `SampleOrderVersion` MODIFY `status` VARCHAR(64) NOT NULL;
+ALTER TABLE `SalesOrder` MODIFY `status` VARCHAR(64) NOT NULL;
+ALTER TABLE `SalesOrder` MODIFY `purchaseAggregateStatus` VARCHAR(64) NOT NULL;
+ALTER TABLE `SalesOrder` MODIFY `shipmentAggregateStatus` VARCHAR(64) NOT NULL;
+ALTER TABLE `SalesOrder` MODIFY `receiptStatus` VARCHAR(64) NOT NULL;
+ALTER TABLE `SalesOrder` MODIFY `afterSalesEndStatus` VARCHAR(64) NOT NULL;
+ALTER TABLE `SalesOrder` MODIFY `financeStatus` VARCHAR(64) NOT NULL;
+ALTER TABLE `SalesOrderVersion` MODIFY `status` VARCHAR(64) NOT NULL;
+ALTER TABLE `PurchaseOrder` MODIFY `status` VARCHAR(64) NOT NULL;
+ALTER TABLE `PurchaseOrderVersion` MODIFY `status` VARCHAR(64) NOT NULL;
+ALTER TABLE `ShipmentBatch` MODIFY `status` VARCHAR(64) NOT NULL;
+ALTER TABLE `AfterSalesOrder` MODIFY `status` VARCHAR(64) NOT NULL;
+ALTER TABLE `AfterSalesOrder` MODIFY `financeReviewStatus` VARCHAR(64) NOT NULL;

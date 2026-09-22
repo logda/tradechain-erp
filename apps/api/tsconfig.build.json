@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@erp/shared": ["packages/shared/dist/esm/index.d.ts"]
+    },
+    "types": ["node"]
+  },
+  "exclude": ["test", "dist", "jest.config.ts", "src/**/*.spec.ts"]
+}

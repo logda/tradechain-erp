@@ -1,0 +1,23 @@
+{
+  "name": "tradechain-erp",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format"
+  },
+  "version": "1.0.0",
+  "description": "TradeChain ERP - 外贸全流程 ERP 系统，覆盖询盘、报价、样品、销售、采购、库存、出货与售后",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "devDependencies": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
