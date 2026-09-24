@@ -82,6 +82,7 @@ export class QuoteController {
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
+  @FormalActions('audit.view')
   @Get('audit-logs')
   listAuditLogs(
     @Headers('x-erp-role') role?: string,

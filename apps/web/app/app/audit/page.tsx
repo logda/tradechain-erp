@@ -304,7 +304,7 @@ export default async function AppAuditPage({ searchParams }: AppAuditPageProps) 
           <article style={heroCardStyle}>
             <h3 style={heroTitleStyle}>无权限访问正式日志中心</h3>
             <p style={heroSubStyle}>
-              日志中心涉及全业务操作日志，仅老板、管理员或全业务日志权限账号可查看。
+              日志中心涉及业务操作日志，请联系管理员配置“审计查看”权限。
             </p>
           </article>
         </section>
@@ -340,25 +340,10 @@ export default async function AppAuditPage({ searchParams }: AppAuditPageProps) 
   );
   const logPaginationParams = {
     module: selectedModuleKey !== 'all' ? selectedModuleKey : undefined,
-    role: readParam(resolvedSearchParams.role),
-    user: readParam(resolvedSearchParams.user),
-    access: readParam(resolvedSearchParams.access),
   };
 
   const buildModuleHref = (moduleKey: string) => {
     const params = new URLSearchParams();
-    const role = readParam(resolvedSearchParams.role);
-    const user = readParam(resolvedSearchParams.user);
-    const access = readParam(resolvedSearchParams.access);
-    if (role) {
-      params.set('role', role);
-    }
-    if (user) {
-      params.set('user', user);
-    }
-    if (access) {
-      params.set('access', access);
-    }
     if (moduleKey !== 'all') {
       params.set('module', moduleKey);
     }
@@ -441,7 +426,7 @@ export default async function AppAuditPage({ searchParams }: AppAuditPageProps) 
           </div>
         </FormalDataTable>
 
-        <AuditLogTable
+        <AuditLogTable session={session}
           items={pagedVisibleItems}
           title={`${selectedModuleLabel}最新日志`}
           limit={logPageSize}

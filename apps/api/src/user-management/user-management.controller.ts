@@ -31,6 +31,7 @@ export class UserManagementController {
     return this.userManagementService.list(normalizePaginationQuery(query));
   }
 
+  @FormalActions('audit.view')
   @Get('audit-logs')
   listAuditLogs() {
     return this.userManagementService.listAuditLogs();

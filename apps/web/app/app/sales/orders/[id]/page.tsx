@@ -1219,7 +1219,7 @@ export default async function AppSalesOrderDetailPage({
           )}
         </article>
 
-        <AuditLogTable items={auditLogs?.items ?? []} />
+        <AuditLogTable session={session} items={auditLogs?.items ?? []} />
       </section>
     </AppShell>
   );

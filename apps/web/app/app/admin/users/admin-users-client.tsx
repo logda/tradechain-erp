@@ -5,6 +5,7 @@ import { AuditLogTable } from '../../_components/audit-log-table';
 import { FormalPagination } from '../../_components/formal-pagination';
 import { MutationActionForm } from '../../_components/mutation-action-form';
 import { hasValidAuditLogResponse, type AuditLogItem } from '../../_lib/audit-log';
+import type { DemoSession } from '../../_lib/demo-session';
 import { CreateAdminUserForm } from './create-admin-user-form';
 import { RolePermissionEditor } from './role-permissions-editor';
 import { UpdateUserRoleForm } from './update-user-role-form';
@@ -42,10 +43,7 @@ type AdminUsersClientProps = {
   }>;
   page: number;
   pageSize: number;
-  session: {
-    role: string;
-    user: string;
-  };
+  session: DemoSession;
   adminAccessScopes?: {
     modules: string[];
     dataScope: string;
@@ -95,7 +93,6 @@ const moduleLabels: Record<string, string> = {
   purchase: '采购',
   operations: '运营',
   boss_dashboard: '老板看板',
-  audit: '日志中心',
   admin: '用户管理',
 };
 
@@ -108,6 +105,7 @@ const dataScopeLabels: Record<string, string> = {
 };
 
 const actionLabels: Record<string, string> = {
+  'audit.view': '审计查看',
   'admin.user.write': '账号管理',
   'admin.role.write': '角色权限',
   'master_data.write': '主数据维护',
@@ -137,7 +135,7 @@ const roleLabels: Record<string, string> = {
 };
 
 function formatModuleScope(item: UserListItem) {
-  const modules = item.accessScopes?.modules ?? [];
+  const modules = (item.accessScopes?.modules ?? []).filter((module) => module !== 'audit');
   if (modules.length === 0) {
     return '-';
   }
@@ -428,7 +426,7 @@ export function AdminUsersClient({
         </div>
       </section>
 
-      <AuditLogTable items={auditLogItems} />
+      <AuditLogTable session={session} items={auditLogItems} />
     </>
   );
 }

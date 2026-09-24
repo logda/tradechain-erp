@@ -18,5 +18,7 @@ describe('formal responsive shell', () => {
       'erp-shell__title',
     );
     expect(screen.getByText('页面内容').parentElement).toHaveClass('erp-shell__body');
+    expect(screen.queryByRole('link', { name: '全链路验收中心' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '日志中心' })).toHaveAttribute('href', '/app/logs');
   });
 });

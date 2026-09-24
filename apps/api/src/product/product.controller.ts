@@ -36,6 +36,7 @@ export class ProductController {
     return this.productService.list(normalizePaginationQuery(query));
   }
 
+  @FormalActions('audit.view')
   @Get('audit-logs')
   listAuditLogs() {
     return this.productService.listAuditLogs();

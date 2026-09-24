@@ -73,7 +73,8 @@ export class InquiryController {
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales', 'purchase_manager', 'purchase')
-  @FormalAnyModules('purchase', 'audit')
+  @FormalAnyModules('purchase', 'sales')
+  @FormalActions('audit.view')
   @Get('audit-logs')
   listAuditLogs(
     @Headers('x-erp-role') role?: string,

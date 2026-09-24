@@ -75,6 +75,7 @@ export class AfterSalesController {
   }
 
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
+  @FormalActions('audit.view')
   @Get('audit-logs')
   listAuditLogs() {
     return this.afterSalesService.listAuditLogs();

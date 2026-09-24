@@ -95,7 +95,7 @@ describe('inventory pages', () => {
     expect(screen.getByText('stock_in_confirmed')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '仓库中心' })).toHaveAttribute(
       'href',
-      '/app/warehouses?role=boss&user=Mia',
+      '/app/warehouses',
     );
   });
 

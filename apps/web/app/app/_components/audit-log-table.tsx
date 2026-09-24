@@ -8,6 +8,7 @@ import {
   formatAuditOperator,
   type AuditLogItem,
 } from '../_lib/audit-log';
+import { canViewFormalAuditCenter, type DemoSession } from '../_lib/demo-session';
 import { FormalDataTable } from './formal-data-table';
 
 const tableStyle = {
@@ -135,17 +136,20 @@ function ChangeSummary({ item }: { item: AuditLogItem }) {
 
 export function AuditLogTable({
   items,
+  session,
   title = '审计日志',
   limit = 8,
   showModule = false,
   total,
 }: {
   items: Array<AuditLogItem & { moduleLabel?: string }>;
+  session: DemoSession;
   title?: string;
   limit?: number;
   showModule?: boolean;
   total?: number;
 }) {
+  if (!canViewFormalAuditCenter(session)) return null;
   const visibleItems = [...items]
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
     .slice(-limit)

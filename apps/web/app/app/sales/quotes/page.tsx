@@ -606,7 +606,7 @@ export default async function AppQuoteListPage({
         />
       </FormalDataTable>
 
-      <AuditLogTable items={auditLogs} />
+      <AuditLogTable session={session} items={auditLogs} />
     </AppShell>
   );
 }

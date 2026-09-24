@@ -1196,7 +1196,7 @@ export default async function AppPurchaseOrderDetailPage({
           </div>
         </article>
 
-        <AuditLogTable items={auditLogs?.items ?? []} />
+        <AuditLogTable session={session} items={auditLogs?.items ?? []} />
       </section>
     </AppShell>
   );

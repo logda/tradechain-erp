@@ -504,7 +504,7 @@ export default async function AppPurchaseOrdersPage({
         />
       </FormalDataTable>
 
-      <AuditLogTable items={auditLogs} />
+      <AuditLogTable session={session} items={auditLogs} />
     </AppShell>
   );
 }

@@ -440,7 +440,7 @@ export default async function AppFormalInquiryPage({
         />
       </FormalDataTable>
 
-      <AuditLogTable items={auditLogs?.items ?? []} />
+      <AuditLogTable session={session} items={auditLogs?.items ?? []} />
     </AppShell>
   );
 }

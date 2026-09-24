@@ -9,6 +9,7 @@ export type DemoRole =
 export type DemoSession = {
   role: DemoRole;
   user: string;
+  username?: string;
   accessScopes?: {
     modules: string[];
     dataScope: string;
@@ -54,6 +55,7 @@ const dataScopeLabels: Record<string, string> = {
 };
 
 const actionLabels: Record<string, string> = {
+  'audit.view': '审计查看',
   'admin.user.write': '账号管理',
   'admin.role.write': '角色权限',
   'master_data.write': '主数据维护',
@@ -128,9 +130,12 @@ function normalizeRole(value: string | undefined): DemoRole {
 export function resolveDemoSession(searchParams?: SearchParams): DemoSession {
   const role = normalizeRole(readParam(searchParams?.role));
   const user = readParam(searchParams?.user) ?? defaultUsers[role];
+  const username = readParam(searchParams?.username);
   const accessScopes = parseAccessScopes(readParam(searchParams?.access));
 
-  return accessScopes ? { role, user, accessScopes } : { role, user };
+  return accessScopes
+    ? { role, user, ...(username ? { username } : {}), accessScopes }
+    : { role, user, ...(username ? { username } : {}) };
 }
 
 export function getDemoRoleLabel(role: DemoRole) {
@@ -214,15 +219,8 @@ export function canViewFormalModule(session: DemoSession, module: FormalModule) 
 }
 
 export function canViewFormalAuditCenter(session: DemoSession) {
-  if (session.role === 'admin' || session.role === 'boss') {
-    return true;
-  }
-
-  if (!session.accessScopes) {
-    return false;
-  }
-
-  return session.accessScopes.modules.includes('audit');
+  return session.role === 'admin' ||
+    session.accessScopes?.actions?.includes('audit.view') === true;
 }
 
 export function filterQuoteRows<T extends { createdBy: string }>(

@@ -637,7 +637,7 @@ export default async function AppAfterSalesDetailPage({
           </div>
         </article>
 
-        <AuditLogTable items={auditLogs?.items ?? []} />
+        <AuditLogTable session={session} items={auditLogs?.items ?? []} />
       </section>
     </AppShell>
   );

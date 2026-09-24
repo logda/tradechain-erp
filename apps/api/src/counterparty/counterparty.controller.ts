@@ -34,6 +34,7 @@ export class CounterpartyController {
     return this.counterpartyService.list(normalizePaginationQuery(query));
   }
 
+  @FormalActions('audit.view')
   @Get('audit-logs')
   listAuditLogs() {
     return this.counterpartyService.listAuditLogs();

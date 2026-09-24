@@ -87,6 +87,7 @@ export class PurchaseOrderController {
   }
 
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
+  @FormalActions('audit.view')
   @Get('audit-logs')
   listAuditLogs() {
     return this.purchaseOrderService.listAuditLogs();

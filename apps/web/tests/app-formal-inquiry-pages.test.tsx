@@ -203,7 +203,7 @@ describe('formal inquiry pages', () => {
     expect(screen.getByLabelText('询价单号 Inquiry No')).toHaveClass('erp-control');
     expect(screen.getByText('上海星河贸易有限公司 / Runtime Customer EN')).toBeInTheDocument();
     expect(screen.getByText('pending_boss_review / 待老板确认')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '审计日志' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '审计日志' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: '查看详情 IQ-RUNTIME-001' }),
     ).toHaveAttribute('href', '/app/sales/inquiries/88');

@@ -36,7 +36,8 @@ function readHeaderList(value: string | string[] | undefined) {
 }
 
 function isStrictFormalSessionMode() {
-  return process.env.ERP_REQUIRE_SIGNED_FORMAL_SESSION?.trim().toLowerCase() === 'true';
+  return process.env.NODE_ENV !== 'test' ||
+    process.env.ERP_REQUIRE_SIGNED_FORMAL_SESSION?.trim().toLowerCase() === 'true';
 }
 
 const DEV_ONLY_SESSION_SECRET = 'dev-only-insecure-formal-session-secret';
@@ -69,7 +70,7 @@ function verifySignature(payload: string, signature: string, secret: string) {
   );
 }
 
-function readSignedFormalSession(headers: Record<string, string | string[] | undefined>) {
+export function readSignedFormalSession(headers: Record<string, string | string[] | undefined>) {
   const payload = readHeaderValue(headers['x-erp-session'])?.trim();
   const signature = readHeaderValue(headers['x-erp-session-signature'])?.trim();
 
@@ -85,6 +86,7 @@ function readSignedFormalSession(headers: Record<string, string | string[] | und
     const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
       role?: unknown;
       user?: unknown;
+      username?: unknown;
       modules?: unknown;
       actions?: unknown;
       exp?: unknown;
@@ -93,6 +95,9 @@ function readSignedFormalSession(headers: Record<string, string | string[] | und
     if (
       typeof parsed.role !== 'string' ||
       typeof parsed.user !== 'string' ||
+      (isStrictFormalSessionMode() &&
+        (typeof parsed.username !== 'string' || !parsed.username.trim() ||
+          typeof parsed.exp !== 'number')) ||
       (parsed.modules !== undefined &&
         (!Array.isArray(parsed.modules) ||
           parsed.modules.some((moduleCode) => typeof moduleCode !== 'string'))) ||
@@ -107,6 +112,7 @@ function readSignedFormalSession(headers: Record<string, string | string[] | und
 
     return {
       role: parsed.role as FormalRole,
+      user: parsed.user,
       modules: Array.isArray(parsed.modules) ? parsed.modules : [],
       actions: Array.isArray(parsed.actions) ? parsed.actions : [],
     };
@@ -139,6 +145,12 @@ export class FormalRoleGuard implements CanActivate {
 
     if (!signedSession && isStrictFormalSessionMode()) {
       throw new ForbiddenException('正式模式要求签名会话');
+    }
+    if (signedSession) {
+      request.headers['x-erp-role'] = signedSession.role;
+      request.headers['x-erp-user'] = signedSession.user;
+      request.headers['x-erp-modules'] = signedSession.modules.join(',');
+      request.headers['x-erp-actions'] = signedSession.actions.join(',');
     }
 
     const role = signedSession?.role ??

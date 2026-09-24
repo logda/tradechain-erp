@@ -107,7 +107,7 @@ describe('admin users page', () => {
     expect(screen.getByRole('heading', { name: '角色权限配置' })).toBeInTheDocument();
     expect(screen.getByText('停用账号 / deactivate_user')).toBeInTheDocument();
     expect(
-      screen.getByText('销售、采购、运营、老板看板、日志中心、用户管理'),
+      screen.getByText('销售、采购、运营、老板看板、用户管理'),
     ).toBeInTheDocument();
     expect(screen.getAllByText('仅本人销售单/报价').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: '新增用户' })).toBeInTheDocument();
@@ -118,36 +118,39 @@ describe('admin users page', () => {
       'http://127.0.0.1:3001/api/admin/users?page=1&pageSize=20',
       {
         cache: 'no-store',
-        headers: {
+        headers: expect.objectContaining({
           'x-erp-role': 'admin',
           'x-erp-user': 'Admin',
           'x-erp-modules': expect.any(String),
           'x-erp-actions': expect.stringContaining('admin.user.write'),
-        },
+          'x-erp-session-signature': expect.any(String),
+        }),
       },
     );
     expect(fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:3001/api/admin/users/audit-logs',
       {
         cache: 'no-store',
-        headers: {
+        headers: expect.objectContaining({
           'x-erp-role': 'admin',
           'x-erp-user': 'Admin',
           'x-erp-modules': expect.any(String),
           'x-erp-actions': expect.stringContaining('admin.user.write'),
-        },
+          'x-erp-session-signature': expect.any(String),
+        }),
       },
     );
     expect(fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:3001/api/admin/users/role-permissions',
       {
         cache: 'no-store',
-        headers: {
+        headers: expect.objectContaining({
           'x-erp-role': 'admin',
           'x-erp-user': 'Admin',
           'x-erp-modules': expect.any(String),
           'x-erp-actions': expect.stringContaining('admin.user.write'),
-        },
+          'x-erp-session-signature': expect.any(String),
+        }),
       },
     );
   });
@@ -834,7 +837,7 @@ describe('admin users page', () => {
     expect(screen.getByText('最近更新：Admin / 2026-07-18T11:30:00.000Z')).toBeInTheDocument();
   });
 
-  it('lets admins configure the audit center as an explicit module permission', async () => {
+  it('lets admins grant audit.view as an explicit action permission', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -842,9 +845,9 @@ describe('admin users page', () => {
         json: async () => ({
           roleCode: 'boss',
           accessScopes: {
-            modules: ['audit'],
+            modules: [],
             dataScope: 'all',
-            actions: [],
+            actions: ['audit.view'],
           },
         }),
       }),
@@ -855,7 +858,7 @@ describe('admin users page', () => {
         endpoint="http://127.0.0.1:3001/api/admin/users/role-permissions/boss"
         roleCode="boss"
         roleLabel="老板"
-        modules={['audit']}
+        modules={[]}
         dataScope="all"
         actions={[]}
         updatedBy="system"
@@ -870,8 +873,9 @@ describe('admin users page', () => {
       />,
     );
 
-    const auditModule = screen.getByLabelText('日志中心');
-    expect(auditModule).toBeChecked();
+    const auditPermission = screen.getByLabelText('审计查看');
+    expect(auditPermission).not.toBeChecked();
+    fireEvent.click(auditPermission);
 
     fireEvent.click(screen.getByRole('button', { name: '保存权限' }));
 
@@ -882,9 +886,9 @@ describe('admin users page', () => {
       'http://127.0.0.1:3001/api/admin/users/role-permissions/boss',
       expect.objectContaining({
         body: JSON.stringify({
-          modules: ['audit'],
+          modules: [],
           dataScope: 'all',
-          actions: [],
+          actions: ['audit.view'],
           updatedBy: 'Admin',
         }),
       }),

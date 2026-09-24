@@ -456,7 +456,7 @@ export default async function AppSampleOrdersPage({
         summaryLabel="样品单"
       />
 
-      <AuditLogTable items={auditLogs?.items ?? []} />
+      <AuditLogTable session={session} items={auditLogs?.items ?? []} />
     </AppShell>
   );
 }

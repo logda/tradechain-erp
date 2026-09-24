@@ -1,5 +1,6 @@
 const defaultActionScopes: Record<string, string[]> = {
   admin: [
+    'audit.view',
     'admin.user.write',
     'admin.role.write',
     'master_data.write',
@@ -72,6 +73,7 @@ const defaultModuleScopes: Record<string, string[]> = {
 export type FormalRequestSession = {
   role: string;
   user: string;
+  username?: string;
   accessScopes?: { modules?: string[]; actions?: string[] };
 };
 

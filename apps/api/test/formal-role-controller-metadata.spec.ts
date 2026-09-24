@@ -137,7 +137,7 @@ describe('formal role controller metadata', () => {
     expect(getMethodModules(InquiryController, 'getById')).toEqual(['purchase']);
     expect(getMethodAnyModules(InquiryController, 'listAuditLogs')).toEqual([
       'purchase',
-      'audit',
+      'sales',
     ]);
     expect(getClassModules(PurchaseOrderController)).toEqual(['purchase']);
     expect(getClassModules(ShipmentBatchController)).toBeUndefined();
@@ -146,7 +146,7 @@ describe('formal role controller metadata', () => {
       'operations',
     ]);
     expect(getClassModules(AfterSalesController)).toEqual(['operations']);
-    expect(getClassModules(AuditController)).toEqual(['audit']);
+    expect(getClassModules(AuditController)).toBeUndefined();
     expect(getClassModules(DashboardController)).toEqual(['boss_dashboard']);
     expect(getClassModules(ReportController)).toEqual(['boss_dashboard']);
   });

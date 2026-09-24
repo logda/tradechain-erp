@@ -572,7 +572,7 @@ export default async function AppProductsPage({
         apiBaseUrl={getProductBrowserApiBaseUrl()}
       />
 
-      <AuditLogTable items={auditLogItems} />
+      <AuditLogTable session={session} items={auditLogItems} />
     </AppShell>
   );
 }

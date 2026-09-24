@@ -473,7 +473,7 @@ export default async function AppCounterpartiesPage({
         }
       />
 
-      <AuditLogTable items={auditLogItems} />
+      <AuditLogTable session={session} items={auditLogItems} />
     </AppShell>
   );
 }

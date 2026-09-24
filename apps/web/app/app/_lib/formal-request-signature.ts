@@ -27,8 +27,10 @@ export function buildSignedFormalRequestHeaders(session: FormalRequestSession) {
     JSON.stringify({
       role: session.role,
       user: session.user,
+      username: session.username,
       modules,
       actions,
+      exp: Math.floor(Date.now() / 1000) + 300,
     }),
   ).toString('base64url');
   const signature = createHmac('sha256', getFormalSessionSecret())

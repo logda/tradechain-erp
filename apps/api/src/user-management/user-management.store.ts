@@ -67,6 +67,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
     modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'audit', 'admin'],
     dataScope: 'all',
     actions: [
+      'audit.view',
       'admin.user.write',
       'admin.role.write',
       'master_data.write',

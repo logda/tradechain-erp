@@ -4,10 +4,9 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { LoginForm } from './login-form';
 import {
-  buildFormalWorkspaceUrl,
-  decodeFormalSessionCookie,
   FORMAL_SESSION_COOKIE,
 } from '../_lib/formal-session';
+import { loadAuthenticatedSession } from '../_lib/formal-auth-session';
 
 type LoginPageProps = {
   searchParams?: Promise<{
@@ -84,12 +83,12 @@ function readSearchParamValue(value: string | string[] | undefined) {
 export default async function AppLoginPage({ searchParams }: LoginPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const cookieStore = await cookies();
-  const formalSession = decodeFormalSessionCookie(
+  const formalSession = await loadAuthenticatedSession(
     cookieStore.get(FORMAL_SESSION_COOKIE)?.value,
   );
 
   if (formalSession) {
-    redirect(buildFormalWorkspaceUrl(formalSession));
+    redirect('/app');
   }
 
   const errorMessage = readLoginError(resolvedSearchParams);

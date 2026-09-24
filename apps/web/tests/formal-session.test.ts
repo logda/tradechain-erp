@@ -317,18 +317,14 @@ describe('formal session helpers', () => {
     ).toBe('https://example.trycloudflare.com');
   });
 
-  it('keeps formal app rewrites on the same public origin for cookie-backed sessions', () => {
+  it('keeps verified formal app rewrites on the same public origin', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      role: 'admin', user: 'Admin', username: 'admin',
+      accessScopes: { modules: ['sales', 'admin'], dataScope: 'all', actions: ['audit.view'] },
+    }) }));
     const request = new NextRequest('https://example.trycloudflare.com/app', {
       headers: {
-        cookie: `erp_formal_session=${encodeFormalSessionCookie({
-          role: 'admin',
-          user: 'Admin',
-          username: 'admin',
-          accessScopes: {
-            modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'admin'],
-            dataScope: 'all',
-          },
-        })}`,
+        cookie: 'erp_formal_session=signed-ticket',
         'x-forwarded-host': 'example.trycloudflare.com',
         'x-forwarded-proto': 'https',
         'x-erp-public-origin': 'https://example.trycloudflare.com',
@@ -336,17 +332,18 @@ describe('formal session helpers', () => {
       },
     });
 
-    const response = middleware(request);
-
-    expect(response.headers.get('location')).toBe(
-      'https://example.trycloudflare.com/app?role=admin&user=Admin&access=%257B%2522modules%2522%253A%255B%2522sales%2522%252C%2522purchase%2522%252C%2522operations%2522%252C%2522boss_dashboard%2522%252C%2522admin%2522%255D%252C%2522dataScope%2522%253A%2522all%2522%257D',
-    );
+    const response = await middleware(request);
+    const rewritten = new URL(response.headers.get('x-middleware-rewrite')!);
+    expect(rewritten.origin).toBe('https://example.trycloudflare.com');
+    expect(rewritten.searchParams.get('role')).toBe('admin');
+    expect(rewritten.searchParams.get('username')).toBe('admin');
+    vi.unstubAllGlobals();
   });
 
-  it('redirects legacy preview routes to formal app routes', () => {
+  it('redirects legacy preview routes to formal app routes', async () => {
     const request = new NextRequest('https://erp.example.com/sales-orders/88?foo=bar');
 
-    const response = middleware(request);
+    const response = await middleware(request);
 
     expect(response.headers.get('location')).toBe(
       'https://erp.example.com/app/sales/orders/88?foo=bar',

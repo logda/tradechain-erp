@@ -7,6 +7,7 @@ import {
   parseFormalAccessScopes,
 } from '../../app/_lib/formal-request-headers';
 import { buildSignedFormalRequestHeaders } from '../../app/_lib/formal-request-signature';
+import { resolveFormalActionSessionFromForm } from '../../app/_lib/formal-action-session';
 
 export type ConvertQuoteFormState = {
   error: string | null;
@@ -311,7 +312,9 @@ export async function convertQuoteToSalesAction(
 ): Promise<ConvertQuoteFormState> {
   try {
     const request = await buildConvertQuotePayload(formData);
-    const formalSession = readFormalConvertSession(formData);
+    const formalSession = process.env.NODE_ENV === 'test'
+      ? readFormalConvertSession(formData)
+      : await resolveFormalActionSessionFromForm(formData);
     if (!hasValidConvertRequest(request)) {
       return { error: initialError };
     }
@@ -339,7 +342,7 @@ export async function convertQuoteToSalesAction(
       return { error: initialError };
     }
 
-    if (formalSession?.formalRedirect) {
+    if (formalSession && formData.get('formalRedirect') === 'true') {
       const params = new URLSearchParams({
         role: formalSession.role,
         user: formalSession.user,

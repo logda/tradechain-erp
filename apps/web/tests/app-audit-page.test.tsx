@@ -58,7 +58,7 @@ describe('AppAuditPage', () => {
 
     const { default: AppAuditPage } = await import('../app/app/audit/page');
 
-    render(<>{await AppAuditPage({})}</>);
+    render(<>{await AppAuditPage({ searchParams: Promise.resolve({ role: 'admin', user: 'Admin' }) })}</>);
 
     expect(screen.getByRole('heading', { name: '正式日志中心' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute(
@@ -90,9 +90,9 @@ describe('AppAuditPage', () => {
       expect.objectContaining({
         cache: 'no-store',
         headers: expect.objectContaining({
-          'x-erp-role': 'boss',
-          'x-erp-user': 'Mia',
-          'x-erp-modules': expect.stringContaining('audit'),
+          'x-erp-role': 'admin',
+          'x-erp-user': 'Admin',
+          'x-erp-actions': expect.stringContaining('audit.view'),
         }),
       }),
     );
@@ -158,7 +158,7 @@ describe('AppAuditPage', () => {
 
     const { default: AppAuditPage } = await import('../app/app/audit/page');
 
-    render(<>{await AppAuditPage({})}</>);
+    render(<>{await AppAuditPage({ searchParams: Promise.resolve({ role: 'admin', user: 'Admin' }) })}</>);
 
     expect(screen.getByRole('heading', { name: '正式日志中心' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute(
@@ -180,8 +180,8 @@ describe('AppAuditPage', () => {
       expect.objectContaining({
         cache: 'no-store',
         headers: expect.objectContaining({
-          'x-erp-role': 'boss',
-          'x-erp-user': 'Mia',
+          'x-erp-role': 'admin',
+          'x-erp-user': 'Admin',
         }),
       }),
     );
@@ -190,8 +190,8 @@ describe('AppAuditPage', () => {
       expect.objectContaining({
         cache: 'no-store',
         headers: expect.objectContaining({
-          'x-erp-role': 'boss',
-          'x-erp-user': 'Mia',
+          'x-erp-role': 'admin',
+          'x-erp-user': 'Admin',
         }),
       }),
     );
@@ -241,6 +241,8 @@ describe('AppAuditPage', () => {
       <>
         {await AppAuditPage({
           searchParams: Promise.resolve({
+            role: 'admin',
+            user: 'Admin',
             module: 'sales-orders',
           }),
         })}
@@ -273,7 +275,7 @@ describe('AppAuditPage', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('allows dynamic sessions with the audit module and all-data scope', async () => {
+  it('allows dynamic sessions with the audit.view action', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ items: [] }),
@@ -290,9 +292,9 @@ describe('AppAuditPage', () => {
             user: 'Mia',
             access: encodeURIComponent(
               JSON.stringify({
-                modules: ['audit'],
+                modules: ['sales'],
                 dataScope: 'all',
-                actions: [],
+                actions: ['audit.view'],
               }),
             ),
           }),
@@ -306,7 +308,7 @@ describe('AppAuditPage', () => {
       'http://127.0.0.1:3001/api/audit-logs',
       expect.objectContaining({
         headers: expect.objectContaining({
-          'x-erp-modules': 'audit',
+          'x-erp-actions': 'audit.view',
         }),
       }),
     );

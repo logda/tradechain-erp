@@ -179,6 +179,7 @@ describe('UserManagementService', () => {
         modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'audit', 'admin'],
         dataScope: 'all',
         actions: [
+          'audit.view',
           'admin.user.write',
           'admin.role.write',
           'master_data.write',
@@ -205,6 +206,8 @@ describe('UserManagementService', () => {
     const service = new UserManagementService();
 
     const result = await service.listRolePermissions();
+    expect(result.items.find((item) => item.roleCode === 'admin')?.accessScopes.actions)
+      .toContain('audit.view');
 
     expect(result.items).toEqual(
       expect.arrayContaining([
@@ -239,6 +242,26 @@ describe('UserManagementService', () => {
         }),
       ]),
     );
+  });
+
+  it('shows the admin audit grant when runtime permissions were saved before audit.view existed', async () => {
+    const service = new UserManagementService();
+    const admin = (await service.listRolePermissions()).items.find((item) => item.roleCode === 'admin')!;
+    const serviceWithStore = service as unknown as { store: {
+      listRolePermissions: () => typeof admin[];
+    } };
+    const original = serviceWithStore.store.listRolePermissions();
+    serviceWithStore.store = {
+      listRolePermissions: () => original.map((item) => item.roleCode === 'admin'
+        ? { ...item, accessScopes: {
+          ...item.accessScopes,
+          actions: item.accessScopes.actions.filter((action) => action !== 'audit.view'),
+        } }
+        : item),
+    };
+    const result = await service.listRolePermissions();
+    expect(result.items.find((item) => item.roleCode === 'admin')?.accessScopes.actions)
+      .toContain('audit.view');
   });
 
   it('updates a role permission and uses it for login/session access scopes', async () => {

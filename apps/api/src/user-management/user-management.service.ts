@@ -45,6 +45,7 @@ const dataScopes = [
 ];
 
 const actionCodes = [
+  'audit.view',
   'admin.user.write',
   'admin.role.write',
   'master_data.write',
@@ -179,7 +180,10 @@ function resolveAccessScopes(
   return {
     modules: [...accessScopes.modules],
     dataScope: accessScopes.dataScope,
-    actions: [...(accessScopes.actions ?? defaultRolePermissions[roleCode].actions)],
+    actions: [...new Set([
+      ...(accessScopes.actions ?? defaultRolePermissions[roleCode].actions),
+      ...(roleCode === 'admin' ? ['audit.view'] : []),
+    ])],
   };
 }
 
@@ -196,7 +200,7 @@ function toRolePermissionRecord(record: PrismaRolePermissionRecord): RolePermiss
     accessScopes: {
       modules,
       dataScope: record.dataScope,
-      actions,
+      actions: record.roleCode === 'admin' ? [...new Set([...actions, 'audit.view'])] : actions,
     },
     updatedBy: record.updatedBy,
     updatedAt: record.updatedAt.toISOString(),
@@ -274,6 +278,29 @@ function toAuditLogRecord(record: PrismaOperationLogRecord) {
 @Injectable()
 export class UserManagementService {
   private readonly store = resolveUserManagementStore();
+
+  async getCurrentSession(username: string): Promise<{
+    role: RoleCode;
+    user: string;
+    username: string;
+    accessScopes: AccessScopes;
+  } | null> {
+    const normalizedUsername = username.trim().toLowerCase();
+    const record = this.shouldUsePrisma()
+      ? ((await this.prisma!.user.findUnique({
+          where: { username: normalizedUsername },
+        })) as PrismaUserRecord | null)
+      : this.store.listUsers().find((item) => item.username === normalizedUsername) ?? null;
+    if (!record || record.status !== 'active') return null;
+    const role = record.roleCode as RoleCode;
+    const permissions = await this.loadRolePermissionMap();
+    return {
+      role,
+      user: role === 'admin' ? 'Admin' : record.realName,
+      username: record.username,
+      accessScopes: resolveAccessScopes(role, permissions),
+    };
+  }
 
   constructor(
     @Optional()
@@ -414,7 +441,12 @@ export class UserManagementService {
     return roleCodes.map((roleCode) => {
       const persisted = recordMap.get(roleCode);
       if (persisted) {
-        return persisted;
+        return roleCode === 'admin'
+          ? { ...persisted, accessScopes: {
+            ...persisted.accessScopes,
+            actions: [...new Set([...(persisted.accessScopes.actions ?? []), 'audit.view'])],
+          } }
+          : persisted;
       }
 
       return {

@@ -33,7 +33,6 @@ const moduleOptions = [
   { value: 'purchase', label: '采购' },
   { value: 'operations', label: '运营' },
   { value: 'boss_dashboard', label: '老板看板' },
-  { value: 'audit', label: '日志中心' },
   { value: 'admin', label: '用户管理' },
 ] as const;
 
@@ -46,6 +45,7 @@ const dataScopeOptions = [
 ] as const;
 
 const actionOptions = [
+  { value: 'audit.view', label: '审计查看' },
   { value: 'admin.user.write', label: '账号管理' },
   { value: 'admin.role.write', label: '角色权限' },
   { value: 'master_data.write', label: '主数据维护' },

@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { encodeFormalSessionCookie } from '../app/app/_lib/formal-session';
 
 const { redirectMock } = vi.hoisted(() => ({
   redirectMock: vi.fn((href: string) => {
@@ -28,6 +27,7 @@ describe('root page', () => {
     redirectMock.mockClear();
     cookieGetMock.mockReset();
     cookieGetMock.mockReturnValue(undefined);
+    vi.unstubAllGlobals();
   });
 
   it('redirects to the formal login page when there is no session cookie', async () => {
@@ -36,15 +36,13 @@ describe('root page', () => {
   });
 
   it('redirects to the formal workspace when a session cookie exists', async () => {
-    cookieGetMock.mockReturnValue({
-      value: encodeFormalSessionCookie({
-        role: 'boss',
-        user: 'Mia',
-        username: 'mia',
-      }),
-    });
+    cookieGetMock.mockReturnValue({ value: 'signed-ticket' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      role: 'boss', user: 'Mia', username: 'mia',
+      accessScopes: { modules: ['sales'], dataScope: 'all', actions: [] },
+    }) }));
 
-    await expect(RootPage()).rejects.toThrowError('NEXT_REDIRECT:/app?role=boss&user=Mia');
-    expect(redirectMock).toHaveBeenCalledWith('/app?role=boss&user=Mia');
+    await expect(RootPage()).rejects.toThrowError('NEXT_REDIRECT:/app');
+    expect(redirectMock).toHaveBeenCalledWith('/app');
   });
 });

@@ -18,7 +18,6 @@ const navEntries: Array<{
   visible: NavEntryVisible;
 }> = [
   { href: '/app', label: '正式首页', visible: 'all' as const },
-  { href: '/app/mvp', label: '全链路验收中心', visible: 'all' as const },
   {
     href: '/app/master-data',
     label: '主数据中心',
@@ -48,26 +47,6 @@ const navEntries: Array<{
   { href: '/app/logs', label: '日志中心', visible: 'audit' as const },
   { href: '/app/admin/users', label: '用户管理', visible: 'admin' as const },
 ] as const;
-
-function buildSessionHref(href: string, session: DemoSession) {
-  const [pathnameAndSearch, hash = ''] = href.split('#');
-  const [pathname, search = ''] = pathnameAndSearch.split('?');
-  const searchParams = new URLSearchParams(search);
-  searchParams.set('role', session.role);
-  searchParams.set('user', session.user);
-
-  if (session.accessScopes) {
-    searchParams.set(
-      'access',
-      encodeURIComponent(JSON.stringify(session.accessScopes)),
-    );
-  } else {
-    searchParams.delete('access');
-  }
-
-  const queryString = searchParams.toString();
-  return `${pathname}${queryString ? `?${queryString}` : ''}${hash ? `#${hash}` : ''}`;
-}
 
 export function AppShell({
   title,
@@ -123,7 +102,7 @@ export function AppShell({
             {visibleNavEntries.map((entry) => (
               <Link
                 key={entry.href}
-                href={buildSessionHref(entry.href, session)}
+                href={entry.href}
                 className="erp-shell__nav-link"
               >
                 {entry.label}

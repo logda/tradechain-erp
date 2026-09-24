@@ -3,8 +3,6 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
-  buildFormalWorkspaceUrl,
-  encodeFormalSessionCookie,
   FORMAL_SESSION_COOKIE,
 } from '../_lib/formal-session';
 
@@ -43,6 +41,7 @@ function hasValidLoginResult(
   role: string;
   user: string;
   username: string;
+  token: string;
   accessScopes?: { modules: string[]; dataScope: string; actions?: string[] };
 } {
   return (
@@ -51,6 +50,7 @@ function hasValidLoginResult(
     typeof (value as { role?: unknown }).role === 'string' &&
     typeof (value as { user?: unknown }).user === 'string' &&
     typeof (value as { username?: unknown }).username === 'string' &&
+    typeof (value as { token?: unknown }).token === 'string' &&
     (
       (value as { accessScopes?: unknown }).accessScopes === undefined ||
       (
@@ -126,7 +126,7 @@ export async function loginAction(
     const cookieStore = await cookies();
     cookieStore.set(
       FORMAL_SESSION_COOKIE,
-      encodeFormalSessionCookie(result),
+      result.token,
       {
         httpOnly: true,
         maxAge: 60 * 60 * 8,
@@ -137,7 +137,7 @@ export async function loginAction(
 
     return {
       error: null,
-      redirectTo: buildFormalWorkspaceUrl(result),
+      redirectTo: '/app',
     };
   } catch (error) {
     void error;

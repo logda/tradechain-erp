@@ -13,6 +13,38 @@ describe('UserManagementService prisma storage', () => {
     }
   });
 
+  it('reads a current Prisma session with latest role permissions, including legacy admin defaults', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const rolePermission = {
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          roleCode: 'admin',
+          modules: ['admin'],
+          actions: ['admin.user.write'],
+          dataScope: 'all',
+          updatedBy: 'system',
+          createdAt: new Date('2026-07-11'),
+          updatedAt: new Date('2026-07-11'),
+        },
+      ]),
+    };
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          username: 'admin', realName: '系统管理员', roleCode: 'admin', status: 'active',
+        }),
+      },
+      rolePermission,
+    } as unknown as PrismaService;
+
+    const service = new UserManagementService(prisma);
+    const session = await service.getCurrentSession('admin');
+    expect(session).toMatchObject({ role: 'admin', user: 'Admin', username: 'admin' });
+    expect(session?.accessScopes.actions).toContain('audit.view');
+    expect(rolePermission.findMany).toHaveBeenCalledTimes(1);
+  });
+
   it('authenticates users from Prisma and writes login audit logs', async () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const prisma = {

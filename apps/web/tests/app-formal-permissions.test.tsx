@@ -65,7 +65,7 @@ describe('formal permissions', () => {
     expect(screen.getByText('用户 User: Admin')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '采购中心' })).toHaveAttribute(
       'href',
-      '/app/purchase?role=admin&user=Admin',
+      '/app/purchase',
     );
   });
 

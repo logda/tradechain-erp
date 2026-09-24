@@ -505,7 +505,7 @@ export default async function AppShipmentBatchesPage({
         />
       </FormalDataTable>
 
-      <AuditLogTable items={auditLogs} />
+      <AuditLogTable session={session} items={auditLogs} />
     </AppShell>
   );
 }

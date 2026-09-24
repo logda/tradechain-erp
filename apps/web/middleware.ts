@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import {
-  buildFormalSessionRouteDecision,
   FORMAL_SESSION_COOKIE,
   resolveFormalRequestOrigin,
 } from './app/app/_lib/formal-session';
+import { loadAuthenticatedSession } from './app/app/_lib/formal-auth-session';
 
 const legacyRouteRedirects: Record<string, string> = {
   '/after-sales': '/app/after-sales',
@@ -41,7 +41,7 @@ function resolveLegacyFormalRoute(pathname: string) {
   return null;
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const formalRoute = resolveLegacyFormalRoute(request.nextUrl.pathname);
   if (formalRoute) {
     const url = request.nextUrl.clone();
@@ -49,29 +49,49 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const decision = buildFormalSessionRouteDecision({
-    pathname: request.nextUrl.pathname,
-    search: request.nextUrl.search,
-    origin: resolveFormalRequestOrigin({
+  if (!request.nextUrl.pathname.startsWith('/app') ||
+    request.nextUrl.pathname === '/app/login' ||
+    request.nextUrl.pathname.startsWith('/app/login/') ||
+    request.nextUrl.pathname === '/app/logout') {
+    return NextResponse.next();
+  }
+
+  const origin = resolveFormalRequestOrigin({
       origin: request.nextUrl.origin,
       publicOrigin: request.headers.get('x-erp-public-origin'),
       forwardedHost: request.headers.get('x-forwarded-host'),
       host: request.headers.get('host'),
       forwardedProto: request.headers.get('x-forwarded-proto'),
-    }),
-    sessionCookie: request.cookies.get(FORMAL_SESSION_COOKIE)?.value,
-    referer: request.headers.get('referer'),
   });
-
-  if (!decision) {
-    return NextResponse.next();
+  const session = await loadAuthenticatedSession(request.cookies.get(FORMAL_SESSION_COOKIE)?.value);
+  if (!session) {
+    const response = NextResponse.redirect(new URL('/app/login', origin));
+    response.cookies.delete(FORMAL_SESSION_COOKIE);
+    return response;
   }
-
-  if (decision.type === 'rewrite') {
-    return NextResponse.redirect(decision.url);
+  const url = new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, origin);
+  if (url.searchParams.has('role') || url.searchParams.has('user') ||
+    url.searchParams.has('username') || url.searchParams.has('access')) {
+    const access = url.searchParams.get('access');
+    const currentAccess = JSON.stringify(session.accessScopes);
+    if (url.searchParams.get('role') === session.role &&
+      url.searchParams.get('user') === session.user &&
+      url.searchParams.get('username') === session.username &&
+      (access === currentAccess || access === encodeURIComponent(currentAccess))) {
+      return NextResponse.next();
+    }
+    url.searchParams.delete('role');
+    url.searchParams.delete('user');
+    url.searchParams.delete('username');
+    url.searchParams.delete('access');
+    return NextResponse.redirect(url);
   }
-
-  return NextResponse.redirect(decision.url);
+  const rewriteUrl = request.nextUrl.clone();
+  rewriteUrl.searchParams.set('role', session.role);
+  rewriteUrl.searchParams.set('user', session.user);
+  rewriteUrl.searchParams.set('username', session.username);
+  rewriteUrl.searchParams.set('access', encodeURIComponent(JSON.stringify(session.accessScopes)));
+  return NextResponse.rewrite(rewriteUrl);
 }
 
 export const config = {

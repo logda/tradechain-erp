@@ -186,12 +186,6 @@ export default async function AppHomePage({
           />
         ) : null}
         <WorktileCard
-          title="全链路验收中心"
-          href="/app/mvp"
-          description="按推荐步骤完成账号、主数据、销售、采购、发货、售后、财务和老板看板验收。"
-          badge="MVP"
-        />
-        <WorktileCard
           title="主数据中心"
           href="/app/master-data"
           description="先进入主数据中心，再分流到往来单位与商品 / SKU 维护。"

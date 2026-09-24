@@ -127,7 +127,7 @@ describe('formal sales list pages', () => {
     ).toBeInTheDocument();
     expect(within(quoteRow as HTMLTableRowElement).getByRole('button', { name: '转销售单' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'TikTok / tiktok' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '审计日志' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '审计日志' })).not.toBeInTheDocument();
     expect(
       quoteDetailLink,
     ).toHaveAttribute('href', '/app/sales/quotes/77');
@@ -430,7 +430,7 @@ describe('formal sales list pages', () => {
     expect(screen.getByText('截止：')).toBeInTheDocument();
     expect(screen.getByText(/2026-07-12/)).toBeInTheDocument();
     expect(screen.getByText(/2026-08-12/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '审计日志' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '审计日志' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('navigation', { name: '销售单分页' }),
     ).toBeInTheDocument();
@@ -639,7 +639,7 @@ describe('formal sales list pages', () => {
       'href',
       '/app/sales/samples?docNo=SP-RUNTIME-001&quoteNo=Q-RUNTIME-001&page=2&pageSize=20',
     );
-    expect(screen.getByRole('heading', { name: '审计日志' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '审计日志' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: '查看详情 SP-RUNTIME-001' }),
     ).toHaveAttribute('href', '/app/sales/samples/66');

@@ -77,6 +77,7 @@ export class SampleOrderController {
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales', 'purchase_manager', 'purchase')
+  @FormalActions('audit.view')
   @Get('audit-logs')
   listAuditLogs() {
     return this.sampleOrderService.listAuditLogs();

@@ -35,6 +35,8 @@ function stubDetailAndAudit(detail: unknown, auditOperation = 'create') {
   );
 }
 
+const auditAccess = encodeURIComponent(JSON.stringify({ modules: ['sales', 'purchase', 'operations'], dataScope: 'all', actions: ['audit.view'] }));
+
 describe('formal detail audit sections', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
@@ -64,7 +66,7 @@ describe('formal detail audit sections', () => {
       <>
         {await AppQuoteDetailPage({
           params: Promise.resolve({ id: '101' }),
-          searchParams: Promise.resolve({ role: 'sales_manager', user: 'Mia' }),
+          searchParams: Promise.resolve({ role: 'sales_manager', user: 'Mia', access: auditAccess }),
         })}
       </>,
     );
@@ -104,7 +106,7 @@ describe('formal detail audit sections', () => {
       <>
         {await AppSalesOrderDetailPage({
           params: Promise.resolve({ id: '101' }),
-          searchParams: Promise.resolve({ role: 'boss', user: 'Mia' }),
+          searchParams: Promise.resolve({ role: 'boss', user: 'Mia', access: auditAccess }),
         })}
       </>,
     );
@@ -142,7 +144,7 @@ describe('formal detail audit sections', () => {
       <>
         {await AppPurchaseOrderDetailPage({
           params: Promise.resolve({ id: '101' }),
-          searchParams: Promise.resolve({ role: 'purchase_manager', user: 'Leo' }),
+          searchParams: Promise.resolve({ role: 'purchase_manager', user: 'Leo', access: auditAccess }),
         })}
       </>,
     );
@@ -177,7 +179,7 @@ describe('formal detail audit sections', () => {
       <>
         {await AppAfterSalesDetailPage({
           params: Promise.resolve({ id: '101' }),
-          searchParams: Promise.resolve({ role: 'purchase_manager', user: 'Leo' }),
+          searchParams: Promise.resolve({ role: 'purchase_manager', user: 'Leo', access: auditAccess }),
         })}
       </>,
     );
@@ -212,7 +214,7 @@ describe('formal detail audit sections', () => {
       <>
         {await AppShipmentBatchDetailPage({
           params: Promise.resolve({ id: '101' }),
-          searchParams: Promise.resolve({ role: 'purchase_manager', user: 'Leo' }),
+          searchParams: Promise.resolve({ role: 'purchase_manager', user: 'Leo', access: auditAccess }),
         })}
       </>,
     );
@@ -251,7 +253,7 @@ describe('formal detail audit sections', () => {
       <>
         {await AppFormalInquiryDetailPage({
           params: Promise.resolve({ id: '1' }),
-          searchParams: Promise.resolve({ role: 'purchase_manager', user: 'Mia' }),
+          searchParams: Promise.resolve({ role: 'purchase_manager', user: 'Mia', access: auditAccess }),
         })}
       </>,
     );
@@ -284,7 +286,7 @@ describe('formal detail audit sections', () => {
       <>
         {await AppFormalSampleOrderDetailPage({
           params: Promise.resolve({ id: '101' }),
-          searchParams: Promise.resolve({ role: 'sales_manager', user: 'Mia' }),
+          searchParams: Promise.resolve({ role: 'sales_manager', user: 'Mia', access: auditAccess }),
         })}
       </>,
     );

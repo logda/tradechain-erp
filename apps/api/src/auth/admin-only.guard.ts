@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { FORMAL_ACTIONS_KEY, FORMAL_MODULES_KEY } from './formal-role.decorator';
+import { readSignedFormalSession } from './formal-role.guard';
 
 function readHeaderValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -36,7 +37,18 @@ export class AdminOnlyGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<{
       headers: Record<string, string | string[] | undefined>;
     }>();
-    const role = readHeaderValue(request.headers['x-erp-role'])?.trim();
+    const signedSession = readSignedFormalSession(request.headers);
+    if (!signedSession && (process.env.NODE_ENV !== 'test' ||
+      process.env.ERP_REQUIRE_SIGNED_FORMAL_SESSION?.trim().toLowerCase() === 'true')) {
+      throw new ForbiddenException('正式模式要求签名会话');
+    }
+    if (signedSession) {
+      request.headers['x-erp-role'] = signedSession.role;
+      request.headers['x-erp-user'] = signedSession.user;
+      request.headers['x-erp-modules'] = signedSession.modules.join(',');
+      request.headers['x-erp-actions'] = signedSession.actions.join(',');
+    }
+    const role = signedSession?.role ?? readHeaderValue(request.headers['x-erp-role'])?.trim();
 
     if (role !== 'admin') {
       throw new ForbiddenException('仅管理员可访问用户管理接口');

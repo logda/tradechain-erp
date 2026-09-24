@@ -89,7 +89,7 @@ describe('AppHomePage', () => {
     const sidebarNav = screen.getByRole('navigation', { name: 'formal-app-nav' });
     expect(
       within(sidebarNav).getByRole('link', { name: '主数据中心' }),
-    ).toHaveAttribute('href', expect.stringContaining('/app/master-data?role=boss&user=Mia'));
+    ).toHaveAttribute('href', '/app/master-data');
     expect(
       within(sidebarNav).queryByRole('link', { name: '往来单位主数据' }),
     ).not.toBeInTheDocument();
@@ -128,21 +128,13 @@ describe('AppHomePage', () => {
         link.getAttribute('href') === '/app/reports',
       ),
     ).toBe(true);
-    expect(
-      screen.getAllByRole('link', { name: '日志中心' }).some((link) =>
-        link.getAttribute('href') === '/app/logs',
-      ),
-    ).toBe(true);
+    expect(screen.queryByRole('link', { name: '日志中心' })).not.toBeInTheDocument();
     expect(
       screen.getAllByRole('link', { name: '正式待办中心' }).some((link) =>
         link.getAttribute('href') === '/app/todos',
       ),
     ).toBe(true);
-    expect(
-      screen.getAllByRole('link', { name: '全链路验收中心' }).some((link) =>
-        link.getAttribute('href') === '/app/mvp',
-      ),
-    ).toBe(true);
+    expect(screen.queryByRole('link', { name: '全链路验收中心' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '采购工作台' })).toHaveAttribute(
       'href',
       '/app/purchase',

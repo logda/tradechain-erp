@@ -925,7 +925,7 @@ export default async function AppShipmentBatchDetailPage({
           </div>
         </article>
 
-        <AuditLogTable items={auditLogs?.items ?? []} />
+        <AuditLogTable session={session} items={auditLogs?.items ?? []} />
       </section>
     </AppShell>
   );

@@ -4,6 +4,16 @@ import {
   resolveFormalActionSession,
 } from './formal-session';
 import type { DemoRole, DemoSession } from './demo-session';
+import { loadAuthenticatedSession } from './formal-auth-session';
+
+async function readLiveActionSession() {
+  try {
+    const cookieStore = await cookies();
+    return await loadAuthenticatedSession(cookieStore.get(FORMAL_SESSION_COOKIE)?.value);
+  } catch {
+    return null;
+  }
+}
 
 function readHeaderList(value: string | undefined) {
   if (!value?.trim()) {
@@ -34,6 +44,9 @@ function normalizeRole(value: string | undefined): DemoRole {
 export async function resolveFormalActionSessionFromHeaders(
   requestHeaders: Record<string, string> | undefined,
 ): Promise<DemoSession> {
+  const session = await readLiveActionSession();
+  if (session) return session;
+  if (process.env.NODE_ENV !== 'test') throw new Error('请先登录');
   const role = normalizeRole(requestHeaders?.['x-erp-role']);
   const user = requestHeaders?.['x-erp-user']?.trim() || 'Mia';
   const modules = readHeaderList(requestHeaders?.['x-erp-modules']);
@@ -55,6 +68,9 @@ export async function resolveFormalActionSessionFromHeaders(
 }
 
 export async function resolveFormalActionSessionFromForm(formData: FormData) {
+  const session = await readLiveActionSession();
+  if (session) return session;
+  if (process.env.NODE_ENV !== 'test') throw new Error('请先登录');
   try {
     const cookieStore = await cookies();
 

@@ -12,6 +12,7 @@ import {
   resolveFormalActionSession,
 } from '../_lib/formal-session';
 import { resolveFormalActionSessionFromHeaders } from '../_lib/formal-action-session';
+import { resolveFormalActionSessionFromForm } from '../_lib/formal-action-session';
 import type { DemoSession } from '../_lib/demo-session';
 
 type MutationActionResult =
@@ -68,6 +69,10 @@ async function resolveSignedActionSession({
 }): Promise<DemoSession> {
   if (requestHeaders) {
     return await resolveFormalActionSessionFromHeaders(requestHeaders);
+  }
+
+  if (process.env.NODE_ENV !== 'test') {
+    return await resolveFormalActionSessionFromForm(formData ?? new FormData());
   }
 
   let sessionCookie: string | null = null;

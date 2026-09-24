@@ -103,17 +103,15 @@ describe('app login page', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('账号或密码错误');
   });
 
-  it('redirects to the formal workspace when a valid session cookie exists', async () => {
-    cookieGetMock.mockReturnValue({
-      value: encodeFormalSessionCookie({
-        role: 'sales',
-        user: 'Zoe',
-        username: 'zoe',
-      }),
-    });
+  it('redirects to the formal workspace only when the API accepts its cookie', async () => {
+    cookieGetMock.mockReturnValue({ value: 'valid-ticket' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      role: 'sales', user: 'Zoe', username: 'zoe',
+      accessScopes: { modules: ['sales'], dataScope: 'own_sales', actions: [] },
+    }) }));
 
     await expect(AppLoginPage({})).rejects.toThrow('NEXT_REDIRECT');
-    expect(redirectMock).toHaveBeenCalledWith('/app?role=sales&user=Zoe');
+    expect(redirectMock).toHaveBeenCalledWith('/app');
   });
 
   it('normalizes the login payload', async () => {
@@ -140,6 +138,7 @@ describe('app login page', () => {
           role: 'admin',
           user: 'Admin',
           username: 'admin',
+          token: 'signed-ticket',
         }),
       }),
     );
@@ -148,11 +147,11 @@ describe('app login page', () => {
       loginAction({ error: null, redirectTo: null }, formData),
     ).resolves.toMatchObject({
       error: null,
-      redirectTo: expect.stringContaining('/app?role=admin&user=Admin'),
+      redirectTo: '/app',
     });
     expect(cookieSetMock).toHaveBeenCalledWith(
       'erp_formal_session',
-      expect.any(String),
+      'signed-ticket',
       expect.objectContaining({
         httpOnly: true,
         path: '/',

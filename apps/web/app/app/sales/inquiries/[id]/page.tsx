@@ -746,7 +746,7 @@ export default async function AppFormalInquiryDetailPage({
           </div>
         </section>
 
-        <AuditLogTable items={auditLogs?.items ?? []} />
+        <AuditLogTable session={session} items={auditLogs?.items ?? []} />
       </section>
     </AppShell>
   );

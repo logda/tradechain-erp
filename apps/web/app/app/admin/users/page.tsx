@@ -5,7 +5,7 @@ import {
   resolveDemoSession,
 } from '../../_lib/demo-session';
 import { hasValidAuditLogResponse, type AuditLogResponse } from '../../_lib/audit-log';
-import { buildFormalRequestHeaders } from '../../_lib/formal-request-headers';
+import { buildFormalApiRequestHeaders } from '../../_lib/formal-api-request-headers';
 import { normalizePageNumber, paginateItems } from '../../_lib/formal-pagination';
 import { AdminUsersClient } from './admin-users-client';
 
@@ -57,7 +57,7 @@ function getAdminApiBaseUrl() {
 const fullAdminAccessScopes = {
   modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'admin', 'audit'],
   dataScope: 'all',
-  actions: ['admin.user.write', 'admin.role.write', 'master_data.write'],
+  actions: ['audit.view', 'admin.user.write', 'admin.role.write', 'master_data.write'],
 };
 
 function hasValidUserListResponse(value: unknown): value is UserListResponse {
@@ -215,6 +215,7 @@ function resolveRoleAccessScopes(roleCode: string) {
       modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'admin', 'audit'],
       dataScope: 'all',
       actions: [
+        'audit.view',
         'admin.user.write',
         'admin.role.write',
         'master_data.write',
@@ -347,9 +348,10 @@ export default async function AppAdminUsersPage({
     ),
   };
   const adminAccessScopes = session.accessScopes ?? fullAdminAccessScopes;
-  const adminRequestHeaders = buildFormalRequestHeaders({
+  const adminRequestHeaders = buildFormalApiRequestHeaders({
     role: session.role,
     user: session.user,
+    username: session.username,
     accessScopes: adminAccessScopes,
   });
 

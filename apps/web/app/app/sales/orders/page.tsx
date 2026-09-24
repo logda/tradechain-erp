@@ -772,7 +772,7 @@ export default async function AppSalesOrdersPage({
         />
       </FormalDataTable>
 
-      <AuditLogTable items={auditLogs} />
+      <AuditLogTable session={session} items={auditLogs} />
     </AppShell>
   );
 }

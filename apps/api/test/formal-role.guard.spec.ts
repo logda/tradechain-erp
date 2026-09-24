@@ -14,6 +14,7 @@ function createSignedSession(
   payload: {
     role: string;
     user: string;
+    username?: string;
     modules?: string[];
     actions?: string[];
     exp?: number;
@@ -140,6 +141,13 @@ describe('FormalRoleGuard', () => {
     const guard = createGuard({ allowedRoles: ['admin'] });
 
     expect(() => guard.canActivate(createContext())).toThrow(ForbiddenException);
+  });
+
+  it('does not accept self-declared role headers outside tests', () => {
+    process.env.NODE_ENV = 'development';
+    const guard = createGuard({ allowedRoles: ['admin'] });
+    expect(() => guard.canActivate(createContext('admin', 'audit.view', 'audit')))
+      .toThrow(ForbiddenException);
   });
 
   it('blocks non-matching formal roles', () => {
@@ -272,7 +280,9 @@ describe('FormalRoleGuard', () => {
     const signedSession = createSignedSession({
       role: 'sales',
       user: 'Zoe',
+      username: 'zoe',
       modules: ['sales'],
+      exp: Math.floor(Date.now() / 1000) + 300,
     });
     const tamperedPayload = Buffer.from(
       JSON.stringify({
@@ -303,7 +313,9 @@ describe('FormalRoleGuard', () => {
     const signedSession = createSignedSession({
       role: 'sales',
       user: 'Zoe',
+      username: 'zoe',
       modules: ['sales'],
+      exp: Math.floor(Date.now() / 1000) + 300,
     });
 
     expect(

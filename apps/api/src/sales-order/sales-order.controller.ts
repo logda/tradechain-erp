@@ -157,6 +157,7 @@ export class SalesOrderController {
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
+  @FormalActions('audit.view')
   @Get('audit-logs')
   listAuditLogs() {
     return this.salesOrderService.listAuditLogs();
