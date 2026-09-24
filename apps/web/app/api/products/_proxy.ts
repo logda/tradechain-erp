@@ -28,6 +28,8 @@ export async function proxyProductRequest(
   const headers = new Headers(buildFormalApiRequestHeaders(session));
   const contentType = request.headers.get('content-type');
   if (contentType) headers.set('content-type', contentType);
+  const idempotencyKey = request.headers.get('idempotency-key');
+  if (idempotencyKey) headers.set('idempotency-key', idempotencyKey);
 
   const response = await fetch(targetUrl, {
     method,

@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from 'react';
 import { buildFormalRequestHeaders } from '../../_lib/formal-request-headers';
 import { submitFormalJsonMutationAction } from '../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 
 type UpdateUserRoleFormProps = {
   endpoint: string;
@@ -94,13 +95,16 @@ export function UpdateUserRoleForm({
 }: UpdateUserRoleFormProps) {
   const [state, setState] = useState<State>({ error: null, success: null });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     setState({ error: null, success: null });
 
@@ -121,9 +125,11 @@ export function UpdateUserRoleForm({
         'POST',
         payload,
         formalHeaders,
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setState({ error: result.error, success: null });
         return;
       }
@@ -176,7 +182,9 @@ export function UpdateUserRoleForm({
         error: null,
         success: onSuccess ? '角色已更新，当前列表已同步。' : '角色已更新',
       });
+      attempt.succeed();
     } catch {
+      attempt.fail();
       setState({ error: '保存角色失败', success: null });
     } finally {
       setIsSubmitting(false);
@@ -184,7 +192,7 @@ export function UpdateUserRoleForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={formStyle}>
       <label style={labelStyle}>
         变更角色 Role Change
         <select name="roleCode" defaultValue={currentRoleCode} style={inputStyle}>
@@ -203,7 +211,7 @@ export function UpdateUserRoleForm({
       {state.success ? (
         <p style={{ margin: 0, color: '#166534', fontSize: '12px' }}>{state.success}</p>
       ) : null}
-      <button type="submit" style={buttonStyle} disabled={isSubmitting}>
+      <button type="submit" style={buttonStyle} disabled={isSubmitting || attempt.isComplete}>
         {isSubmitting ? '保存中...' : '保存角色'}
       </button>
     </form>

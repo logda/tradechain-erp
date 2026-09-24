@@ -1352,6 +1352,7 @@ export class ShipmentBatchService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updateShipmentBatchStatus({
         shipmentBatchId: payload.shipmentBatchId,
+        expectedStatus: 'shipped',
         status: 'to_forwarder',
         operationType: 'mark_shipment_to_forwarder',
         operatorId: payload.operatorId,
@@ -1371,6 +1372,7 @@ export class ShipmentBatchService {
     }
 
     const created = this.store.getShipmentBatch(payload.shipmentBatchId);
+    this.assertShipmentStatus(created, 'shipped');
     if (created) {
       const operatorId = payload.operatorId ?? created.createdBy;
       const beforeData = snapshotAuditData(created);
@@ -1410,6 +1412,7 @@ export class ShipmentBatchService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updateShipmentBatchStatus({
         shipmentBatchId: payload.shipmentBatchId,
+        expectedStatus: 'to_forwarder',
         status: 'forwarder_shipped',
         operationType: 'mark_shipment_forwarder_shipped',
         operatorId: payload.operatorId,
@@ -1429,6 +1432,7 @@ export class ShipmentBatchService {
     }
 
     const created = this.store.getShipmentBatch(payload.shipmentBatchId);
+    this.assertShipmentStatus(created, 'to_forwarder');
     if (created) {
       const operatorId = payload.operatorId ?? created.createdBy;
       const beforeData = snapshotAuditData(created);
@@ -1468,6 +1472,7 @@ export class ShipmentBatchService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updateShipmentBatchStatus({
         shipmentBatchId: payload.shipmentBatchId,
+        expectedStatus: 'forwarder_shipped',
         status: 'arrived',
         operationType: 'mark_shipment_arrived',
         operatorId: payload.operatorId,
@@ -1491,6 +1496,7 @@ export class ShipmentBatchService {
     }
 
     const created = this.store.getShipmentBatch(payload.shipmentBatchId);
+    this.assertShipmentStatus(created, 'forwarder_shipped');
     if (created) {
       const operatorId = payload.operatorId ?? created.createdBy;
       const beforeData = snapshotAuditData(created);
@@ -1523,13 +1529,14 @@ export class ShipmentBatchService {
     reason: string;
     operatorId?: number;
   }) {
-    if (payload.currentStatus === 'arrived') {
+    if (payload.currentStatus === 'arrived' || payload.currentStatus === 'exception') {
       throw new BadRequestException('Arrived batches cannot be marked exception');
     }
 
     if (this.shouldUsePrisma()) {
       const updated = await this.updateShipmentBatchStatus({
         shipmentBatchId: payload.shipmentBatchId,
+        expectedStatus: payload.currentStatus,
         status: 'exception',
         operationType: 'mark_shipment_exception',
         operatorId: payload.operatorId,
@@ -1555,6 +1562,7 @@ export class ShipmentBatchService {
     }
 
     const created = this.store.getShipmentBatch(payload.shipmentBatchId);
+    this.assertShipmentStatus(created, payload.currentStatus);
     if (created) {
       const operatorId = payload.operatorId ?? created.createdBy;
       const beforeData = snapshotAuditData(created);
@@ -1648,6 +1656,7 @@ export class ShipmentBatchService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updateShipmentBatchStatus({
         shipmentBatchId: payload.shipmentBatchId,
+        requireUnsentReceipt: true,
         operationType: 'send_shipment_receipt',
         operatorId: payload.operatorId ?? payload.sentBy,
         mutate: (record) => ({
@@ -1673,6 +1682,9 @@ export class ShipmentBatchService {
     }
 
     const created = this.store.getShipmentBatch(payload.shipmentBatchId);
+    if (created?.receiptSendStatus === 'sent') {
+      throw new BadRequestException('Receipt has already been sent');
+    }
     if (created) {
       const operatorId = payload.operatorId ?? payload.sentBy;
       const beforeData = snapshotAuditData(created);
@@ -1704,6 +1716,8 @@ export class ShipmentBatchService {
 
   private async updateShipmentBatchStatus(payload: {
     shipmentBatchId: number;
+    expectedStatus?: string;
+    requireUnsentReceipt?: boolean;
     status?: string;
     operationType: string;
     operatorId?: number;
@@ -1718,6 +1732,12 @@ export class ShipmentBatchService {
     }
 
     const beforeData = toShipmentDocumentPayload(existing);
+    if (payload.requireUnsentReceipt && beforeData.receiptSendStatus === 'sent') {
+      throw new BadRequestException('Receipt has already been sent');
+    }
+    if (payload.expectedStatus) {
+      this.assertShipmentStatus(beforeData, payload.expectedStatus);
+    }
     const baseNext = {
       ...beforeData,
       status: payload.status ?? beforeData.status,
@@ -1727,7 +1747,7 @@ export class ShipmentBatchService {
       ...(payload.mutate ? payload.mutate(baseNext) : {}),
     } as CreatedShipmentBatchRecord;
     const updated = (await this.prismaDb!.businessDocument.update({
-      where: { id: existing.id },
+      where: { id: existing.id, ...(payload.expectedStatus ? { status: payload.expectedStatus } : {}) },
       data: {
         status: nextPayload.status,
         payload: nextPayload,
@@ -1749,5 +1769,15 @@ export class ShipmentBatchService {
     });
 
     return nextPayload;
+  }
+
+  private assertShipmentStatus(
+    record: CreatedShipmentBatchRecord | undefined,
+    expectedStatus: string,
+  ) {
+    if (!record) throw new NotFoundException('Shipment batch not found');
+    if (record.status !== expectedStatus) {
+      throw new BadRequestException('Shipment batch status has changed; refresh before retrying');
+    }
   }
 }

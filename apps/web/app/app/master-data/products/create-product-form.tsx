@@ -1,11 +1,12 @@
 'use client';
 
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import {
   buildFormalRequestHeaders,
   buildFormalRequestHeadersFromSearch,
 } from '../../_lib/formal-request-headers';
 import { submitFormalJsonMutationAction } from '../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import {
   CounterpartyPicker,
   formatCounterpartyOptionLabel,
@@ -385,6 +386,8 @@ export function CreateProductForm({
 }: CreateProductFormProps) {
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
+  const generatedSku = useRef<string | null>(null);
   const [salesCodeMode, setSalesCodeMode] = useState<SalesCodeMode>('generated');
   const [purchaseCodeMode, setPurchaseCodeMode] = useState<PurchaseCodeMode>('generated');
   const [factorySourceMode, setFactorySourceMode] = useState<FactorySourceMode>('manual');
@@ -435,7 +438,7 @@ export function CreateProductForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
@@ -446,7 +449,7 @@ export function CreateProductForm({
         ? String(formData.get('salesCode') ?? '').trim()
         : '';
     const purchaseCode = String(formData.get('purchaseCode') ?? '').trim();
-    const derivedSku = salesCode || purchaseCode || `SKU-${Date.now()}`;
+    const derivedSku = salesCode || purchaseCode || (generatedSku.current ??= `SKU-${Date.now()}`);
     setState(initialState);
 
     if (purchaseCodeMode === 'generated' && ruleNeedsSupplier && !resolvedUnitCode.trim()) {
@@ -457,6 +460,8 @@ export function CreateProductForm({
       return;
     }
 
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
 
     const payload = {
@@ -495,9 +500,11 @@ export function CreateProductForm({
         'POST',
         payload,
         resolveRequestHeaders(createdBy, actorAccessScopes),
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setState({
           error: result.error,
           success: null,
@@ -603,7 +610,10 @@ export function CreateProductForm({
         error: null,
         success: onSuccess ? '新增成功，已同步到当前列表。' : '新增成功，请刷新查看最新商品。',
       });
+      generatedSku.current = null;
+      attempt.succeed();
     } catch {
+      attempt.fail();
       setState({ error: '新增商品失败', success: null });
     } finally {
       setIsSubmitting(false);
@@ -611,7 +621,12 @@ export function CreateProductForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={() => {
+      if (!isSubmitting) {
+        generatedSku.current = null;
+        attempt.resetFailedAfterEdit();
+      }
+    }} style={formStyle}>
       <input type="hidden" name="currency" value="USD" />
       <input type="hidden" name="ownerName" value={createdBy} />
       <section style={heroCardStyle}>
@@ -949,7 +964,7 @@ export function CreateProductForm({
       {state.success ? (
         <p style={{ margin: 0, color: '#166534', fontSize: '13px' }}>{state.success}</p>
       ) : null}
-      <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting}>
+      <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting || attempt.isComplete}>
         {isSubmitting ? '提交中...' : '新增商品'}
       </button>
     </form>

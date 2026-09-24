@@ -9,6 +9,7 @@ import {
 } from '../../_lib/formal-request-headers';
 import { buildSignedFormalRequestHeaders } from '../../_lib/formal-request-signature';
 import { resolveFormalActionSessionFromForm } from '../../_lib/formal-action-session';
+import { readMutationRequestHeaders } from '../../_lib/mutation-request-key';
 
 export type FormalAfterSalesFormState = {
   error: string | null;
@@ -95,6 +96,7 @@ export async function createFormalAfterSalesAction(
         'Content-Type': 'application/json',
         ...buildFormalRequestHeaders(actionSession),
         ...buildSignedFormalRequestHeaders(actionSession),
+        ...readMutationRequestHeaders(formData),
       },
       body: JSON.stringify({
         salesOrderId: payload.salesOrderId,

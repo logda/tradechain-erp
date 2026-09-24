@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   buildFormalRequestHeaders,
@@ -9,6 +9,7 @@ import {
 } from '../_lib/formal-request-headers';
 import { submitFormalMutationAction } from '../_actions/formal-mutation-action';
 import type { MutationField } from '../_lib/mutation-action';
+import { createMutationRequestKey } from '../_lib/mutation-request-key';
 import {
   formalActionButtonDisabledStyle,
   formalActionButtonStyle,
@@ -255,11 +256,14 @@ export function MutationActionForm({
 
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
+  const submissionLocked = useRef(false);
+  const requestKey = useRef<string | null>(null);
   const canSubmit = hasRequiredAction(requiredAction, requestHeaders);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting || !canSubmit) {
+    if (submissionLocked.current || isComplete || !canSubmit) {
       return;
     }
 
@@ -271,7 +275,9 @@ export function MutationActionForm({
     }
 
     setState(initialState);
+    submissionLocked.current = true;
     setIsSubmitting(true);
+    requestKey.current ??= createMutationRequestKey();
 
     const formData = new FormData(event.currentTarget);
     const formalHeaders = resolveFormalRequestHeaders(requestHeaders);
@@ -282,9 +288,11 @@ export function MutationActionForm({
         fields,
         formData,
         formalHeaders,
+        requestKey.current,
       );
 
       if (!result.ok) {
+        submissionLocked.current = false;
         setState({
           error: result.error,
           success: null,
@@ -296,6 +304,7 @@ export function MutationActionForm({
         error: null,
         success: describeSuccess(result.result, successLabel),
       });
+      setIsComplete(true);
       onSuccess?.(result.result);
 
       const purchaseOrderAlertMessage = buildPurchaseOrderAlertMessage(result.result);
@@ -314,6 +323,7 @@ export function MutationActionForm({
         router.refresh?.();
       }
     } catch (error) {
+      submissionLocked.current = false;
       setState({
         error: formatUnexpectedActionError(error),
         success: null,
@@ -324,7 +334,12 @@ export function MutationActionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formalActionFormStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={() => {
+      if (state.error && !submissionLocked.current) {
+        requestKey.current = null;
+        setState(initialState);
+      }
+    }} style={formalActionFormStyle}>
       {fields.filter((field) => field.display !== 'input' && field.display !== 'select').map((field) => (
         <input
           key={field.name}
@@ -389,10 +404,10 @@ export function MutationActionForm({
       ) : null}
       <button
         type="submit"
-        disabled={isSubmitting || !canSubmit}
+        disabled={isSubmitting || isComplete || !canSubmit}
         style={{
           ...formalActionButtonStyle,
-          ...(!canSubmit ? formalActionButtonDisabledStyle : {}),
+          ...(isSubmitting || isComplete || !canSubmit ? formalActionButtonDisabledStyle : {}),
         }}
       >
         {isSubmitting ? '提交中...' : label}

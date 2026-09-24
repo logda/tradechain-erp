@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitFormalJsonMutationAction } from '../../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../../_lib/use-mutation-attempt';
 
 type QuotePriceConfirmFormProps = {
   endpoint: string;
@@ -68,10 +69,11 @@ export function QuotePriceConfirmForm({
   );
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || attempt.isComplete) return;
 
     const payloadItems = items.map((item) => ({
       lineNo: item.lineNo,
@@ -86,6 +88,8 @@ export function QuotePriceConfirmForm({
     }
 
     setError(null);
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     try {
       const result = await submitFormalJsonMutationAction(
@@ -93,13 +97,17 @@ export function QuotePriceConfirmForm({
         'POST',
         { currentVersionNo, items: payloadItems },
         requestHeaders,
+        requestKey,
       );
       if (!result.ok) {
+        attempt.fail();
         setError(result.error);
         return;
       }
+      attempt.succeed();
       router.refresh?.();
     } catch {
+      attempt.fail();
       setError('老板确认售价失败，请稍后重试。');
     } finally {
       setIsSubmitting(false);
@@ -107,7 +115,7 @@ export function QuotePriceConfirmForm({
   }
 
   return (
-    <form className="erp-card erp-workflow-card" onSubmit={handleSubmit} style={formStyle}>
+    <form className="erp-card erp-workflow-card" onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={formStyle}>
       <p style={{ margin: 0, color: '#475569', fontSize: '13px', lineHeight: 1.6 }}>
         确认后报价单进入待客户反馈，销售再记录客户结果。
       </p>
@@ -132,7 +140,7 @@ export function QuotePriceConfirmForm({
         </label>
       ))}
       {error ? <p role="alert" style={{ margin: 0, color: '#b91c1c' }}>{error}</p> : null}
-      <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting || items.length === 0}>
+      <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting || attempt.isComplete || items.length === 0}>
         {isSubmitting ? '确认中...' : '确认最终售价'}
       </button>
     </form>

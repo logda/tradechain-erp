@@ -9,6 +9,7 @@ import {
 } from '../../../_lib/formal-request-headers';
 import { buildSignedFormalRequestHeaders } from '../../../_lib/formal-request-signature';
 import { resolveFormalActionSessionFromForm } from '../../../_lib/formal-action-session';
+import { readMutationRequestHeaders } from '../../../_lib/mutation-request-key';
 import { validateCreateFormalQuoteFormData } from './formal-quote-validation';
 
 export type FormalQuoteFormState = {
@@ -470,6 +471,7 @@ export async function createFormalQuoteAction(
         'Content-Type': 'application/json',
         ...buildFormalRequestHeaders(actionSession),
         ...buildSignedFormalRequestHeaders(actionSession),
+        ...readMutationRequestHeaders(formData),
       },
       body: JSON.stringify({
         submitMode: payload.submitMode,
@@ -556,7 +558,7 @@ export async function autosaveFormalQuoteDraftAction(
       quoteAttachments: payload.quoteAttachments,
       items: payload.items,
     };
-    const response = await fetch(
+      const response = await fetch(
       Number.isInteger(quoteId) && quoteId > 0
         ? `${getQuoteApiBaseUrl()}/quotes/${quoteId}/draft`
         : `${getQuoteApiBaseUrl()}/quotes`,
@@ -566,6 +568,7 @@ export async function autosaveFormalQuoteDraftAction(
           'Content-Type': 'application/json',
           ...buildFormalRequestHeaders(actionSession),
           ...buildSignedFormalRequestHeaders(actionSession),
+          ...readMutationRequestHeaders(formData),
         },
         body: JSON.stringify(requestBody),
         cache: 'no-store',
@@ -620,6 +623,7 @@ export async function updateFormalQuoteDraftAction(
         'Content-Type': 'application/json',
         ...buildFormalRequestHeaders(actionSession),
         ...buildSignedFormalRequestHeaders(actionSession),
+        ...readMutationRequestHeaders(formData),
       },
       body: JSON.stringify({
         submitMode: payload.submitMode,

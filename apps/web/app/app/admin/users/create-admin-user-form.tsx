@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from 'react';
 import { buildFormalRequestHeaders } from '../../_lib/formal-request-headers';
 import { submitFormalJsonMutationAction } from '../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 
 type CreateAdminUserFormProps = {
   endpoint: string;
@@ -96,14 +97,17 @@ export function CreateAdminUserForm({
 }: CreateAdminUserFormProps) {
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
     const form = event.currentTarget;
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     setState(initialState);
 
@@ -127,9 +131,11 @@ export function CreateAdminUserForm({
         'POST',
         payload,
         formalHeaders,
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setState({
           error: result.error,
           success: null,
@@ -175,7 +181,9 @@ export function CreateAdminUserForm({
         error: null,
         success: onSuccess ? '新增成功，已同步到当前列表。' : '新增成功，请刷新或继续在当前页查看最新用户。',
       });
+      attempt.succeed();
     } catch {
+      attempt.fail();
       setState({
         error: '新增用户失败',
         success: null,
@@ -186,7 +194,7 @@ export function CreateAdminUserForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={formStyle}>
       <div style={gridStyle}>
         <label style={labelStyle}>
           用户名 Username
@@ -222,7 +230,7 @@ export function CreateAdminUserForm({
           {state.success}
         </p>
       ) : null}
-      <button type="submit" style={buttonStyle} disabled={isSubmitting}>
+      <button type="submit" style={buttonStyle} disabled={isSubmitting || attempt.isComplete}>
         {isSubmitting ? '提交中...' : '新增用户'}
       </button>
     </form>

@@ -6,6 +6,7 @@ import {
   buildFormalRequestHeadersFromSearch,
 } from '../../_lib/formal-request-headers';
 import { submitFormalJsonMutationAction } from '../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import {
   CounterpartyPicker,
   formatCounterpartyOptionLabel,
@@ -207,6 +208,7 @@ export function UpdateProductForm({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
   const matchedSupplier = item.defaultSupplierCode
     ? findProductSupplierOption(supplierOptions, item.defaultSupplierCode)
     : undefined;
@@ -243,13 +245,15 @@ export function UpdateProductForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
     const formData = new FormData(event.currentTarget);
     setError(null);
     setMessage(null);
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
 
     try {
@@ -285,9 +289,11 @@ export function UpdateProductForm({
           updatedBy,
         },
         resolveRequestHeaders(updatedBy, actorAccessScopes),
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setError(result.error);
         return;
       }
@@ -336,7 +342,9 @@ export function UpdateProductForm({
         ...responseItem,
       });
       setMessage('保存成功');
+      attempt.succeed();
     } catch {
+      attempt.fail();
       setError('保存失败');
     } finally {
       setIsSubmitting(false);
@@ -344,7 +352,7 @@ export function UpdateProductForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={formStyle}>
       <input type="hidden" name="currency" value="USD" />
       <input type="hidden" name="ownerName" value={item.ownerName} />
       <input type="hidden" name="sku" value={item.sku} />
@@ -653,7 +661,7 @@ export function UpdateProductForm({
         </p>
       ) : null}
       {message ? <p style={{ margin: 0, color: '#166534', fontSize: '12px' }}>{message}</p> : null}
-      <button type="submit" disabled={isSubmitting} style={buttonStyle}>
+      <button type="submit" disabled={isSubmitting || attempt.isComplete} style={buttonStyle}>
         {isSubmitting ? '保存中...' : '保存编辑'}
       </button>
     </form>

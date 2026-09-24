@@ -112,6 +112,7 @@ export async function submitFormalJsonMutationAction(
   method: FormalMutationMethod,
   payload: unknown,
   requestHeaders?: Record<string, string>,
+  idempotencyKey?: string,
 ): Promise<MutationActionResult> {
   const actionSession = await resolveSignedActionSession({ requestHeaders });
   let response: Response;
@@ -122,6 +123,7 @@ export async function submitFormalJsonMutationAction(
       headers: {
         'Content-Type': 'application/json',
         ...buildFormalApiMutationHeaders(actionSession),
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
       body: JSON.stringify(payload),
       cache: 'no-store',
@@ -145,6 +147,7 @@ export async function submitFormalMutationAction(
   fields: MutationField[],
   formData: FormData,
   requestHeaders?: Record<string, string>,
+  idempotencyKey?: string,
 ): Promise<MutationActionResult> {
   const payload = buildMutationPayload(formData, fields);
   const actionSession = await resolveSignedActionSession({
@@ -159,6 +162,7 @@ export async function submitFormalMutationAction(
       headers: {
         'Content-Type': 'application/json',
         ...buildFormalApiMutationHeaders(actionSession),
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
       body: JSON.stringify(payload),
       cache: 'no-store',

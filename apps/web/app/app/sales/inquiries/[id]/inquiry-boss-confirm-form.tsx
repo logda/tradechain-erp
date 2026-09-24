@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitFormalJsonMutationAction } from '../../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../../_lib/use-mutation-attempt';
 import {
   formatCounterpartyBilingualDisplay,
   formatCounterpartyChineseDisplay,
@@ -273,6 +274,7 @@ export function InquiryBossConfirmForm({
 
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
   const [finalPrices, setFinalPrices] = useState<Record<number, string>>(() =>
     buildInitialPriceMap(items),
   );
@@ -282,7 +284,7 @@ export function InquiryBossConfirmForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
@@ -322,6 +324,8 @@ export function InquiryBossConfirmForm({
     }
 
     setState(initialState);
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
 
     try {
@@ -330,9 +334,11 @@ export function InquiryBossConfirmForm({
         'POST',
         { items: nextItems },
         requestHeaders,
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setState({
           error: result.error,
           success: null,
@@ -344,8 +350,10 @@ export function InquiryBossConfirmForm({
         error: null,
         success: '老板确认成功，最终售价已保存。',
       });
+      attempt.succeed();
       router.refresh?.();
     } catch {
+      attempt.fail();
       setState({
         error: '老板确认失败，请稍后重试。',
         success: null,
@@ -356,7 +364,7 @@ export function InquiryBossConfirmForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={cardStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={cardStyle}>
       <div style={headerStyle}>
         <div>
           <p style={eyebrowStyle}>Boss Approval</p>
@@ -484,7 +492,7 @@ export function InquiryBossConfirmForm({
       ) : null}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting || items.length === 0}>
+        <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting || attempt.isComplete || items.length === 0}>
           {isSubmitting ? '确认中...' : label}
         </button>
       </div>

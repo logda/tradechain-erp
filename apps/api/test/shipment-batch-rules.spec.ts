@@ -560,6 +560,31 @@ describe('ShipmentBatchService', () => {
     );
   });
 
+  it('rejects a repeated shipment transition even when the caller resends the old status', async () => {
+    const service = new ShipmentBatchService();
+    const created = await service.create({
+      salesOrderId: 88,
+      purchaseOrderId: 121,
+      shippedQty: 40,
+      accumulatedQty: 40,
+      remainingQty: 60,
+      shippedAt: '2026-07-11T12:00:00.000Z',
+      shippingCode: 'SHIP-REPLAY-001',
+      createdBy: 2002,
+      purchaseOrderCurrentStatus: 'purchasing',
+      currentBatchCount: 0,
+    });
+    await service.markToForwarder({ shipmentBatchId: created.id, currentStatus: 'shipped' });
+
+    await expect(service.markToForwarder({
+      shipmentBatchId: created.id,
+      currentStatus: 'shipped',
+    })).rejects.toThrow();
+    const logs = await service.listAuditLogs();
+    expect(logs.items.filter((item) => item.bizId === created.id &&
+      item.operationType === 'mark_shipment_to_forwarder')).toHaveLength(1);
+  });
+
   it('requires an uploaded receipt before sending it to the customer', async () => {
     const service = new ShipmentBatchService();
 
@@ -599,6 +624,12 @@ describe('ShipmentBatchService', () => {
       sentBy: 2002,
       operatorId: 9000,
     });
+    await expect(service.sendReceipt({
+      shipmentBatchId: created.id,
+      receiptDocUrl: 'https://files.example.com/receipt-101.pdf',
+      sentBy: 2002,
+      operatorId: 9000,
+    })).rejects.toThrow();
 
     const detail = await service.getDetail(created.id);
     const auditLogs = await service.listAuditLogs();
@@ -610,6 +641,8 @@ describe('ShipmentBatchService', () => {
     expect((detail as { receiptSendStatus?: string }).receiptSendStatus).toBe(
       'sent',
     );
+    expect(auditLogs.items.filter((item) => item.bizId === created.id &&
+      item.operationType === 'send_shipment_receipt')).toHaveLength(1);
     expect(
       auditLogs.items.filter(
         (item) =>
@@ -640,6 +673,14 @@ describe('ShipmentBatchService', () => {
       currentBatchCount: 0,
     });
 
+    await service.markToForwarder({
+      shipmentBatchId: created.id,
+      currentStatus: 'shipped',
+    });
+    await service.markForwarderShipped({
+      shipmentBatchId: created.id,
+      currentStatus: 'to_forwarder',
+    });
     await service.markException({
       shipmentBatchId: created.id,
       currentStatus: 'forwarder_shipped',

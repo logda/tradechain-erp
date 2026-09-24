@@ -379,4 +379,52 @@ describe('MutationActionForm', () => {
       );
     });
   });
+
+  it('locks a successful action while its old view remains and sends one request key', async () => {
+    let finish!: (response: unknown) => void;
+    const fetchMock = vi.fn().mockImplementation(() => new Promise((resolve) => {
+      finish = resolve;
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<MutationActionForm
+      endpoint="http://127.0.0.1:3001/api/sales-orders/101/approve"
+      label="审批通过"
+      fields={[{ name: 'currentStatus', value: 'pending_sales_manager_approval' }]}
+    />);
+    const button = screen.getByRole('button', { name: '审批通过' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: '提交中...' })).toBeDisabled();
+
+    finish({ ok: true, json: async () => ({ status: 'purchasing' }) });
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: '审批通过' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '审批通过' }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const headers = (fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers;
+    expect(headers['Idempotency-Key']).toMatch(/^[a-zA-Z0-9_-]{16,128}$/);
+  });
+
+  it('allows retry after failure with the same request key', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, json: async () => ({ message: '暂时失败' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'submitted' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MutationActionForm
+      endpoint="http://127.0.0.1:3001/api/sales-orders/101/submit"
+      label="提交审批"
+      fields={[{ name: 'currentStatus', value: 'draft' }]}
+    />);
+
+    fireEvent.click(screen.getByRole('button', { name: '提交审批' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('暂时失败'));
+    expect(screen.getByRole('button', { name: '提交审批' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: '提交审批' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '提交审批' })).toBeDisabled());
+    const firstHeaders = (fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers;
+    const secondHeaders = (fetchMock.mock.calls[1][1] as { headers: Record<string, string> }).headers;
+    expect(secondHeaders['Idempotency-Key']).toBe(firstHeaders['Idempotency-Key']);
+  });
 });

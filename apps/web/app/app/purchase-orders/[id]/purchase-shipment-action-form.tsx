@@ -3,6 +3,7 @@
 import { type FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitFormalJsonMutationAction } from '../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import {
   formalActionButtonDisabledStyle,
   formalActionButtonStyle,
@@ -156,6 +157,7 @@ export function PurchaseShipmentActionForm({
     success: null,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
 
   const normalizedShippingCodeItems = useMemo(
     () => normalizeShippingCodeItems(shippingCodeItems),
@@ -197,7 +199,7 @@ export function PurchaseShipmentActionForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
@@ -210,6 +212,8 @@ export function PurchaseShipmentActionForm({
     }
 
     setMessage({ error: null, success: null });
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
 
     try {
@@ -233,16 +237,20 @@ export function PurchaseShipmentActionForm({
           items: buildShipmentItemsForShippedQty(draft.items, shippedQty),
         },
         requestHeaders,
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setMessage({ error: result.error, success: null });
         return;
       }
 
       setMessage({ error: null, success: '操作成功，已生成发货批次' });
+      attempt.succeed();
       router.refresh?.();
     } catch (error) {
+      attempt.fail();
       setMessage({ error: formatUnexpectedActionError(error), success: null });
     } finally {
       setIsSubmitting(false);
@@ -250,7 +258,7 @@ export function PurchaseShipmentActionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formalActionFormStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={formalActionFormStyle}>
       <div style={fieldGridStyle}>
         <div style={labelStyle}>
           发货编码与数量 Shipping Codes *
@@ -323,7 +331,7 @@ export function PurchaseShipmentActionForm({
       <button
         type="submit"
         style={isSubmitting || !canSubmit ? formalActionButtonDisabledStyle : formalActionButtonStyle}
-        disabled={isSubmitting || !canSubmit}
+        disabled={isSubmitting || attempt.isComplete || !canSubmit}
       >
         {isSubmitting ? '提交中...' : '生成发货批次'}
       </button>

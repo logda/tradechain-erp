@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import {
   createFormalAfterSalesAction,
   type FormalAfterSalesFormState,
@@ -84,6 +85,7 @@ export function CreateFormalAfterSalesForm({
 }) {
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
   const [selectedCustomerId, setSelectedCustomerId] = useState(
     customerOptions[0]?.id ? String(customerOptions[0].id) : '',
   );
@@ -99,22 +101,29 @@ export function CreateFormalAfterSalesForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     setState(initialState);
 
     const formData = new FormData(event.currentTarget);
+    formData.set('idempotencyKey', requestKey);
     try {
       const nextState = await createFormalAfterSalesAction(initialState, formData);
+      if (nextState.error) attempt.fail();
+      else attempt.succeed();
       setState(nextState);
     } catch (error) {
       if (isRedirectError(error)) {
+        attempt.succeed();
         throw error;
       }
 
+      attempt.fail();
       setState({ error: fallbackError });
     } finally {
       setIsSubmitting(false);
@@ -122,7 +131,7 @@ export function CreateFormalAfterSalesForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={formStyle}>
       <input type="hidden" name="createdBy" value={String(createdBy)} />
       <input type="hidden" name="role" value={role} />
       <input type="hidden" name="user" value={user} />
@@ -211,7 +220,7 @@ export function CreateFormalAfterSalesForm({
 
       {state.error ? <p role="alert">{state.error}</p> : null}
 
-      <button type="submit" disabled={isSubmitting} style={buttonStyle}>
+      <button type="submit" disabled={isSubmitting || attempt.isComplete} style={buttonStyle}>
         {isSubmitting ? '创建中...' : '创建售后单'}
       </button>
     </form>

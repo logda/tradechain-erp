@@ -9,6 +9,7 @@ import {
 } from '../../../_lib/formal-request-headers';
 import { buildSignedFormalRequestHeaders } from '../../../_lib/formal-request-signature';
 import { resolveFormalActionSessionFromForm } from '../../../_lib/formal-action-session';
+import { readMutationRequestHeaders } from '../../../_lib/mutation-request-key';
 import { resolveFormalUserId } from '../../../_lib/formal-access';
 
 export type SalesOrderFormState = {
@@ -489,6 +490,7 @@ export async function createSalesOrderAction(
         'Content-Type': 'application/json',
         ...buildFormalRequestHeaders(actionSession),
         ...buildSignedFormalRequestHeaders(actionSession),
+        ...readMutationRequestHeaders(formData),
       },
       body: JSON.stringify({
         submitMode: payload.submitMode,
@@ -591,6 +593,7 @@ export async function autosaveSalesOrderDraftAction(
           'Content-Type': 'application/json',
           ...buildFormalRequestHeaders(actionSession),
           ...buildSignedFormalRequestHeaders(actionSession),
+          ...readMutationRequestHeaders(formData),
         },
         body: JSON.stringify(requestBody),
         cache: 'no-store',
@@ -651,6 +654,7 @@ export async function updateSalesOrderDraftAction(
           'Content-Type': 'application/json',
           ...buildFormalRequestHeaders(actionSession),
           ...buildSignedFormalRequestHeaders(actionSession),
+          ...readMutationRequestHeaders(formData),
         },
         body: JSON.stringify({
           submitMode: payload.submitMode,

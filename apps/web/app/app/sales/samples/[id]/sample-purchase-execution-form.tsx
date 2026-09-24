@@ -4,6 +4,7 @@ import { type FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitFormalJsonMutationAction } from '../../../_actions/formal-mutation-action';
 import type { CounterpartyOption } from '../../../_lib/counterparty-options';
+import { useMutationAttempt } from '../../../_lib/use-mutation-attempt';
 import {
   CounterpartyPicker,
   formatCounterpartyOptionLabel,
@@ -219,6 +220,7 @@ export function SamplePurchaseExecutionForm({
   const initialMode = resolveInitialMode(initialPurchaseUnit, supplierOptions);
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
   const [submittingIntent, setSubmittingIntent] = useState<SubmitIntent | null>(null);
   const [purchaseUnitMode, setPurchaseUnitMode] = useState<PurchaseUnitMode>(initialMode.mode);
   const [supplierId, setSupplierId] = useState(initialMode.supplierId);
@@ -248,7 +250,7 @@ export function SamplePurchaseExecutionForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
@@ -279,6 +281,8 @@ export function SamplePurchaseExecutionForm({
       return;
     }
 
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
     const intent: SubmitIntent =
@@ -310,9 +314,11 @@ export function SamplePurchaseExecutionForm({
           estimatedCompletionDate,
         },
         requestHeaders,
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setState({
           error: result.error,
           success: null,
@@ -324,8 +330,10 @@ export function SamplePurchaseExecutionForm({
         error: null,
         success: intent === 'submit' ? '样品信息已提交' : '打样信息已保存',
       });
+      attempt.succeed();
       router.refresh?.();
     } catch {
+      attempt.fail();
       setState({
         error: '操作失败',
         success: null,
@@ -337,7 +345,7 @@ export function SamplePurchaseExecutionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={formStyle}>
       <section style={cardStyle}>
         <div style={cardHeaderStyle}>
           <div>
@@ -470,7 +478,7 @@ export function SamplePurchaseExecutionForm({
         <button
           type="submit"
           value="save"
-          disabled={isSubmitting}
+          disabled={isSubmitting || attempt.isComplete}
           style={{
             ...(submitEndpoint ? secondaryButtonStyle : primaryButtonStyle),
             ...(isSubmitting
@@ -489,7 +497,7 @@ export function SamplePurchaseExecutionForm({
           <button
             type="submit"
             value="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || attempt.isComplete}
             style={{
               ...primaryButtonStyle,
               ...(isSubmitting

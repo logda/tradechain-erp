@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AfterSalesController } from './after-sales/after-sales.controller';
 import { AfterSalesService } from './after-sales/after-sales.service';
 import { AuditController } from './audit/audit.controller';
@@ -48,6 +49,8 @@ import { FormalTodoService } from './todo/formal-todo.service';
 import { WarehouseController } from './warehouse/warehouse.controller';
 import { WarehouseService } from './warehouse/warehouse.service';
 import { PrismaModule } from './storage/prisma.module';
+import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
+import { IdempotencyService } from './idempotency/idempotency.service';
 
 @Module({
   imports: [PrismaModule],
@@ -79,6 +82,8 @@ import { PrismaModule } from './storage/prisma.module';
     WarehouseController,
   ],
   providers: [
+    IdempotencyService,
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     AfterSalesService,
     AuditService,
     BossDashboardService,

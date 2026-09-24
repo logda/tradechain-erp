@@ -11,6 +11,7 @@ import {
   formalActionFormStyle,
 } from '../../_components/formal-action-button-style';
 import { submitFormalMutationAction } from '../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import type { CounterpartyOption } from '../../_lib/counterparty-options';
 import type { MutationField } from '../../_lib/mutation-action';
 
@@ -154,6 +155,7 @@ export function PurchaseOrderDraftForm({
     success: null,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
 
   const selectedSupplier = useMemo(
     () =>
@@ -170,11 +172,13 @@ export function PurchaseOrderDraftForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
     setMessage({ error: null, success: null });
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
 
     const formData = new FormData(event.currentTarget);
@@ -196,15 +200,19 @@ export function PurchaseOrderDraftForm({
         fields,
         formData,
         requestHeaders,
+        requestKey,
       );
       if (!result.ok) {
+        attempt.fail();
         setMessage({ error: result.error, success: null });
         return;
       }
 
       setMessage({ error: null, success: '采购单草稿已保存' });
+      attempt.succeed();
       router.refresh?.();
     } catch (error) {
+      attempt.fail();
       setMessage({ error: formatUnexpectedActionError(error), success: null });
     } finally {
       setIsSubmitting(false);
@@ -212,7 +220,7 @@ export function PurchaseOrderDraftForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formalActionFormStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={formalActionFormStyle}>
       <input name="currentStatus" type="hidden" value={currentStatus} />
       <input name="supplierId" type="hidden" value={supplierIdValue} />
       <input name="supplierName" type="hidden" value={supplierNameValue} />
@@ -322,7 +330,7 @@ export function PurchaseOrderDraftForm({
       {message.error ? <p style={{ margin: 0, color: '#dc2626' }}>{message.error}</p> : null}
       {message.success ? <p style={{ margin: 0, color: '#15803d' }}>{message.success}</p> : null}
 
-      <button type="submit" style={formalActionButtonStyle} disabled={isSubmitting}>
+      <button type="submit" style={formalActionButtonStyle} disabled={isSubmitting || attempt.isComplete}>
         {isSubmitting ? '保存中...' : '保存草稿'}
       </button>
     </form>

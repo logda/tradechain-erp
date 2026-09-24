@@ -3,6 +3,8 @@
 import React from 'react';
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { useMutationAttempt } from '../../../_lib/use-mutation-attempt';
+import { createMutationRequestKey } from '../../../_lib/mutation-request-key';
 import {
   autosaveSalesOrderDraftAction,
   createSalesOrderAction,
@@ -822,6 +824,7 @@ export function CreateSalesOrderForm({
 }) {
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
   const [submittingMode, setSubmittingMode] = useState<'draft' | 'submit' | null>(null);
   const [draftSalesOrderId, setDraftSalesOrderId] = useState<number | null>(
     initialSalesOrder?.id ?? null,
@@ -837,6 +840,10 @@ export function CreateSalesOrderForm({
   const formRef = useRef<HTMLFormElement | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSeqRef = useRef(0);
+  const autosaveRunningRef = useRef(false);
+  const autosaveQueuedRef = useRef(false);
+  const autosavePromiseRef = useRef<Promise<void> | null>(null);
+  const autosaveRequestKeyRef = useRef<string | null>(null);
   const isSubmittingRef = useRef(false);
   const draftSalesOrderIdRef = useRef<number | null>(initialSalesOrder?.id ?? null);
   const selectedFactoryPicPreviewUrlsRef = useRef<Record<number, string[]>>({});
@@ -903,6 +910,11 @@ export function CreateSalesOrderForm({
       return;
     }
 
+    if (autosaveRunningRef.current) {
+      autosaveQueuedRef.current = true;
+      return;
+    }
+
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
     }
@@ -917,44 +929,65 @@ export function CreateSalesOrderForm({
         return;
       }
 
-      setAutosaveStatus('saving');
-      setAutosaveMessage('正在自动保存草稿');
-      const formData = new FormData(form);
-      formData.set('submitMode', 'draft');
-      formData.set('skipAttachmentUpload', 'true');
-      if (draftSalesOrderIdRef.current) {
-        formData.set('salesOrderId', String(draftSalesOrderIdRef.current));
-      }
+      autosaveRunningRef.current = true;
+      const running = (async () => {
+        try {
+          setAutosaveStatus('saving');
+          setAutosaveMessage('正在自动保存草稿');
+          const formData = new FormData(form);
+          formData.set('submitMode', 'draft');
+          formData.set('skipAttachmentUpload', 'true');
+          autosaveRequestKeyRef.current ??= createMutationRequestKey();
+          formData.set('idempotencyKey', autosaveRequestKeyRef.current);
+          if (draftSalesOrderIdRef.current) {
+            formData.set('salesOrderId', String(draftSalesOrderIdRef.current));
+          }
 
-      const result = await autosaveSalesOrderDraftAction(formData);
-      if (autosaveSeqRef.current !== seq) {
-        return;
-      }
+          const result = await autosaveSalesOrderDraftAction(formData);
+          if (result.salesOrderId) {
+            autosaveRequestKeyRef.current = null;
+            draftSalesOrderIdRef.current = result.salesOrderId;
+            setDraftSalesOrderId(result.salesOrderId);
+          }
+          if (autosaveSeqRef.current !== seq) {
+            return;
+          }
 
-      if (result.error) {
-        setAutosaveStatus('error');
-        setAutosaveMessage(result.error);
-        return;
-      }
+          if (result.error) {
+            setAutosaveStatus('error');
+            setAutosaveMessage(result.error);
+            return;
+          }
 
-      if (result.skipped) {
-        setAutosaveStatus('skipped');
-        setAutosaveMessage('完善订货单位和销售明细后会自动保存草稿');
-        return;
-      }
+          if (result.skipped) {
+            setAutosaveStatus('skipped');
+            setAutosaveMessage('完善订货单位和销售明细后会自动保存草稿');
+            return;
+          }
 
-      if (result.salesOrderId) {
-        setDraftSalesOrderId(result.salesOrderId);
+          setAutosaveStatus('saved');
+          setAutosaveMessage(
+            result.savedAt
+              ? `已自动保存 ${new Date(result.savedAt).toLocaleTimeString('zh-CN', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}`
+              : '已自动保存',
+          );
+        } finally {
+          autosaveRunningRef.current = false;
+          if (autosaveQueuedRef.current && !isSubmittingRef.current) {
+            autosaveQueuedRef.current = false;
+            scheduleAutosave();
+          }
+        }
+      })();
+      autosavePromiseRef.current = running;
+      try {
+        await running;
+      } finally {
+        autosavePromiseRef.current = null;
       }
-      setAutosaveStatus('saved');
-      setAutosaveMessage(
-        result.savedAt
-          ? `已自动保存 ${new Date(result.savedAt).toLocaleTimeString('zh-CN', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}`
-          : '已自动保存',
-      );
     }, 1500);
   }
 
@@ -1043,18 +1076,28 @@ export function CreateSalesOrderForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || isSubmittingRef.current || attempt.isComplete) {
       return;
     }
 
+    const form = event.currentTarget;
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    isSubmittingRef.current = true;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    if (autosavePromiseRef.current) await autosavePromiseRef.current.catch(() => undefined);
+    const requestKey = attempt.begin();
+    if (!requestKey) {
+      isSubmittingRef.current = false;
+      return;
+    }
     setIsSubmitting(true);
     setState(initialState);
 
-    const formData = new FormData(event.currentTarget);
-    if (draftSalesOrderId) {
-      formData.set('salesOrderId', String(draftSalesOrderId));
+    const formData = new FormData(form);
+    formData.set('idempotencyKey', requestKey);
+    if (draftSalesOrderIdRef.current) {
+      formData.set('salesOrderId', String(draftSalesOrderIdRef.current));
     }
-    const submitter = (event.nativeEvent as SubmitEvent).submitter;
     const nextSubmitMode =
       submitter instanceof HTMLButtonElement && submitter.value === 'submit'
         ? 'submit'
@@ -1063,17 +1106,22 @@ export function CreateSalesOrderForm({
     setSubmittingMode(nextSubmitMode);
     try {
       const nextState =
-        draftSalesOrderId
+        draftSalesOrderIdRef.current
           ? await updateSalesOrderDraftAction(initialState, formData)
           : await createSalesOrderAction(initialState, formData);
+      if (nextState.error) attempt.fail();
+      else attempt.succeed();
       setState(nextState);
     } catch (error) {
       if (isRedirectError(error)) {
+        attempt.succeed();
         throw error;
       }
 
+      attempt.fail();
       setState({ error: fallbackSubmitError });
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       setSubmittingMode(null);
     }
@@ -1084,6 +1132,7 @@ export function CreateSalesOrderForm({
       ref={formRef}
       noValidate
       onSubmit={handleSubmit}
+      onChangeCapture={attempt.resetFailedAfterEdit}
       onKeyDownCapture={handleFormKeyDown}
       onInput={handleFormInput}
       onChange={handleFormChange}
@@ -1684,7 +1733,7 @@ export function CreateSalesOrderForm({
           type="submit"
           name="submitMode"
           value="draft"
-          disabled={isSubmitting}
+          disabled={isSubmitting || attempt.isComplete}
           style={secondaryButtonStyle}
         >
           {isSubmitting && submittingMode === 'draft' ? '保存中...' : '保存草稿'}
@@ -1693,7 +1742,7 @@ export function CreateSalesOrderForm({
           type="submit"
           name="submitMode"
           value="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || attempt.isComplete}
           style={buttonStyle}
         >
           {isSubmitting && submittingMode === 'submit' ? '提交中...' : '提交审批'}

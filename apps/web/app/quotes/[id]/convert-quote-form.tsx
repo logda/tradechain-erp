@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from 'react';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { useMutationAttempt } from '../../app/_lib/use-mutation-attempt';
 import {
   convertQuoteToSalesAction,
   type ConvertQuoteFormState,
@@ -113,17 +114,21 @@ export function ConvertQuoteForm({
 }: ConvertQuoteFormProps) {
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     setState(initialState);
 
     const formData = new FormData(event.currentTarget);
+    formData.set('idempotencyKey', requestKey);
     const params = new URLSearchParams(window.location.search);
     const resolvedRole = role?.trim() || params.get('role');
     const resolvedUser = user?.trim() || params.get('user');
@@ -135,12 +140,16 @@ export function ConvertQuoteForm({
 
     try {
       const nextState = await convertQuoteToSalesAction(initialState, formData);
+      if (nextState.error) attempt.fail();
+      else attempt.succeed();
       setState(nextState);
     } catch (error) {
       if (isRedirectError(error)) {
+        attempt.succeed();
         throw error;
       }
 
+      attempt.fail();
       setState({ error: fallbackError });
     } finally {
       setIsSubmitting(false);
@@ -166,6 +175,7 @@ export function ConvertQuoteForm({
   return (
     <form
       onSubmit={handleSubmit}
+      onChangeCapture={attempt.resetFailedAfterEdit}
       style={isCompact ? compactFormStyle : formalActionFormStyle}
     >
       <input name="quoteId" type="hidden" value={quoteId} />
@@ -214,7 +224,7 @@ export function ConvertQuoteForm({
       ) : null}
       <button
         type="submit"
-        disabled={isSubmitting}
+        disabled={isSubmitting || attempt.isComplete}
         style={isSubmitting ? submittingButtonStyle : buttonStyle}
       >
         {isSubmitting ? '提交中...' : isCompact ? '转销售单' : '转为销售订单'}

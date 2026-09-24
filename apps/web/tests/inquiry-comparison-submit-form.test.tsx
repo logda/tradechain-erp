@@ -159,6 +159,7 @@ describe('InquiryComparisonSubmitForm', () => {
           'x-erp-role': 'admin',
           'x-erp-user': 'Admin',
         },
+        expect.stringMatching(/^[a-zA-Z0-9_-]{16,128}$/),
       );
       expect(refreshMock).toHaveBeenCalledTimes(1);
     });

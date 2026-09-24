@@ -54,6 +54,7 @@ describe('QuoteCustomerFeedbackForm', () => {
           remark: '客户希望降价 5%',
         },
         { 'x-erp-role': 'sales', 'x-erp-user': 'Zoe' },
+        expect.any(String),
       );
       expect(refreshMock).toHaveBeenCalledTimes(1);
     });

@@ -8,6 +8,7 @@ import {
 } from '../../app/_lib/formal-request-headers';
 import { buildSignedFormalRequestHeaders } from '../../app/_lib/formal-request-signature';
 import { resolveFormalActionSessionFromForm } from '../../app/_lib/formal-action-session';
+import { readMutationRequestHeaders } from '../../app/_lib/mutation-request-key';
 
 export type ConvertQuoteFormState = {
   error: string | null;
@@ -327,6 +328,7 @@ export async function convertQuoteToSalesAction(
           'Content-Type': 'application/json',
           ...(formalSession ? buildFormalRequestHeaders(formalSession) : {}),
           ...(formalSession ? buildSignedFormalRequestHeaders(formalSession) : {}),
+          ...readMutationRequestHeaders(formData),
         },
         body: JSON.stringify(request.payload),
         cache: 'no-store',

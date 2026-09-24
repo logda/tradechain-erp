@@ -77,6 +77,7 @@ describe('SamplePurchaseExecutionForm', () => {
           'x-erp-role': 'purchase',
           'x-erp-user': 'Leo',
         },
+        expect.stringMatching(/^[a-zA-Z0-9_-]{16,128}$/),
       );
       expect(refreshMock).toHaveBeenCalledTimes(1);
     });
@@ -127,6 +128,7 @@ describe('SamplePurchaseExecutionForm', () => {
           'x-erp-role': 'purchase',
           'x-erp-user': 'Leo',
         },
+        expect.stringMatching(/^[a-zA-Z0-9_-]{16,128}$/),
       );
       expect(refreshMock).toHaveBeenCalledTimes(1);
     });
@@ -197,8 +199,40 @@ describe('SamplePurchaseExecutionForm', () => {
           'x-erp-role': 'purchase',
           'x-erp-user': 'Leo',
         },
+        expect.stringMatching(/^[a-zA-Z0-9_-]{16,128}$/),
       );
       expect(refreshMock).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('retries a failed sample action with one key and locks after success', async () => {
+    submitFormalJsonMutationActionMock
+      .mockResolvedValueOnce({ ok: false, error: '暂时失败' })
+      .mockResolvedValueOnce({ ok: true, result: { currentStatus: 'sampling' } });
+    render(<SamplePurchaseExecutionForm
+      endpoint="http://127.0.0.1:3001/api/samples/101/start-sampling"
+      label="开始打样"
+      requestHeaders={{ 'x-erp-role': 'purchase', 'x-erp-user': 'Leo' }}
+      currentStatus="pending_sampling"
+      supplierOptions={[]}
+    />);
+    fireEvent.click(screen.getByRole('button', { name: '手工填写' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '采购单位' }), {
+      target: { value: '宁波智造工厂' },
+    });
+    fireEvent.change(screen.getByLabelText('预计完成日期'), {
+      target: { value: '2026-07-28' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '开始打样' }));
+    await waitFor(() => expect(screen.getByText('暂时失败')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: '开始打样' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '开始打样' }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: '开始打样' })).toBeDisabled();
+    expect(submitFormalJsonMutationActionMock.mock.calls).toHaveLength(2);
+    expect(submitFormalJsonMutationActionMock.mock.calls[0][4]).toMatch(/^[a-zA-Z0-9_-]{16,128}$/);
+    expect(submitFormalJsonMutationActionMock.mock.calls[1][4])
+      .toBe(submitFormalJsonMutationActionMock.mock.calls[0][4]);
   });
 });

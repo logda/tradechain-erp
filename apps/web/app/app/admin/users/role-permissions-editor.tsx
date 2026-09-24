@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { buildFormalRequestHeaders } from '../../_lib/formal-request-headers';
 import { submitFormalJsonMutationAction } from '../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 
 type RolePermissionEditorProps = {
   endpoint: string;
@@ -146,6 +147,7 @@ export function RolePermissionEditor({
 }: RolePermissionEditorProps) {
   const [state, setState] = useState<State>({ error: null, success: null });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
   const [selectedModules, setSelectedModules] = useState(modules);
   const [selectedDataScope, setSelectedDataScope] = useState(dataScope);
   const [selectedActions, setSelectedActions] = useState(actions);
@@ -154,10 +156,12 @@ export function RolePermissionEditor({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     setState({ error: null, success: null });
     const payload = {
@@ -178,9 +182,11 @@ export function RolePermissionEditor({
         'POST',
         payload,
         formalHeaders,
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setState({ error: result.error, success: null });
         return;
       }
@@ -195,8 +201,10 @@ export function RolePermissionEditor({
       }
 
       setState({ error: null, success: `${roleLabel} 权限已更新` });
+      attempt.succeed();
       onSuccess?.();
     } catch {
+      attempt.fail();
       setState({ error: '保存角色权限失败', success: null });
     } finally {
       setIsSubmitting(false);
@@ -204,7 +212,7 @@ export function RolePermissionEditor({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={cardStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={cardStyle}>
       <div style={groupStyle}>
         <div style={tagStyle}>角色 Role: {roleCode}</div>
         <strong>{roleLabel}</strong>
@@ -296,7 +304,7 @@ export function RolePermissionEditor({
         <p style={{ margin: 0, color: '#166534', fontSize: '13px' }}>{state.success}</p>
       ) : null}
 
-      <button type="submit" style={buttonStyle} disabled={isSubmitting}>
+      <button type="submit" style={buttonStyle} disabled={isSubmitting || attempt.isComplete}>
         {isSubmitting ? '保存中...' : '保存权限'}
       </button>
     </form>

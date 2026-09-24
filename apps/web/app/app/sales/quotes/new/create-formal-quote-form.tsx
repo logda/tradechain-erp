@@ -8,6 +8,8 @@ import {
   type FormEvent,
 } from 'react';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { useMutationAttempt } from '../../../_lib/use-mutation-attempt';
+import { createMutationRequestKey } from '../../../_lib/mutation-request-key';
 import {
   autosaveFormalQuoteDraftAction,
   createFormalQuoteAction,
@@ -400,6 +402,7 @@ export function CreateFormalQuoteForm({
 }) {
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
   const [draftQuoteId, setDraftQuoteId] = useState<number | null>(initialQuote?.id ?? null);
   const [autosaveStatus, setAutosaveStatus] = useState<
     'idle' | 'waiting' | 'saving' | 'saved' | 'skipped' | 'error'
@@ -410,6 +413,8 @@ export function CreateFormalQuoteForm({
   const autosaveSeqRef = useRef(0);
   const autosaveRunningRef = useRef(false);
   const autosaveQueuedRef = useRef(false);
+  const autosavePromiseRef = useRef<Promise<void> | null>(null);
+  const autosaveRequestKeyRef = useRef<string | null>(null);
   const isSubmittingRef = useRef(false);
   const draftQuoteIdRef = useRef<number | null>(initialQuote?.id ?? null);
   const imageFilesInputRef = useRef<HTMLInputElement | null>(null);
@@ -549,6 +554,8 @@ export function CreateFormalQuoteForm({
     setAutosaveMessage('正在自动保存草稿');
     const formData = new FormData(form);
     formData.set('submitMode', 'draft');
+    autosaveRequestKeyRef.current ??= createMutationRequestKey();
+    formData.set('idempotencyKey', autosaveRequestKeyRef.current);
     if (draftQuoteIdRef.current) {
       formData.set('quoteId', String(draftQuoteIdRef.current));
     }
@@ -556,6 +563,7 @@ export function CreateFormalQuoteForm({
     const result = await autosaveFormalQuoteDraftAction(formData);
 
     if (result.quoteId) {
+      autosaveRequestKeyRef.current = null;
       draftQuoteIdRef.current = result.quoteId;
       setDraftQuoteId(result.quoteId);
     }
@@ -633,9 +641,12 @@ export function CreateFormalQuoteForm({
     const seq = autosaveSeqRef.current + 1;
     autosaveSeqRef.current = seq;
     autosaveTimerRef.current = setTimeout(async () => {
+      const running = runAutosave(seq);
+      autosavePromiseRef.current = running;
       try {
-        await runAutosave(seq);
+        await running;
       } finally {
+        autosavePromiseRef.current = null;
         autosaveRunningRef.current = false;
         if (autosaveQueuedRef.current && !isSubmittingRef.current) {
           autosaveQueuedRef.current = false;
@@ -766,42 +777,58 @@ export function CreateFormalQuoteForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || isSubmittingRef.current || attempt.isComplete) {
       return;
     }
 
-    const formData = new FormData(event.currentTarget);
-    if (draftQuoteId) {
-      formData.set('quoteId', String(draftQuoteId));
-    }
+    const form = event.currentTarget;
     const submitter = (event.nativeEvent as SubmitEvent & {
       submitter?: HTMLElement | null;
     }).submitter as HTMLButtonElement | null | undefined;
+    isSubmittingRef.current = true;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    if (autosavePromiseRef.current) await autosavePromiseRef.current.catch(() => undefined);
+    const formData = new FormData(form);
+    if (draftQuoteIdRef.current) {
+      formData.set('quoteId', String(draftQuoteIdRef.current));
+    }
     const nextSubmitMode =
       submitter?.dataset.submitMode === 'submit' ? 'submit' : 'draft';
     formData.set('submitMode', nextSubmitMode);
     const validationError = validateCreateFormalQuoteFormData(formData);
     if (validationError) {
+      isSubmittingRef.current = false;
       setState({ error: validationError });
       return;
     }
 
+    const requestKey = attempt.begin();
+    if (!requestKey) {
+      isSubmittingRef.current = false;
+      return;
+    }
+    formData.set('idempotencyKey', requestKey);
     setIsSubmitting(true);
     setState(initialState);
 
     try {
       const nextState =
-        draftQuoteId
+        draftQuoteIdRef.current
           ? await updateFormalQuoteDraftAction(initialState, formData)
           : await createFormalQuoteAction(initialState, formData);
+      if (nextState.error) attempt.fail();
+      else attempt.succeed();
       setState(nextState);
     } catch (error) {
       if (isRedirectError(error)) {
+        attempt.succeed();
         throw error;
       }
 
+      attempt.fail();
       setState({ error: fallbackSubmitError });
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   }
@@ -825,6 +852,7 @@ export function CreateFormalQuoteForm({
     <form
       ref={formRef}
       onSubmit={handleSubmit}
+      onChangeCapture={attempt.resetFailedAfterEdit}
       onKeyDownCapture={handleFormKeyDown}
       onInput={scheduleAutosave}
       onChange={scheduleAutosave}
@@ -1476,7 +1504,7 @@ export function CreateFormalQuoteForm({
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || attempt.isComplete}
           style={buttonStyle}
           data-submit-mode="draft"
           onClick={() => setSubmitMode('draft')}
@@ -1489,7 +1517,7 @@ export function CreateFormalQuoteForm({
         </button>
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || attempt.isComplete}
           style={{ ...buttonStyle, background: '#1d4ed8', border: '1px solid #1d4ed8' }}
           data-submit-mode="submit"
           onClick={() => setSubmitMode('submit')}

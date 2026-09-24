@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import {
   buildFormalRequestHeaders,
   buildFormalRequestHeadersFromSearch,
@@ -55,6 +56,7 @@ export function UpdateQuoteSourceForm({
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
 
   function resolveRequestHeaders() {
     if (actorAccessScopes) {
@@ -80,10 +82,12 @@ export function UpdateQuoteSourceForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     setMessage('');
     setError('');
@@ -94,6 +98,7 @@ export function UpdateQuoteSourceForm({
         headers: {
           'Content-Type': 'application/json',
           ...resolveRequestHeaders(),
+          'Idempotency-Key': requestKey,
         },
         body: JSON.stringify({
           items: rows.map((row, index) => ({
@@ -107,6 +112,7 @@ export function UpdateQuoteSourceForm({
       });
 
       if (!response.ok) {
+        attempt.fail();
         setError('保存报价来源字典失败');
         return;
       }
@@ -120,7 +126,9 @@ export function UpdateQuoteSourceForm({
       }
 
       setMessage('报价来源字典已保存');
+      attempt.succeed();
     } catch {
+      attempt.fail();
       setError('保存报价来源字典失败');
     } finally {
       setIsSubmitting(false);
@@ -128,7 +136,7 @@ export function UpdateQuoteSourceForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '16px' }}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={{ display: 'grid', gap: '16px' }}>
       {rows.map((row, index) => (
         <div
           key={`${row.code}-${index}`}
@@ -180,9 +188,10 @@ export function UpdateQuoteSourceForm({
           <button
             type="button"
             style={{ ...buttonStyle, background: '#ffffff', color: '#0f172a' }}
-            onClick={() =>
-              setRows((items) => items.filter((_, itemIndex) => itemIndex !== index))
-            }
+            onClick={() => {
+              attempt.resetAfterEdit();
+              setRows((items) => items.filter((_, itemIndex) => itemIndex !== index));
+            }}
           >
             删除
           </button>
@@ -193,7 +202,8 @@ export function UpdateQuoteSourceForm({
         <button
           type="button"
           style={{ ...buttonStyle, background: '#ffffff', color: '#0f172a' }}
-          onClick={() =>
+          onClick={() => {
+            attempt.resetAfterEdit();
             setRows((items) => [
               ...items,
               {
@@ -202,12 +212,12 @@ export function UpdateQuoteSourceForm({
                 enabled: true,
                 sortOrder: items.length + 1,
               },
-            ])
-          }
+            ]);
+          }}
         >
           新增来源
         </button>
-        <button type="submit" style={buttonStyle} disabled={isSubmitting}>
+        <button type="submit" style={buttonStyle} disabled={isSubmitting || attempt.isComplete}>
           {isSubmitting ? '保存中...' : '保存来源字典'}
         </button>
       </div>

@@ -6,6 +6,7 @@ import {
   buildFormalRequestHeadersFromSearch,
 } from '../../_lib/formal-request-headers';
 import { submitFormalJsonMutationAction } from '../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import {
   buildDocumentCodePreview,
   describeDocumentCodeRule,
@@ -187,6 +188,7 @@ export function UpdateDocumentCodeRuleForm({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
 
   const previewRule: DocumentCodeRule = {
     strategy: 'composed_segments',
@@ -211,7 +213,7 @@ export function UpdateDocumentCodeRuleForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
@@ -222,6 +224,8 @@ export function UpdateDocumentCodeRuleForm({
 
     setError(null);
     setMessage(null);
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
 
     try {
@@ -236,15 +240,19 @@ export function UpdateDocumentCodeRuleForm({
           updatedBy,
         },
         resolveRequestHeaders(updatedBy, actorAccessScopes),
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setError(result.error);
         return;
       }
 
       setMessage('单据编号规则已保存');
+      attempt.succeed();
     } catch {
+      attempt.fail();
       setError('保存单据编号规则失败');
     } finally {
       setIsSubmitting(false);
@@ -252,7 +260,7 @@ export function UpdateDocumentCodeRuleForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={formStyle}>
       <section style={cardStyle}>
         <div>
           <h3 style={{ margin: '0 0 6px' }}>{title}</h3>
@@ -350,7 +358,7 @@ export function UpdateDocumentCodeRuleForm({
       {error ? <p style={{ margin: 0, color: '#b91c1c' }}>{error}</p> : null}
       {message ? <p style={{ margin: 0, color: '#0f766e' }}>{message}</p> : null}
 
-      <button type="submit" style={buttonStyle} disabled={isSubmitting}>
+      <button type="submit" style={buttonStyle} disabled={isSubmitting || attempt.isComplete}>
         {isSubmitting ? '保存中...' : '保存规则'}
       </button>
     </form>

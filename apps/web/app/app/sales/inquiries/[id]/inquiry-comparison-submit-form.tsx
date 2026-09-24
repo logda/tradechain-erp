@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitFormalJsonMutationAction } from '../../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../../_lib/use-mutation-attempt';
 import type { CounterpartyOption } from '../../../_lib/counterparty-options';
 import {
   CounterpartyPicker,
@@ -273,6 +274,7 @@ export function InquiryComparisonSubmitForm({
   }
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
   const [draftValues, setDraftValues] = useState<Record<number, DraftSupplierQuote[]>>(() =>
     buildInitialDraftValues(items),
   );
@@ -293,7 +295,7 @@ export function InquiryComparisonSubmitForm({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
@@ -387,6 +389,8 @@ export function InquiryComparisonSubmitForm({
       return;
     }
 
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     setState(initialState);
 
@@ -401,9 +405,11 @@ export function InquiryComparisonSubmitForm({
           })),
         },
         requestHeaders,
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setState({
           error: result.error,
           success: null,
@@ -415,8 +421,10 @@ export function InquiryComparisonSubmitForm({
         error: null,
         success: '比价提交成功',
       });
+      attempt.succeed();
       router.refresh?.();
     } catch {
+      attempt.fail();
       setState({
         error: '操作失败',
         success: null,
@@ -427,7 +435,7 @@ export function InquiryComparisonSubmitForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} style={formStyle}>
+    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={formStyle}>
       <p style={hintStyle}>每行至少录入 2 条供应商报价，供应商可从往来单位选择，也可手工填写。</p>
       <div style={{ display: 'grid', gap: '14px' }}>
         {items.map((item) => (
@@ -734,7 +742,7 @@ export function InquiryComparisonSubmitForm({
           询价单没有可提交的明细，请先确认来源报价明细。
         </p>
       ) : null}
-      <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting || items.length === 0}>
+      <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting || attempt.isComplete || items.length === 0}>
         {isSubmitting ? '提交中...' : label}
       </button>
     </form>

@@ -128,7 +128,7 @@ describe('ShipmentBatchService prisma document storage', () => {
     const payload = {
       id: 402,
       batchNo: 'SH20260711402',
-      status: 'shipped',
+      status: 'to_forwarder',
       receiptSendStatus: 'pending',
       shippedQty: 40,
       accumulatedQty: 40,
@@ -152,7 +152,7 @@ describe('ShipmentBatchService prisma document storage', () => {
       id: 402n,
       bizType: 'shipment_batch',
       docNo: 'SH20260711402',
-      status: 'shipped',
+      status: 'to_forwarder',
       ownerUserId: 2002n,
       counterpartyId: 21n,
       payload,
@@ -195,7 +195,7 @@ describe('ShipmentBatchService prisma document storage', () => {
       where: { id: 402n },
     });
     expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
-      where: { id: 402n },
+      where: { id: 402n, status: 'to_forwarder' },
       data: expect.objectContaining({
         status: 'forwarder_shipped',
       }),

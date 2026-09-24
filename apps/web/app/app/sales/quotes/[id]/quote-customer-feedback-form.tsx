@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitFormalJsonMutationAction } from '../../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../../_lib/use-mutation-attempt';
 
 type CustomerFeedbackResult = 'accepted' | 'no_follow_up' | 'price_issue';
 
@@ -37,12 +38,15 @@ export function QuoteCustomerFeedbackForm({
   const [remark, setRemark] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || attempt.isComplete) return;
 
     setError(null);
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     try {
       const response = await submitFormalJsonMutationAction(
@@ -50,13 +54,17 @@ export function QuoteCustomerFeedbackForm({
         'POST',
         { currentVersionNo, result, remark: remark.trim() },
         requestHeaders,
+        requestKey,
       );
       if (!response.ok) {
+        attempt.fail();
         setError(response.error);
         return;
       }
+      attempt.succeed();
       router.refresh?.();
     } catch {
+      attempt.fail();
       setError('保存客户反馈失败，请稍后重试。');
     } finally {
       setIsSubmitting(false);
@@ -64,7 +72,7 @@ export function QuoteCustomerFeedbackForm({
   }
 
   return (
-    <form className="erp-card erp-workflow-card" onSubmit={handleSubmit} style={{ display: 'grid', gap: '12px' }}>
+    <form className="erp-card erp-workflow-card" onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={{ display: 'grid', gap: '12px' }}>
       <p style={{ margin: 0, color: '#475569', fontSize: '13px', lineHeight: 1.6 }}>
         系统不提供客户入口，由销售根据线下沟通结果记录。
       </p>
@@ -119,7 +127,7 @@ export function QuoteCustomerFeedbackForm({
       <button
         className="erp-button erp-button--primary"
         type="submit"
-        disabled={isSubmitting}
+        disabled={isSubmitting || attempt.isComplete}
       >
         {isSubmitting ? '保存中...' : '保存客户反馈'}
       </button>

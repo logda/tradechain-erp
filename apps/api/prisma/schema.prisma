@@ -6,6 +6,16 @@ datasource db {
   provider = "mysql"
 }
 
+model IdempotencyRecord {
+  id          String   @id @db.VarChar(64)
+  scope       String?  @unique @db.VarChar(128)
+  fingerprint String   @db.VarChar(64)
+  status      String   @db.VarChar(16)
+  result      String?  @db.LongText
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model User {
   id                BigInt    @id @default(autoincrement())
   username          String    @unique @db.VarChar(64)

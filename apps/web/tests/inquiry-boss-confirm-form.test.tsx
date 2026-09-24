@@ -117,6 +117,7 @@ describe('InquiryBossConfirmForm', () => {
           'x-erp-role': 'boss',
           'x-erp-user': 'Mia',
         },
+        expect.any(String),
       );
       expect(refreshMock).toHaveBeenCalledTimes(1);
     });

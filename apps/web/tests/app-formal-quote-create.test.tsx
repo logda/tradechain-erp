@@ -729,6 +729,7 @@ describe('formal quote create page', () => {
     formData.set('salePrice', '15.9');
     formData.set('role', 'sales');
     formData.set('user', 'Leo');
+    formData.set('idempotencyKey', 'c40a28a6-e7cc-4765-adea-312e1c494cc9');
 
     await expect(createFormalQuoteAction({ error: null }, formData)).rejects.toMatchObject({
       digest: `${REDIRECT_ERROR_CODE};${RedirectType.push};/app/sales/quotes/104?role=sales&user=Leo;303;`,
@@ -738,6 +739,9 @@ describe('formal quote create page', () => {
       'http://127.0.0.1:3001/api/quotes',
       expect.objectContaining({
         method: 'POST',
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'c40a28a6-e7cc-4765-adea-312e1c494cc9',
+        }),
         body: expect.stringContaining('"nameCn":"报价新品"'),
       }),
     );

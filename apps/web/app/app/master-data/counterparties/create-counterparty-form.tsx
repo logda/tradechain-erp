@@ -6,6 +6,7 @@ import {
   buildFormalRequestHeadersFromSearch,
 } from '../../_lib/formal-request-headers';
 import { submitFormalJsonMutationAction } from '../../_actions/formal-mutation-action';
+import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import {
   buildCounterpartyOwnerOptions,
   filterCounterpartyOwnerOptions,
@@ -158,6 +159,7 @@ export function CreateCounterpartyForm({
 }: CreateCounterpartyFormProps) {
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const attempt = useMutationAttempt();
   const [selectedType, setSelectedType] = useState<CounterpartyType>(
     allowedTypes[0] ?? 'customer',
   );
@@ -182,7 +184,7 @@ export function CreateCounterpartyForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || attempt.isComplete) {
       return;
     }
 
@@ -209,6 +211,8 @@ export function CreateCounterpartyForm({
       return;
     }
 
+    const requestKey = attempt.begin();
+    if (!requestKey) return;
     setIsSubmitting(true);
     setState(initialState);
 
@@ -234,9 +238,11 @@ export function CreateCounterpartyForm({
         'POST',
         payload,
         resolveRequestHeaders(createdBy, actorAccessScopes),
+        requestKey,
       );
 
       if (!result.ok) {
+        attempt.fail();
         setState({
           error: result.error,
           success: null,
@@ -284,7 +290,9 @@ export function CreateCounterpartyForm({
         error: null,
         success: onSuccess ? '新增成功，已同步到当前列表。' : '新增成功，请刷新查看最新往来单位。',
       });
+      attempt.succeed();
     } catch {
+      attempt.fail();
       setState({
         error: '新增往来单位失败',
         success: null,
@@ -295,7 +303,7 @@ export function CreateCounterpartyForm({
   }
 
   return (
-    <form noValidate onSubmit={handleSubmit} style={formStyle}>
+    <form noValidate onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={formStyle}>
       <div style={gridStyle}>
         <label style={fieldStyle}>
           <span style={labelRowStyle}>类型 Type</span>
@@ -442,7 +450,7 @@ export function CreateCounterpartyForm({
           {state.success}
         </p>
       ) : null}
-      <button type="submit" disabled={isSubmitting} style={buttonStyle}>
+      <button type="submit" disabled={isSubmitting || attempt.isComplete} style={buttonStyle}>
         {isSubmitting ? '提交中...' : '新增往来单位'}
       </button>
     </form>
