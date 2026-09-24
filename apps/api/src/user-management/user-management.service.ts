@@ -49,6 +49,7 @@ const actionCodes = [
   'admin.user.write',
   'admin.role.write',
   'master_data.write',
+  'counterparty.write',
   'sales.quote.write',
   'sales.inquiry.submit',
   'sales.order.write',
@@ -278,6 +279,22 @@ function toAuditLogRecord(record: PrismaOperationLogRecord) {
 @Injectable()
 export class UserManagementService {
   private readonly store = resolveUserManagementStore();
+
+  async listActiveCounterpartyOwners() {
+    const users = this.shouldUsePrisma()
+      ? ((await this.prisma!.user.findMany({ orderBy: { realName: 'asc' } })) as PrismaUserRecord[])
+      : this.store.listUsers();
+    return users
+      .filter((item) => item.status === 'active')
+      .map((item) => ({
+        id: Number(item.id),
+        username: item.username,
+        realName: item.realName,
+        roleCode: item.roleCode,
+        status: item.status,
+        fullAccess: item.fullAccess,
+      }));
+  }
 
   async getCurrentSession(username: string): Promise<{
     role: RoleCode;

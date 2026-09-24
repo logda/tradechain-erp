@@ -2,6 +2,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { CounterpartyRecord } from './counterparty.service';
 
+export type CounterpartyCustomFieldRecord = {
+  id: number;
+  name: string;
+  type: 'text' | 'number' | 'date';
+  createdBy: string;
+  createdAt: string;
+  deletedAt?: string;
+};
+
 export type CounterpartyAuditLogRecord = {
   id: number;
   bizType: 'counterparty';
@@ -18,6 +27,8 @@ type CounterpartyRuntimeState = {
   auditLogs: CounterpartyAuditLogRecord[];
   nextId: number;
   nextAuditLogId: number;
+  customFields: CounterpartyCustomFieldRecord[];
+  nextCustomFieldId: number;
 };
 
 const counterpartyStoreCache = new Map<string, CounterpartyRuntimeStore>();
@@ -109,11 +120,13 @@ function createSeedState(): CounterpartyRuntimeState {
     auditLogs: [],
     nextId: 5,
     nextAuditLogId: 1,
+    customFields: [],
+    nextCustomFieldId: 1,
   };
 }
 
 function cloneCounterparty(record: CounterpartyRecord): CounterpartyRecord {
-  return { ...record };
+  return { ...record, customValues: record.customValues ? { ...record.customValues } : undefined, unitTags: record.unitTags ? [...record.unitTags] : undefined };
 }
 
 function readState(filePath: string): CounterpartyRuntimeState {
@@ -132,6 +145,8 @@ function readState(filePath: string): CounterpartyRuntimeState {
     nextId: typeof parsed.nextId === 'number' ? parsed.nextId : 1,
     nextAuditLogId:
       typeof parsed.nextAuditLogId === 'number' ? parsed.nextAuditLogId : 1,
+    customFields: Array.isArray(parsed.customFields) ? parsed.customFields : [],
+    nextCustomFieldId: typeof parsed.nextCustomFieldId === 'number' ? parsed.nextCustomFieldId : 1,
   };
 }
 
@@ -156,6 +171,21 @@ export class CounterpartyRuntimeStore {
 
   listAuditLogs() {
     return this.state.auditLogs.map((item) => ({ ...item }));
+  }
+
+  listCustomFields() {
+    return this.state.customFields.map((item) => ({ ...item }));
+  }
+
+  saveCustomFields(fields: CounterpartyCustomFieldRecord[]) {
+    this.state.customFields = fields.map((item) => ({ ...item }));
+    this.persist();
+  }
+
+  nextCustomFieldId() {
+    const id = this.state.nextCustomFieldId++;
+    this.persist();
+    return id;
   }
 
   getCounterparty(id: number) {

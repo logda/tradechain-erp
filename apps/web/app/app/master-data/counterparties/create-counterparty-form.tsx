@@ -17,12 +17,15 @@ import {
   buildCounterpartyRequiredFieldMessage,
   counterpartyFieldPlaceholders,
 } from './counterparty-form-schema';
+import { CounterpartyExtraFields, readCounterpartyExtraFields, type CounterpartyCustomField, type CounterpartyExtraValues } from './counterparty-extra-fields';
 
 type CreateCounterpartyFormProps = {
   endpoint: string;
   createdBy: string;
+  actorRole?: string;
   allowedTypes: CounterpartyType[];
   ownerOptions: CounterpartyAssignableUser[];
+  customFields?: CounterpartyCustomField[];
   actorAccessScopes?: {
     modules: string[];
     dataScope: string;
@@ -45,7 +48,7 @@ type CreateCounterpartyFormProps = {
     status: 'active' | 'inactive';
     createdAt: string;
     createdBy: string;
-  }) => void;
+  } & CounterpartyExtraValues) => void;
 };
 
 type FormState = {
@@ -126,11 +129,12 @@ const requiredMarkStyle = {
 
 function resolveRequestHeaders(
   createdBy: string,
+  role: string,
   actorAccessScopes?: CreateCounterpartyFormProps['actorAccessScopes'],
 ) {
   if (actorAccessScopes) {
     return buildFormalRequestHeaders({
-      role: 'admin',
+      role,
       user: createdBy,
       accessScopes: actorAccessScopes,
     });
@@ -138,22 +142,24 @@ function resolveRequestHeaders(
 
   if (typeof window === 'undefined') {
     return buildFormalRequestHeadersFromSearch(new URLSearchParams(), {
-      role: 'admin',
+      role,
       user: createdBy,
     });
   }
 
   return buildFormalRequestHeadersFromSearch(
     new URLSearchParams(window.location.search),
-    { role: 'admin', user: createdBy },
+    { role, user: createdBy },
   );
 }
 
 export function CreateCounterpartyForm({
   endpoint,
   createdBy,
+  actorRole = 'admin',
   allowedTypes,
   ownerOptions,
+  customFields = [],
   actorAccessScopes,
   onSuccess,
 }: CreateCounterpartyFormProps) {
@@ -229,6 +235,7 @@ export function CreateCounterpartyForm({
       bankName: String(formData.get('bankName') ?? ''),
       bankAccount: String(formData.get('bankAccount') ?? ''),
       remark: String(formData.get('remark') ?? ''),
+      ...readCounterpartyExtraFields(formData, customFields),
       createdBy,
     };
 
@@ -237,7 +244,7 @@ export function CreateCounterpartyForm({
         endpoint,
         'POST',
         payload,
-        resolveRequestHeaders(createdBy, actorAccessScopes),
+        resolveRequestHeaders(createdBy, actorRole, actorAccessScopes),
         requestKey,
       );
 
@@ -275,6 +282,7 @@ export function CreateCounterpartyForm({
         status: responseItem?.status ?? 'active',
         createdAt: responseItem?.createdAt ?? new Date().toISOString(),
         createdBy,
+        ...readCounterpartyExtraFields(formData, customFields),
       };
 
       form.reset();
@@ -285,7 +293,7 @@ export function CreateCounterpartyForm({
       );
       setSelectedType(resetType);
       setSelectedOwner(resetOwners[0]?.value ?? '');
-      onSuccess?.(createdItem);
+      onSuccess?.({ ...createdItem, ...responseItem });
       setState({
         error: null,
         success: onSuccess ? '新增成功，已同步到当前列表。' : '新增成功，请刷新查看最新往来单位。',
@@ -303,7 +311,7 @@ export function CreateCounterpartyForm({
   }
 
   return (
-    <form noValidate onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={formStyle}>
+    <form noValidate onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={formStyle}>
       <div style={gridStyle}>
         <label style={fieldStyle}>
           <span style={labelRowStyle}>类型 Type</span>
@@ -336,11 +344,11 @@ export function CreateCounterpartyForm({
         </label>
         <label style={fieldStyle}>
           <span style={labelRowStyle}>
-            <span>单位名称 Name</span>
+            <span>单位简称 Name</span>
             <span aria-hidden="true" style={requiredMarkStyle}>*</span>
           </span>
           <input
-            aria-label="单位名称 Name"
+            aria-label="单位简称 Name"
             name="name"
             required
             placeholder={counterpartyFieldPlaceholders.name}
@@ -348,20 +356,11 @@ export function CreateCounterpartyForm({
           />
         </label>
         <label style={fieldStyle}>
-          <span style={labelRowStyle}>中文名称 Chinese Name</span>
+          <span style={labelRowStyle}>单位全称 Full Name</span>
           <input
-            aria-label="中文名称 Chinese Name"
+            aria-label="单位全称 Full Name"
             name="shortName"
             placeholder={counterpartyFieldPlaceholders.shortName}
-            style={inputStyle}
-          />
-        </label>
-        <label style={fieldStyle}>
-          <span style={labelRowStyle}>所属区域 Region</span>
-          <input
-            aria-label="所属区域 Region"
-            name="region"
-            placeholder={counterpartyFieldPlaceholders.region}
             style={inputStyle}
           />
         </label>
@@ -375,6 +374,7 @@ export function CreateCounterpartyForm({
             name="ownerName"
             value={selectedOwner}
             onChange={(event) => setSelectedOwner(event.target.value)}
+            disabled={actorRole === 'sales' || actorRole === 'purchase'}
             required
             style={inputStyle}
           >
@@ -384,6 +384,14 @@ export function CreateCounterpartyForm({
               </option>
             ))}
           </select>
+        </label>
+      </div>
+      <details>
+        <summary style={{ cursor: 'pointer', color: '#334155', fontWeight: 700 }}>更多资料与自定义字段</summary>
+        <div style={gridStyle}>
+        <label style={fieldStyle}>
+          <span style={labelRowStyle}>所属地区 Region</span>
+          <input aria-label="所属地区 Region" name="region" placeholder={counterpartyFieldPlaceholders.region} style={inputStyle} />
         </label>
         <label style={fieldStyle}>
           <span style={labelRowStyle}>联系人 Contact</span>
@@ -439,7 +447,9 @@ export function CreateCounterpartyForm({
             style={inputStyle}
           />
         </label>
-      </div>
+        </div>
+        <CounterpartyExtraFields type={selectedType} fields={customFields} />
+      </details>
       {state.error ? (
         <p role="alert" style={{ margin: 0, color: '#b91c1c', fontSize: '13px' }}>
           {state.error}

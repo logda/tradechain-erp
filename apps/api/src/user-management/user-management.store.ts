@@ -58,6 +58,7 @@ type RuntimeState = {
   auditLogs: AuditLogRecord[];
   nextUserId: number;
   nextAuditLogId: number;
+  counterpartyActionMigrated?: boolean;
 };
 
 const runtimeStoreCache = new Map<string, UserManagementRuntimeStore>();
@@ -71,6 +72,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
       'admin.user.write',
       'admin.role.write',
       'master_data.write',
+      'counterparty.write',
       'sales.quote.write',
       'sales.inquiry.submit',
       'sales.order.write',
@@ -91,6 +93,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
     modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'audit'],
     dataScope: 'all',
     actions: [
+      'counterparty.write',
       'sales.order.write',
       'sales.sample.approve',
       'purchase.order.approve',
@@ -103,6 +106,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
     modules: ['sales', 'boss_dashboard'],
     dataScope: 'sales_team',
     actions: [
+      'counterparty.write',
       'sales.quote.write',
       'sales.inquiry.submit',
       'sales.order.write',
@@ -115,6 +119,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
     modules: ['sales'],
     dataScope: 'own_sales',
     actions: [
+      'counterparty.write',
       'sales.quote.write',
       'sales.inquiry.submit',
       'sales.order.write',
@@ -126,6 +131,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
     modules: ['purchase', 'operations', 'boss_dashboard'],
     dataScope: 'purchase_team',
     actions: [
+      'counterparty.write',
       'purchase.order.create',
       'purchase.order.submit',
       'purchase.order.approve',
@@ -138,6 +144,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
     modules: ['purchase', 'operations'],
     dataScope: 'own_purchase',
     actions: [
+      'counterparty.write',
       'purchase.order.create',
       'purchase.order.submit',
       'purchase.sample.execute',
@@ -212,6 +219,7 @@ function createSeedState(): RuntimeState {
     auditLogs: [],
     nextUserId: 5,
     nextAuditLogId: 1,
+    counterpartyActionMigrated: true,
   };
 }
 
@@ -229,6 +237,7 @@ function cloneState(state: RuntimeState): RuntimeState {
     auditLogs: state.auditLogs.map((item) => ({ ...item })),
     nextUserId: state.nextUserId,
     nextAuditLogId: state.nextAuditLogId,
+    counterpartyActionMigrated: state.counterpartyActionMigrated,
   };
 }
 
@@ -242,7 +251,7 @@ function readState(filePath: string): RuntimeState {
   }
 
   const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as Partial<RuntimeState>;
-  return {
+  const state: RuntimeState = {
     users: Array.isArray(parsed.users) ? (parsed.users as UserRecord[]) : [],
     rolePermissions: Array.isArray(parsed.rolePermissions)
       ? (parsed.rolePermissions as RolePermissionRecord[])
@@ -253,7 +262,19 @@ function readState(filePath: string): RuntimeState {
     nextUserId: typeof parsed.nextUserId === 'number' ? parsed.nextUserId : 1,
     nextAuditLogId:
       typeof parsed.nextAuditLogId === 'number' ? parsed.nextAuditLogId : 1,
+    counterpartyActionMigrated: true,
   };
+  if (!parsed.counterpartyActionMigrated) {
+    state.rolePermissions = state.rolePermissions.map((item) => ({
+      ...item,
+      accessScopes: {
+        ...item.accessScopes,
+        actions: [...new Set([...(item.accessScopes.actions ?? []), 'counterparty.write'])],
+      },
+    }));
+    writeState(filePath, state);
+  }
+  return state;
 }
 
 function writeState(filePath: string, state: RuntimeState) {

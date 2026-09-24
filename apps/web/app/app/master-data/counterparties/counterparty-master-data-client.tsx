@@ -6,9 +6,11 @@ import { FormalPagination } from '../../_components/formal-pagination';
 import { CreateCounterpartyForm } from './create-counterparty-form';
 import { CounterpartyTableRow } from './counterparty-table-row';
 import { normalizeCounterpartyDisplayItem } from './counterparty-display';
+import { CounterpartyCustomFieldManager } from './counterparty-custom-field-manager';
+import type { CounterpartyCustomField, CounterpartyExtraValues } from './counterparty-extra-fields';
 import type { CounterpartyAssignableUser, CounterpartyType } from './owner-options';
 
-type CounterpartyListItem = {
+type CounterpartyListItem = CounterpartyExtraValues & {
   id: number;
   type: CounterpartyType;
   code: string;
@@ -35,8 +37,13 @@ type CounterpartyMasterDataClientProps = {
   page: number;
   pageSize: number;
   canManageMasterData: boolean;
+  canChangeStatus?: boolean;
+  canConfigureFields?: boolean;
+  actorRole?: string;
   allowedTypes: CounterpartyType[];
+  createTypes?: CounterpartyType[];
   assignableUsers: CounterpartyAssignableUser[];
+  customFields?: CounterpartyCustomField[];
   updatedBy: string;
   actorAccessScopes?: {
     modules: string[];
@@ -82,7 +89,7 @@ const tableWrapStyle = {
 const tableStyle = {
   width: '100%',
   borderCollapse: 'collapse' as const,
-  minWidth: '1180px',
+  minWidth: '760px',
 } satisfies React.CSSProperties;
 
 const headCellStyle = {
@@ -159,8 +166,13 @@ export function CounterpartyMasterDataClient({
   page,
   pageSize,
   canManageMasterData,
+  canChangeStatus = true,
+  canConfigureFields = false,
+  actorRole = 'admin',
   allowedTypes,
+  createTypes,
   assignableUsers,
+  customFields: initialCustomFields = [],
   updatedBy,
   actorAccessScopes,
   requestHeaders,
@@ -173,6 +185,7 @@ export function CounterpartyMasterDataClient({
     initialItems.map(normalizeCounterpartyDisplayItem),
   );
   const [total, setTotal] = useState(initialTotal);
+  const [customFields, setCustomFields] = useState(initialCustomFields);
 
   function handleCreated(nextItem: CounterpartyListItem) {
     const normalizedItem = normalizeCounterpartyDisplayItem(nextItem);
@@ -194,29 +207,33 @@ export function CounterpartyMasterDataClient({
   return (
     <>
       <section style={sectionStyle}>
-        <h3 style={{ marginTop: 0 }}>
-          {canManageMasterData ? '新增往来单位' : '只读权限说明'}
-        </h3>
-        <p style={{ color: '#475569', lineHeight: 1.7 }}>
-          {canManageMasterData
-            ? '正式版按分类、单位名称、单位编码、所属区域、所属人员、联系人、联系号码、地址、开户银行、银行账号、备注统一维护；删除采用停用/注销，不做物理删除。'
-            : '当前角色仅可查询授权范围内的往来单位，不显示新增、编辑和停用入口。'}
-        </p>
+        <h3 style={{ marginTop: 0 }}>{canManageMasterData ? '新增往来单位' : '往来单位'}</h3>
         {canManageMasterData ? (
           <CreateCounterpartyForm
             endpoint={`${apiBaseUrl}/counterparties`}
             createdBy={updatedBy}
-            allowedTypes={allowedTypes}
+            actorRole={actorRole}
+            allowedTypes={createTypes ?? allowedTypes}
             ownerOptions={assignableUsers}
+            customFields={customFields}
             actorAccessScopes={actorAccessScopes}
             onSuccess={handleCreated}
           />
         ) : (
           <p style={{ color: '#64748b', marginBottom: 0 }}>
-            如需维护客户或供应商资料，请切换到具备 master_data.write 的管理员账号。
+            当前账号无往来单位维护权限。
           </p>
         )}
       </section>
+
+      {canConfigureFields ? (
+        <CounterpartyCustomFieldManager
+          fields={customFields}
+          onChange={setCustomFields}
+          endpoint={`${apiBaseUrl}/counterparties/custom-fields`}
+          requestHeaders={requestHeaders}
+        />
+      ) : null}
 
       <section style={sectionStyle}>
         <div style={listHeaderStyle}>
@@ -237,14 +254,10 @@ export function CounterpartyMasterDataClient({
               <tr>
                 <th style={headCellStyle}>类型 Type</th>
                 <th style={headCellStyle}>编码 Code</th>
-                <th style={headCellStyle}>单位名称 / 中文名称</th>
-                <th style={headCellStyle}>所属区域 / 所属人员</th>
-                <th style={headCellStyle}>联系人 / 联系号码</th>
-                <th style={headCellStyle}>地址</th>
-                <th style={headCellStyle}>开户银行 / 银行账号</th>
-                <th style={headCellStyle}>备注 / 状态</th>
-                <th style={headCellStyle}>编辑 Edit</th>
-                <th style={headCellStyle}>操作 Action</th>
+                <th style={headCellStyle}>单位简称 / 单位全称</th>
+                <th style={headCellStyle}>所属人员</th>
+                <th style={headCellStyle}>状态</th>
+                <th style={headCellStyle}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -253,8 +266,11 @@ export function CounterpartyMasterDataClient({
                   key={item.id}
                   item={item}
                   canManageMasterData={canManageMasterData}
+                  canChangeStatus={canChangeStatus}
+                  actorRole={actorRole}
                   allowedTypes={allowedTypes}
                   ownerOptions={assignableUsers}
+                  customFields={customFields}
                   updatedBy={updatedBy}
                   actorAccessScopes={actorAccessScopes}
                   requestHeaders={requestHeaders}

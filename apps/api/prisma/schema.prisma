@@ -60,6 +60,13 @@ model Counterparty {
   email             String?   @db.VarChar(128)
   region            String?   @db.VarChar(64)
   paymentTerms      String?   @db.VarChar(255)
+  paymentMethod      String?   @db.VarChar(255)
+  settlementMethod   String?   @db.VarChar(255)
+  unitTags           Json?
+  openingReceivable Decimal?  @db.Decimal(18, 2)
+  payableReceivable Decimal?  @db.Decimal(18, 2)
+  moldFee            Decimal?  @db.Decimal(18, 2)
+  customValues       Json?
   ownerName         String    @db.VarChar(64)
   status            String    @db.VarChar(16)
   createdBy         String    @db.VarChar(64)
@@ -72,6 +79,17 @@ model Counterparty {
 
   @@index([type, status])
   @@index([ownerName])
+}
+
+model CounterpartyCustomField {
+  id        BigInt    @id @default(autoincrement())
+  name      String    @db.VarChar(64)
+  type      String    @db.VarChar(16)
+  createdBy String    @db.VarChar(64)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([deletedAt])
 }
 
 model Product {

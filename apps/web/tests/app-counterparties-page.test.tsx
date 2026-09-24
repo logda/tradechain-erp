@@ -4,6 +4,7 @@ import { CounterpartyTableRow } from '../app/app/master-data/counterparties/coun
 import { CreateCounterpartyForm } from '../app/app/master-data/counterparties/create-counterparty-form';
 import { UpdateCounterpartyForm } from '../app/app/master-data/counterparties/update-counterparty-form';
 import AppCounterpartiesPage from '../app/app/master-data/counterparties/page';
+import { CounterpartyCustomFieldManager } from '../app/app/master-data/counterparties/counterparty-custom-field-manager';
 
 const mockAssignableUsers = [
   {
@@ -66,7 +67,7 @@ describe('formal counterparty master data page', () => {
       'fetch',
       vi.fn().mockImplementation((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.includes('/admin/users?')) {
+        if (url.includes('/counterparties/owners?')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({
@@ -180,15 +181,15 @@ describe('formal counterparty master data page', () => {
     expect(screen.getByText('Acme Trading')).toBeInTheDocument();
     expect(screen.getByText('Bravo Industrial')).toBeInTheDocument();
     expect(
-      screen.getByText((_, element) => element?.textContent === '中文名称: 星河贸易'),
+      screen.getByText((_, element) => element?.textContent === '星河贸易'),
     ).toBeInTheDocument();
     expect(
-      screen.getByText((_, element) => element?.textContent === '中文名称: 光源制造'),
+      screen.getByText((_, element) => element?.textContent === '光源制造'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Bank of America')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: '查看详情' })[0]!);
+    expect(screen.getByText('开户银行：Bank of America')).toBeInTheDocument();
     expect(screen.getAllByRole('option', { name: 'Zoe / 销售' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('option', { name: 'Leo / 采购' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('未填写').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: '新增往来单位' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '查询' })).toHaveClass(
       'erp-button',
@@ -199,7 +200,7 @@ describe('formal counterparty master data page', () => {
     );
     expect(screen.getAllByRole('button', { name: '停用' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: '启用' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: '单位名称 / 中文名称' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '单位简称 / 单位全称' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '审计日志' })).toBeInTheDocument();
     expect(screen.getByText('创建往来单位 / create_counterparty')).toBeInTheDocument();
   });
@@ -209,7 +210,7 @@ describe('formal counterparty master data page', () => {
       'fetch',
       vi.fn().mockImplementation((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.includes('/admin/users?')) {
+        if (url.includes('/counterparties/owners?')) {
           return Promise.resolve({
             ok: true,
             json: async () => ({
@@ -275,13 +276,12 @@ describe('formal counterparty master data page', () => {
 
     expect(screen.getByRole('button', { name: '保存编辑' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '收起编辑' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '关闭面板' })).toBeInTheDocument();
   });
 
   it('passes pagination params to the counterparty api and renders pagination controls', async () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('/admin/users?')) {
+      if (url.includes('/counterparties/owners?')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -414,6 +414,9 @@ describe('formal counterparty master data page', () => {
                 createdBy: 'system',
               },
             ],
+            total: 1,
+            page: 1,
+            pageSize: 20,
           }),
         });
       }),
@@ -439,7 +442,7 @@ describe('formal counterparty master data page', () => {
 
     expect(screen.getByText('Acme Trading')).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: '只读权限说明' }),
+      screen.getByRole('heading', { name: '往来单位' }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '新增往来单位' }),
@@ -471,7 +474,7 @@ describe('formal counterparty master data page', () => {
         actorAccessScopes={{
           modules: ['admin'],
           dataScope: 'all',
-          actions: ['master_data.write'],
+          actions: ['counterparty.write'],
         }}
       />,
     );
@@ -482,13 +485,13 @@ describe('formal counterparty master data page', () => {
     fireEvent.change(screen.getByLabelText('编码 Code'), {
       target: { value: 'CUST-OMEGA' },
     });
-    fireEvent.change(screen.getByLabelText('单位名称 Name'), {
+    fireEvent.change(screen.getByLabelText('单位简称 Name'), {
       target: { value: 'Omega Retail' },
     });
-    fireEvent.change(screen.getByLabelText('中文名称 Chinese Name'), {
+    fireEvent.change(screen.getByLabelText('单位全称 Full Name'), {
       target: { value: 'Omega' },
     });
-    fireEvent.change(screen.getByLabelText('所属区域 Region'), {
+    fireEvent.change(screen.getByLabelText('所属地区 Region'), {
       target: { value: 'Shanghai' },
     });
     fireEvent.change(screen.getByLabelText('所属人员 Owner'), {
@@ -523,7 +526,7 @@ describe('formal counterparty master data page', () => {
         method: 'POST',
         body: expect.stringContaining('CUST-OMEGA'),
         headers: expect.objectContaining({
-          'x-erp-actions': 'master_data.write',
+          'x-erp-actions': 'counterparty.write',
         }),
       }),
     );
@@ -538,7 +541,7 @@ describe('formal counterparty master data page', () => {
   it('inserts the created counterparty into the current list without manual refresh', async () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.includes('/admin/users?')) {
+      if (url.includes('/counterparties/owners?')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -615,7 +618,7 @@ describe('formal counterparty master data page', () => {
     fireEvent.change(screen.getByLabelText('编码 Code'), {
       target: { value: 'CUST-OMEGA' },
     });
-    fireEvent.change(screen.getByLabelText('单位名称 Name'), {
+    fireEvent.change(screen.getByLabelText('单位简称 Name'), {
       target: { value: 'Omega Retail' },
     });
     fireEvent.change(screen.getByLabelText('所属人员 Owner'), {
@@ -679,7 +682,7 @@ describe('formal counterparty master data page', () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          '请完整填写以下必填项：单位编码、单位名称',
+          '请完整填写以下必填项：单位编码、单位简称',
         ),
       ).toBeInTheDocument();
     });
@@ -697,13 +700,13 @@ describe('formal counterparty master data page', () => {
     );
 
     expect(screen.getByLabelText('编码 Code')).toHaveStyle({ minHeight: '46px' });
-    expect(screen.getByLabelText('单位名称 Name')).toHaveStyle({ minHeight: '46px' });
+    expect(screen.getByLabelText('单位简称 Name')).toHaveStyle({ minHeight: '46px' });
     expect(screen.getByLabelText('所属人员 Owner')).toHaveStyle({ minHeight: '46px' });
 
     expect(screen.getByText(/编码 Code/).parentElement).toHaveTextContent('*');
-    expect(screen.getByText(/单位名称 Name/).parentElement).toHaveTextContent('*');
+    expect(screen.getByText(/单位简称 Name/).parentElement).toHaveTextContent('*');
     expect(screen.getByText(/所属人员 Owner/).parentElement).toHaveTextContent('*');
-    expect(screen.getByText(/中文名称 Chinese Name/).parentElement).not.toHaveTextContent('*');
+    expect(screen.getByText(/单位全称 Full Name/).parentElement).not.toHaveTextContent('*');
     expect(screen.getByText(/联系人 Contact/).parentElement).not.toHaveTextContent('*');
   });
 
@@ -766,13 +769,13 @@ describe('formal counterparty master data page', () => {
     );
 
     expect(screen.getByLabelText('编码 Code CUST-ACME')).toHaveStyle({ minHeight: '42px' });
-    expect(screen.getByLabelText('单位名称 Name CUST-ACME')).toHaveStyle({ minHeight: '42px' });
+    expect(screen.getByLabelText('单位简称 Name CUST-ACME')).toHaveStyle({ minHeight: '42px' });
     expect(screen.getByLabelText('所属人员 Owner CUST-ACME')).toHaveStyle({ minHeight: '42px' });
 
     expect(screen.getByText(/单位编码 Code/).parentElement).toHaveTextContent('*');
-    expect(screen.getByText(/单位名称 Name/).parentElement).toHaveTextContent('*');
+    expect(screen.getByText(/单位简称 Name/).parentElement).toHaveTextContent('*');
     expect(screen.getByText(/所属人员 Owner/).parentElement).toHaveTextContent('*');
-    expect(screen.getByText(/中文名称 Chinese Name/).parentElement).not.toHaveTextContent('*');
+    expect(screen.getByText(/单位全称 Full Name/).parentElement).not.toHaveTextContent('*');
     expect(screen.getByText(/联系人 Contact/).parentElement).not.toHaveTextContent('*');
   });
 
@@ -878,8 +881,55 @@ describe('formal counterparty master data page', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '启用' })).toBeInTheDocument();
-      expect(screen.getByText('inactive')).toBeInTheDocument();
-      expect(screen.getByText('业务停用')).toBeInTheDocument();
+      expect(screen.getByText('停用')).toBeInTheDocument();
     });
+  });
+
+  it('submits type-specific amounts, tags, and custom values from the collapsed section', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 99, status: 'active' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<CreateCounterpartyForm
+      endpoint="http://127.0.0.1:3001/api/counterparties"
+      createdBy="Zoe"
+      actorRole="sales"
+      allowedTypes={['customer']}
+      ownerOptions={[mockAssignableUsers[3]!]}
+      customFields={[{ id: 7, name: '合作日期', type: 'date' }]}
+    />);
+    expect(screen.getByLabelText('所属人员 Owner')).toBeDisabled();
+    const details = screen.getByText('更多资料与自定义字段').closest('details');
+    expect(details).not.toHaveAttribute('open');
+    fireEvent.change(screen.getByLabelText('编码 Code'), { target: { value: 'CUST-NEW' } });
+    fireEvent.change(screen.getByLabelText('单位简称 Name'), { target: { value: '新客户' } });
+    fireEvent.click(screen.getByText('更多资料与自定义字段'));
+    fireEvent.change(screen.getByLabelText('单位标签（逗号分隔）'), { target: { value: '重点，长期' } });
+    fireEvent.change(screen.getByLabelText('期初应收款'), { target: { value: '125.50' } });
+    fireEvent.change(screen.getByLabelText('模具费用'), { target: { value: '20' } });
+    fireEvent.change(screen.getByLabelText('合作日期'), { target: { value: '2026-09-24' } });
+    fireEvent.click(screen.getByRole('button', { name: '新增往来单位' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({ ownerName: 'Zoe', openingReceivable: '125.50', moldFee: '20', unitTags: ['重点', '长期'], customValues: { '7': '2026-09-24' } });
+    expect(body).not.toHaveProperty('payableReceivable');
+  });
+
+  it('requires confirmation before deleting a custom field and frees the visible slot', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 3, deleted: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+    const onChange = vi.fn();
+    render(<CounterpartyCustomFieldManager
+      fields={[{ id: 3, name: '旧字段', type: 'text' }]}
+      onChange={onChange}
+      endpoint="http://127.0.0.1:3001/api/counterparties/custom-fields"
+      requestHeaders={{ 'x-erp-role': 'boss', 'x-erp-user': 'Mia' }}
+    />);
+    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith([]));
   });
 });

@@ -111,13 +111,14 @@ describe('formal role controller metadata', () => {
       );
     });
 
-    [ProductController, CounterpartyController, UserManagementController].forEach(
+    [ProductController, UserManagementController].forEach(
       (controller) => {
         expect(getClassGuards(controller)).toEqual(
           expect.arrayContaining([AdminOnlyGuard]),
         );
       },
     );
+    expect(getClassGuards(CounterpartyController)).toEqual(expect.arrayContaining([FormalRoleGuard]));
   });
 
   it('declares dynamic module permissions on formal business controllers', () => {
@@ -152,11 +153,12 @@ describe('formal role controller metadata', () => {
   });
 
   it('declares dynamic module permissions on admin-only controllers', () => {
-    [ProductController, CounterpartyController, UserManagementController].forEach(
+    [ProductController, UserManagementController].forEach(
       (controller) => {
         expect(getClassModules(controller)).toEqual(['admin']);
       },
     );
+    expect(getClassAnyModules(CounterpartyController)).toEqual(['sales', 'purchase']);
   });
 
   it('uses the formal role guard on core business controllers', () => {

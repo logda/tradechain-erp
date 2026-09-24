@@ -8,21 +8,21 @@ import {
 import { hasValidAuditLogResponse } from '../../_lib/audit-log';
 import { buildFormalRequestHeaders } from '../../_lib/formal-request-headers';
 import { canUseFormalMasterDataActions } from '../../_lib/formal-access';
-import { normalizePageNumber, paginateItems } from '../../_lib/formal-pagination';
+import { normalizePageNumber } from '../../_lib/formal-pagination';
 import { normalizeCounterpartyDisplayItem } from './counterparty-display';
 import { CounterpartyMasterDataClient } from './counterparty-master-data-client';
 import { CounterpartyFilterForm } from './counterparty-filter-form';
 import { buildFormalApiRequestHeaders } from '../../_lib/formal-api-request-headers';
 import {
   buildCounterpartyOwnerOptions,
-  fallbackCounterpartyAssignableUsers,
   type CounterpartyAssignableUser,
   type CounterpartyType,
 } from './owner-options';
+import type { CounterpartyCustomField, CounterpartyExtraValues } from './counterparty-extra-fields';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-type CounterpartyListItem = {
+type CounterpartyListItem = CounterpartyExtraValues & {
   id: number;
   type: CounterpartyType;
   code: string;
@@ -52,9 +52,6 @@ type CounterpartyListResponse = {
 
 type AssignableUserListResponse = {
   items: CounterpartyAssignableUser[];
-  total: number;
-  page: number;
-  pageSize: number;
 };
 
 const typeLabels: Record<CounterpartyType, string> = {
@@ -62,45 +59,6 @@ const typeLabels: Record<CounterpartyType, string> = {
   supplier: '供应商 Supplier',
   both: '客户兼供应商 Both',
 };
-
-const fallbackItems: CounterpartyListItem[] = [
-  {
-    id: 1,
-    type: 'customer',
-    code: 'CUST-ACME',
-    name: 'Acme Trading',
-    shortName: 'Acme',
-    region: 'United States',
-    ownerName: 'Zoe',
-    contactName: 'Amy Chen',
-    phone: '+1-202-555-0101',
-    address: 'Los Angeles Harbor 88 号',
-    bankName: 'Bank of America',
-    bankAccount: '1234567890',
-    remark: '北美客户',
-    status: 'active',
-    createdAt: '2026-07-11T09:00:00.000Z',
-    createdBy: 'system',
-  },
-  {
-    id: 2,
-    type: 'supplier',
-    code: 'SUP-BRAVO',
-    name: 'Bravo Industrial',
-    shortName: 'Bravo',
-    region: 'Shenzhen',
-    ownerName: 'Leo',
-    contactName: 'Ben Li',
-    phone: '+86-755-5555-0102',
-    address: 'Shenzhen Baoan 99 号',
-    bankName: '平安银行深圳分行',
-    bankAccount: '6222000000000002',
-    remark: '华南供应商',
-    status: 'active',
-    createdAt: '2026-07-11T09:05:00.000Z',
-    createdBy: 'system',
-  },
-];
 
 const toolbarStyle = {
   display: 'flex',
@@ -196,6 +154,12 @@ function getAllowedTypes(session: DemoSession): CounterpartyType[] {
   return ['customer', 'supplier', 'both'];
 }
 
+function getCreateTypes(session: DemoSession): CounterpartyType[] {
+  if (session.role === 'sales' || session.role === 'sales_manager') return ['customer'];
+  if (session.role === 'purchase' || session.role === 'purchase_manager') return ['supplier'];
+  return ['customer', 'supplier', 'both'];
+}
+
 function getDefaultType(session: DemoSession): CounterpartyType | null {
   if (session.role === 'sales' || session.role === 'sales_manager') {
     return 'customer';
@@ -277,7 +241,7 @@ async function loadAssignableUsers(
       pageSize: '200',
     });
     const response = await fetch(
-      `${getCounterpartyApiBaseUrl()}/admin/users?${params.toString()}`,
+      `${getCounterpartyApiBaseUrl()}/counterparties/owners?${params.toString()}`,
       {
         cache: 'no-store',
         headers: buildFormalApiRequestHeaders(session),
@@ -285,16 +249,25 @@ async function loadAssignableUsers(
     );
 
     if (!response.ok) {
-      return fallbackCounterpartyAssignableUsers;
+      return [];
     }
 
     const result = (await response.json().catch(() => null)) as unknown;
     return hasValidAssignableUserListResponse(result)
       ? result.items
-      : fallbackCounterpartyAssignableUsers;
+      : [];
   } catch {
-    return fallbackCounterpartyAssignableUsers;
+    return [];
   }
+}
+
+async function loadCustomFields(session: DemoSession): Promise<CounterpartyCustomField[]> {
+  try {
+    const response = await fetch(`${getCounterpartyApiBaseUrl()}/counterparties/custom-fields`, { cache: 'no-store', headers: buildFormalApiRequestHeaders(session) });
+    if (!response.ok) return [];
+    const result = await response.json();
+    return Array.isArray(result) ? result : [];
+  } catch { return []; }
 }
 
 async function loadCounterparties(
@@ -336,46 +309,6 @@ async function loadAuditLogs(session: DemoSession) {
   }
 }
 
-function filterFallbackItems(
-  items: CounterpartyListItem[],
-  query: ReturnType<typeof buildQuery>,
-) {
-  return items.filter((item) => {
-    if (query.type && item.type !== query.type && item.type !== 'both') {
-      return false;
-    }
-
-    if (query.status && item.status !== query.status) {
-      return false;
-    }
-
-    const keyword = query.keyword?.toLowerCase();
-    if (
-      keyword &&
-      ![
-        item.code,
-        item.name,
-        item.shortName,
-        item.region,
-        item.ownerName,
-        item.contactName,
-        item.phone,
-        item.address,
-        item.bankName,
-        item.bankAccount,
-        item.remark,
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(keyword)
-    ) {
-      return false;
-    }
-
-    return !query.ownerName || item.ownerName === query.ownerName;
-  });
-}
-
 function describeDefaultType(type: CounterpartyType | null) {
   if (!type) {
     return '全部 All';
@@ -392,20 +325,15 @@ export default async function AppCounterpartiesPage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = resolveDemoSession(resolvedSearchParams);
   const allowedTypes = getAllowedTypes(session);
-  const canManageMasterData = canUseFormalMasterDataActions(session);
+  const canManageMasterData = session.accessScopes?.actions?.includes('counterparty.write') ?? true;
   const query = buildQuery(resolvedSearchParams, session);
-  const [result, auditLogs, assignableUsers] = await Promise.all([
+  const [result, auditLogs, assignableUsers, customFields] = await Promise.all([
     loadCounterparties(query, session),
-    loadAuditLogs(session),
+    session.role === 'admin' ? loadAuditLogs(session) : Promise.resolve(null),
     loadAssignableUsers(session),
+    loadCustomFields(session),
   ]);
-  const loadedCounterpartyResult =
-    result ??
-    paginateItems(
-      filterFallbackItems(fallbackItems, query),
-      query.page,
-      query.pageSize,
-    );
+  const loadedCounterpartyResult = result ?? { items: [], total: 0, page: query.page, pageSize: query.pageSize };
   const counterpartyResult = {
     ...loadedCounterpartyResult,
     items: loadedCounterpartyResult.items.map(normalizeCounterpartyDisplayItem),
@@ -428,14 +356,21 @@ export default async function AppCounterpartiesPage({
         </span>
       </div>
 
+      {!result ? <p role="alert" style={{ color: '#b91c1c' }}>往来单位加载失败，请检查服务后刷新页面。</p> : null}
+
       <CounterpartyMasterDataClient
         initialItems={counterpartyResult.items}
         initialTotal={counterpartyResult.total}
         page={counterpartyResult.page}
         pageSize={counterpartyResult.pageSize}
         canManageMasterData={canManageMasterData}
+        canChangeStatus={session.role === 'admin' && canUseFormalMasterDataActions(session)}
+        canConfigureFields={(session.role === 'admin' || session.role === 'boss') && canManageMasterData}
+        actorRole={session.role}
         allowedTypes={allowedTypes}
+        createTypes={getCreateTypes(session)}
         assignableUsers={assignableUsers}
+        customFields={customFields}
         updatedBy={session.user}
         actorAccessScopes={session.accessScopes}
         requestHeaders={masterDataRequestHeaders}

@@ -82,6 +82,7 @@ export default async function AppMasterDataPage({
   }
 
   const canEditMasterData = canUseFormalMasterDataActions(session);
+  const canEditCounterparties = session.accessScopes?.actions?.includes('counterparty.write') ?? true;
 
   return (
     <AppShell
@@ -92,7 +93,7 @@ export default async function AppMasterDataPage({
       <StatStrip
         items={[
           { label: '主数据范围', value: '客户 / 供应商 / SKU' },
-          { label: '写入权限', value: canEditMasterData ? '可编辑' : '只读' },
+          { label: '写入权限', value: canEditMasterData || canEditCounterparties ? '可编辑' : '只读' },
           { label: '业务覆盖', value: '销售 / 采购 / 运营' },
         ]}
       />
@@ -147,7 +148,7 @@ export default async function AppMasterDataPage({
       <section style={sectionStyle}>
         <div>
           <h2 style={titleStyle}>快捷入口</h2>
-          <p style={metaStyle}>管理员可以直接从这里新增和维护主数据。</p>
+          <p style={metaStyle}>按当前岗位权限进入对应的主数据页面。</p>
         </div>
         <div style={quickActionStyle}>
           <Link href="/app/master-data/counterparties" style={quickActionLinkStyle}>
@@ -158,7 +159,7 @@ export default async function AppMasterDataPage({
               查看商品 / SKU
             </Link>
           ) : null}
-          {canEditMasterData ? (
+          {canEditCounterparties ? (
             <Link href="/app/master-data/counterparties" style={quickActionLinkStyle}>
               新增往来单位
             </Link>

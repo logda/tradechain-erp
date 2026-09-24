@@ -1,8 +1,8 @@
 export const counterpartyFieldLabels = {
   code: '单位编码',
-  name: '单位名称',
-  shortName: '中文名称',
-  region: '所属区域',
+  name: '单位简称',
+  shortName: '单位全称',
+  region: '所属地区',
   ownerName: '所属人员',
   contactName: '联系人',
   phone: '联系号码',
@@ -28,9 +28,9 @@ export const counterpartyFieldPlaceholders: Record<
   string
 > = {
   code: '请输入单位编码',
-  name: '请输入单位名称',
-  shortName: '请输入中文名称',
-  region: '请输入所属区域',
+  name: '请输入单位简称',
+  shortName: '请输入单位全称',
+  region: '请输入所属地区',
   ownerName: '请选择所属人员',
   contactName: '请输入联系人',
   phone: '请输入联系号码',

@@ -82,6 +82,7 @@ async function seedRolePermissions() {
       dataScope: 'all',
       actions: [
         'admin.user.write',
+        'counterparty.write',
         'admin.role.write',
         'master_data.write',
         'sales.quote.write',
@@ -105,6 +106,7 @@ async function seedRolePermissions() {
       dataScope: 'all',
       actions: [
         'sales.order.write',
+        'counterparty.write',
         'sales.sample.approve',
         'purchase.order.approve',
         'after_sales.process',
@@ -118,6 +120,7 @@ async function seedRolePermissions() {
       dataScope: 'sales_team',
       actions: [
         'sales.quote.write',
+        'counterparty.write',
         'sales.inquiry.submit',
         'sales.order.write',
         'sales.sample.submit',
@@ -131,6 +134,7 @@ async function seedRolePermissions() {
       dataScope: 'own_sales',
       actions: [
         'sales.quote.write',
+        'counterparty.write',
         'sales.inquiry.submit',
         'sales.order.write',
         'sales.sample.submit',
@@ -143,6 +147,7 @@ async function seedRolePermissions() {
       dataScope: 'purchase_team',
       actions: [
         'purchase.order.create',
+        'counterparty.write',
         'purchase.order.submit',
         'purchase.order.approve',
         'shipment.update',
@@ -155,6 +160,7 @@ async function seedRolePermissions() {
       dataScope: 'own_purchase',
       actions: [
         'purchase.order.create',
+        'counterparty.write',
         'purchase.order.submit',
         'shipment.update',
         'after_sales.process',

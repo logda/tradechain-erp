@@ -17,8 +17,9 @@ import {
   buildCounterpartyRequiredFieldMessage,
   counterpartyFieldPlaceholders,
 } from './counterparty-form-schema';
+import { CounterpartyExtraFields, readCounterpartyExtraFields, type CounterpartyCustomField, type CounterpartyExtraValues } from './counterparty-extra-fields';
 
-type CounterpartyEditableItem = {
+type CounterpartyEditableItem = CounterpartyExtraValues & {
   id: number;
   type: CounterpartyType;
   code: string;
@@ -38,8 +39,10 @@ type UpdateCounterpartyFormProps = {
   endpoint: string;
   item: CounterpartyEditableItem;
   updatedBy: string;
+  actorRole?: string;
   allowedTypes: CounterpartyType[];
   ownerOptions: CounterpartyAssignableUser[];
+  customFields?: CounterpartyCustomField[];
   actorAccessScopes?: {
     modules: string[];
     dataScope: string;
@@ -115,11 +118,12 @@ const requiredMarkStyle = {
 
 function resolveRequestHeaders(
   updatedBy: string,
+  role: string,
   actorAccessScopes?: UpdateCounterpartyFormProps['actorAccessScopes'],
 ) {
   if (actorAccessScopes) {
     return buildFormalRequestHeaders({
-      role: 'admin',
+      role,
       user: updatedBy,
       accessScopes: actorAccessScopes,
     });
@@ -127,14 +131,14 @@ function resolveRequestHeaders(
 
   if (typeof window === 'undefined') {
     return buildFormalRequestHeadersFromSearch(new URLSearchParams(), {
-      role: 'admin',
+      role,
       user: updatedBy,
     });
   }
 
   return buildFormalRequestHeadersFromSearch(
     new URLSearchParams(window.location.search),
-    { role: 'admin', user: updatedBy },
+    { role, user: updatedBy },
   );
 }
 
@@ -142,8 +146,10 @@ export function UpdateCounterpartyForm({
   endpoint,
   item,
   updatedBy,
+  actorRole = 'admin',
   allowedTypes,
   ownerOptions,
+  customFields = [],
   actorAccessScopes,
   onSuccess,
 }: UpdateCounterpartyFormProps) {
@@ -151,7 +157,7 @@ export function UpdateCounterpartyForm({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const attempt = useMutationAttempt();
-  const canEditType = allowedTypes.includes(item.type);
+  const canEditType = (actorRole === 'admin' || actorRole === 'boss') && allowedTypes.includes(item.type);
   const allOwnerOptions = buildCounterpartyOwnerOptions(ownerOptions);
   const [selectedType, setSelectedType] = useState<CounterpartyType>(item.type);
   const [selectedOwner, setSelectedOwner] = useState(item.ownerName);
@@ -216,9 +222,10 @@ export function UpdateCounterpartyForm({
           bankName: String(formData.get('bankName') ?? ''),
           bankAccount: String(formData.get('bankAccount') ?? ''),
           remark: String(formData.get('remark') ?? ''),
+          ...readCounterpartyExtraFields(formData, customFields),
           updatedBy,
         },
-        resolveRequestHeaders(updatedBy, actorAccessScopes),
+        resolveRequestHeaders(updatedBy, actorRole, actorAccessScopes),
         requestKey,
       );
 
@@ -242,6 +249,7 @@ export function UpdateCounterpartyForm({
         bankName: String(formData.get('bankName') ?? '').trim(),
         bankAccount: String(formData.get('bankAccount') ?? '').trim(),
         remark: String(formData.get('remark') ?? '').trim(),
+        ...readCounterpartyExtraFields(formData, customFields),
       };
       const responseItem =
         typeof result.result === 'object' && result.result !== null
@@ -298,11 +306,11 @@ export function UpdateCounterpartyForm({
         </label>
         <label style={fieldStyle}>
           <span style={labelRowStyle}>
-            <span>单位名称 Name</span>
+            <span>单位简称 Name</span>
             <span aria-hidden="true" style={requiredMarkStyle}>*</span>
           </span>
           <input
-            aria-label={`单位名称 Name ${item.code}`}
+            aria-label={`单位简称 Name ${item.code}`}
             name="name"
             defaultValue={item.name}
             placeholder={counterpartyFieldPlaceholders.name}
@@ -311,22 +319,12 @@ export function UpdateCounterpartyForm({
           />
         </label>
         <label style={fieldStyle}>
-          <span style={labelRowStyle}>中文名称 Chinese Name</span>
+          <span style={labelRowStyle}>单位全称 Full Name</span>
           <input
-            aria-label={`中文名称 Chinese Name ${item.code}`}
+            aria-label={`单位全称 Full Name ${item.code}`}
             name="shortName"
             defaultValue={item.shortName}
             placeholder={counterpartyFieldPlaceholders.shortName}
-            style={inputStyle}
-          />
-        </label>
-        <label style={fieldStyle}>
-          <span style={labelRowStyle}>所属区域 Region</span>
-          <input
-            aria-label={`所属区域 Region ${item.code}`}
-            name="region"
-            defaultValue={item.region}
-            placeholder={counterpartyFieldPlaceholders.region}
             style={inputStyle}
           />
         </label>
@@ -340,6 +338,7 @@ export function UpdateCounterpartyForm({
             name="ownerName"
             value={selectedOwner}
             onChange={(event) => setSelectedOwner(event.target.value)}
+            disabled={actorRole === 'sales' || actorRole === 'purchase'}
             required
             style={inputStyle}
           >
@@ -352,6 +351,14 @@ export function UpdateCounterpartyForm({
               </option>
             ))}
           </select>
+        </label>
+      </div>
+      <details>
+        <summary style={{ cursor: 'pointer', color: '#334155', fontWeight: 700 }}>更多资料与自定义字段</summary>
+        <div style={gridStyle}>
+        <label style={fieldStyle}>
+          <span style={labelRowStyle}>所属地区 Region</span>
+          <input aria-label={`所属地区 Region ${item.code}`} name="region" defaultValue={item.region} placeholder={counterpartyFieldPlaceholders.region} style={inputStyle} />
         </label>
         <label style={fieldStyle}>
           <span style={labelRowStyle}>联系人 Contact</span>
@@ -413,7 +420,9 @@ export function UpdateCounterpartyForm({
             style={inputStyle}
           />
         </label>
-      </div>
+        </div>
+        <CounterpartyExtraFields type={selectedType} item={item} fields={customFields} />
+      </details>
       {error ? (
         <p role="alert" style={{ margin: 0, color: '#b91c1c', fontSize: '12px' }}>
           {error}

@@ -183,6 +183,7 @@ describe('UserManagementService', () => {
           'admin.user.write',
           'admin.role.write',
           'master_data.write',
+          'counterparty.write',
           'sales.quote.write',
           'sales.inquiry.submit',
           'sales.order.write',
@@ -217,6 +218,7 @@ describe('UserManagementService', () => {
             modules: ['sales'],
             dataScope: 'own_sales',
             actions: [
+              'counterparty.write',
               'sales.quote.write',
               'sales.inquiry.submit',
               'sales.order.write',
@@ -231,6 +233,7 @@ describe('UserManagementService', () => {
             modules: ['purchase', 'operations', 'boss_dashboard'],
             dataScope: 'purchase_team',
             actions: [
+              'counterparty.write',
               'purchase.order.create',
               'purchase.order.submit',
               'purchase.order.approve',
@@ -305,6 +308,7 @@ describe('UserManagementService', () => {
       modules: ['sales', 'boss_dashboard', 'audit'],
       dataScope: 'sales_team',
       actions: [
+        'counterparty.write',
         'sales.quote.write',
         'sales.inquiry.submit',
         'sales.order.write',

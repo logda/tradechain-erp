@@ -16,6 +16,7 @@ describe('CounterpartyService prisma storage', () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const createdAt = new Date('2026-07-13T09:00:00.000Z');
     const prisma = {
+      counterpartyCustomField: { findMany: jest.fn().mockResolvedValue([]) },
       counterparty: {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({
@@ -154,6 +155,7 @@ describe('CounterpartyService prisma storage', () => {
       deactivatedReason: '长期无交易',
     };
     const prisma = {
+      counterpartyCustomField: { findMany: jest.fn().mockResolvedValue([]) },
       counterparty: {
         findMany: jest.fn().mockResolvedValue([activeRecord]),
         findUnique: jest
@@ -276,6 +278,7 @@ describe('CounterpartyService prisma storage', () => {
       deactivatedReason: null,
     };
     const prisma = {
+      counterpartyCustomField: { findMany: jest.fn().mockResolvedValue([]) },
       counterparty: {
         findUnique: jest.fn().mockResolvedValue(inactiveRecord),
         update: jest.fn().mockResolvedValue(activatedRecord),
@@ -311,5 +314,34 @@ describe('CounterpartyService prisma storage', () => {
       id: 11,
       status: 'active',
     });
+  });
+
+  it('keeps a deleted field value in Prisma JSON while returning only active fields', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const createdAt = new Date('2026-09-24T08:00:00.000Z');
+    const existing = {
+      id: 88n, type: 'customer', code: 'CUST-STAGE04', name: 'Example', shortName: '',
+      region: null, ownerName: 'Zoe', contactName: null, phone: null, address: null,
+      bankName: null, bankAccount: null, remark: null, email: null, paymentTerms: null,
+      status: 'active', createdBy: 'Zoe', createdAt, updatedBy: null, updatedAt: createdAt,
+      deactivatedAt: null, deactivatedBy: null, deactivatedReason: null,
+      customValues: { '1': 'old hidden value', '2': 'old active value' },
+    };
+    const prisma = {
+      counterpartyCustomField: {
+        findMany: jest.fn().mockResolvedValue([{ id: 2n, name: '额度', type: 'number', createdBy: 'Admin', createdAt }]),
+      },
+      counterparty: {
+        findUnique: jest.fn().mockResolvedValue(existing),
+        update: jest.fn().mockImplementation(async ({ data }) => ({ ...existing, ...data, updatedAt: createdAt })),
+      },
+      operationLog: { create: jest.fn().mockResolvedValue({ id: 1n }) },
+    } as unknown as PrismaService;
+    const service = new CounterpartyService(prisma);
+    const updated = await service.update(88, { customValues: { '2': '3.5' }, paymentMethod: '电汇', updatedBy: 'Zoe' });
+    expect(prisma.counterparty.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ customValues: { '1': 'old hidden value', '2': '3.5' }, paymentMethod: '电汇' }),
+    }));
+    expect(updated.customValues).toEqual({ '2': '3.5' });
   });
 });

@@ -1,28 +1,38 @@
 import { ParseIntPipe } from '@nestjs/common';
 import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { Test } from '@nestjs/testing';
-import { AdminOnlyGuard } from '../src/auth/admin-only.guard';
+import { FormalRoleGuard } from '../src/auth/formal-role.guard';
 import { FORMAL_ACTIONS_KEY } from '../src/auth/formal-role.decorator';
 import { CounterpartyController } from '../src/counterparty/counterparty.controller';
 import { CounterpartyService } from '../src/counterparty/counterparty.service';
+import { UserManagementService } from '../src/user-management/user-management.service';
+
+const ownersProvider = {
+  provide: UserManagementService,
+  useValue: { listActiveCounterpartyOwners: jest.fn().mockResolvedValue([
+    { realName: 'Leo', roleCode: 'purchase', status: 'active' },
+    { realName: 'Zoe', roleCode: 'sales', status: 'active' },
+  ]) },
+};
+const adminRequest = { headers: { 'x-erp-role': 'admin', 'x-erp-user': 'Admin' } };
 
 describe('CounterpartyController', () => {
-  it('protects counterparty master data with admin and action permissions', () => {
+  it('protects counterparty master data with role and action permissions', () => {
     expect(Reflect.getMetadata(GUARDS_METADATA, CounterpartyController)).toEqual(
-      expect.arrayContaining([AdminOnlyGuard]),
+      expect.arrayContaining([FormalRoleGuard]),
     );
     expect(
       Reflect.getMetadata(
         FORMAL_ACTIONS_KEY,
         CounterpartyController.prototype.create,
       ),
-    ).toEqual(['master_data.write']);
+    ).toEqual(['counterparty.write']);
     expect(
       Reflect.getMetadata(
         FORMAL_ACTIONS_KEY,
         CounterpartyController.prototype.update,
       ),
-    ).toEqual(['master_data.write']);
+    ).toEqual(['counterparty.write']);
     expect(
       Reflect.getMetadata(
         FORMAL_ACTIONS_KEY,
@@ -41,7 +51,7 @@ describe('CounterpartyController', () => {
     const list = jest.fn().mockResolvedValue({ items: [], total: 0, page: 2, pageSize: 5 });
     const moduleRef = await Test.createTestingModule({
       controllers: [CounterpartyController],
-      providers: [{ provide: CounterpartyService, useValue: { list } }],
+      providers: [ownersProvider, { provide: CounterpartyService, useValue: { list } }],
     }).compile();
 
     const controller = moduleRef.get(CounterpartyController);
@@ -51,7 +61,7 @@ describe('CounterpartyController', () => {
       status: 'active',
       page: '2',
       pageSize: '5',
-    });
+    }, adminRequest);
 
     expect(list).toHaveBeenCalledWith({
       type: 'customer',
@@ -59,26 +69,26 @@ describe('CounterpartyController', () => {
       status: 'active',
       page: 2,
       pageSize: 5,
-    });
+    }, expect.any(Function));
   });
 
   it('falls back to safe list pagination defaults', async () => {
     const list = jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
     const moduleRef = await Test.createTestingModule({
       controllers: [CounterpartyController],
-      providers: [{ provide: CounterpartyService, useValue: { list } }],
+      providers: [ownersProvider, { provide: CounterpartyService, useValue: { list } }],
     }).compile();
 
     const controller = moduleRef.get(CounterpartyController);
     await controller.list({
       page: 'NaN',
       pageSize: '0',
-    });
+    }, adminRequest);
 
     expect(list).toHaveBeenCalledWith({
       page: 1,
       pageSize: 20,
-    });
+    }, expect.any(Function));
   });
 
   it('creates a counterparty from form input', async () => {
@@ -89,7 +99,7 @@ describe('CounterpartyController', () => {
     });
     const moduleRef = await Test.createTestingModule({
       controllers: [CounterpartyController],
-      providers: [{ provide: CounterpartyService, useValue: { create } }],
+      providers: [ownersProvider, { provide: CounterpartyService, useValue: { create } }],
     }).compile();
 
     const controller = moduleRef.get(CounterpartyController);
@@ -107,7 +117,7 @@ describe('CounterpartyController', () => {
       bankAccount: '6222000000000001',
       remark: '核心供应商',
       createdBy: 'Admin',
-    });
+    }, adminRequest);
 
     expect(create).toHaveBeenCalledWith({
       type: 'supplier',
@@ -134,7 +144,10 @@ describe('CounterpartyController', () => {
     });
     const moduleRef = await Test.createTestingModule({
       controllers: [CounterpartyController],
-      providers: [{ provide: CounterpartyService, useValue: { update } }],
+      providers: [ownersProvider, { provide: CounterpartyService, useValue: {
+        update,
+        findById: jest.fn().mockResolvedValue({ type: 'supplier', ownerName: 'Leo' }),
+      } }],
     }).compile();
 
     const controller = moduleRef.get(CounterpartyController);
@@ -146,7 +159,7 @@ describe('CounterpartyController', () => {
       bankAccount: '6222000000000066',
       remark: '更新银行账户',
       updatedBy: 'Admin',
-    });
+    }, adminRequest);
 
     expect(update).toHaveBeenCalledWith(9, {
       name: 'Gamma Components Ltd.',
@@ -167,7 +180,7 @@ describe('CounterpartyController', () => {
     });
     const moduleRef = await Test.createTestingModule({
       controllers: [CounterpartyController],
-      providers: [{ provide: CounterpartyService, useValue: { deactivate } }],
+      providers: [ownersProvider, { provide: CounterpartyService, useValue: { deactivate } }],
     }).compile();
 
     const controller = moduleRef.get(CounterpartyController);
@@ -190,7 +203,7 @@ describe('CounterpartyController', () => {
     });
     const moduleRef = await Test.createTestingModule({
       controllers: [CounterpartyController],
-      providers: [{ provide: CounterpartyService, useValue: { activate } }],
+      providers: [ownersProvider, { provide: CounterpartyService, useValue: { activate } }],
     }).compile();
 
     const controller = moduleRef.get(CounterpartyController);
@@ -219,7 +232,7 @@ describe('CounterpartyController', () => {
     });
     const moduleRef = await Test.createTestingModule({
       controllers: [CounterpartyController],
-      providers: [{ provide: CounterpartyService, useValue: { listAuditLogs } }],
+      providers: [ownersProvider, { provide: CounterpartyService, useValue: { listAuditLogs } }],
     }).compile();
 
     const controller = moduleRef.get(CounterpartyController);

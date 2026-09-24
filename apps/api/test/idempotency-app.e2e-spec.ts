@@ -33,12 +33,12 @@ describe('AppModule idempotent business creation', () => {
       .post('/api/counterparties')
       .set('x-erp-role', 'admin')
       .set('x-erp-user', 'Admin')
-      .set('x-erp-modules', 'admin')
-      .set('x-erp-actions', 'master_data.write')
+      .set('x-erp-modules', 'sales,purchase,admin')
+      .set('x-erp-actions', 'counterparty.write')
       .set('Idempotency-Key', '22b1a221-afca-48ed-8779-78929e1f0a09')
       .send({
         type: 'customer', code: 'IDEMP-001', name: 'Idempotent Customer',
-        shortName: '', region: '', ownerName: 'Admin', contactName: '', phone: '',
+        shortName: '', region: '', ownerName: '系统管理员', contactName: '', phone: '',
         address: '', bankName: '', bankAccount: '', remark: '', createdBy: 'Admin',
       });
 
@@ -50,7 +50,7 @@ describe('AppModule idempotent business creation', () => {
       .get('/api/counterparties')
       .set('x-erp-role', 'admin')
       .set('x-erp-user', 'Admin')
-      .set('x-erp-modules', 'admin')
+      .set('x-erp-modules', 'sales,purchase,admin')
       .expect(200);
     expect(listed.body.items.filter((item: { code: string }) => item.code === 'IDEMP-001'))
       .toHaveLength(1);

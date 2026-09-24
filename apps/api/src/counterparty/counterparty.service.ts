@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -8,7 +9,7 @@ import {
 import { paginateItems } from '../common/pagination';
 import { PrismaService } from '../storage/prisma.service';
 import { resolveStorageMode } from '../storage/storage-mode';
-import { resolveCounterpartyStore } from './counterparty.store';
+import { resolveCounterpartyStore, type CounterpartyCustomFieldRecord } from './counterparty.store';
 
 const counterpartyTypes = ['customer', 'supplier', 'both'] as const;
 const counterpartyStatuses = ['active', 'inactive'] as const;
@@ -32,6 +33,13 @@ export type CounterpartyRecord = {
   remark: string;
   email: string;
   paymentTerms: string;
+  paymentMethod?: string;
+  settlementMethod?: string;
+  unitTags?: string[];
+  openingReceivable?: string | null;
+  payableReceivable?: string | null;
+  moldFee?: string | null;
+  customValues?: Record<string, string>;
   status: CounterpartyStatus;
   createdAt: string;
   createdBy: string;
@@ -66,6 +74,13 @@ export type CreateCounterpartyPayload = {
   remark: string;
   email?: string;
   paymentTerms?: string;
+  paymentMethod?: string;
+  settlementMethod?: string;
+  unitTags?: string[];
+  openingReceivable?: string | null;
+  payableReceivable?: string | null;
+  moldFee?: string | null;
+  customValues?: Record<string, string>;
   createdBy: string;
 };
 
@@ -86,6 +101,13 @@ export type UpdateCounterpartyPayload = Partial<
     | 'remark'
     | 'email'
     | 'paymentTerms'
+    | 'paymentMethod'
+    | 'settlementMethod'
+    | 'unitTags'
+    | 'openingReceivable'
+    | 'payableReceivable'
+    | 'moldFee'
+    | 'customValues'
   >
 > & {
   updatedBy: string;
@@ -107,6 +129,13 @@ type PrismaCounterpartyRecord = {
   remark: string | null;
   email: string | null;
   paymentTerms: string | null;
+  paymentMethod?: string | null;
+  settlementMethod?: string | null;
+  unitTags?: unknown;
+  openingReceivable?: { toString(): string } | null;
+  payableReceivable?: { toString(): string } | null;
+  moldFee?: { toString(): string } | null;
+  customValues?: unknown;
   status: string;
   createdBy: string;
   createdAt: Date;
@@ -147,6 +176,50 @@ function normalizeOptionalText(value: string | undefined) {
   return normalized || null;
 }
 
+function normalizeAmount(value: string | null | undefined, label: string) {
+  if (value === undefined || value === null || value === '') return null;
+  const text = String(value).trim();
+  if (!/^-?\d{1,16}(?:\.\d{1,2})?$/.test(text)) {
+    throw new BadRequestException(`${label}必须是最多两位小数的数字`);
+  }
+  return text;
+}
+
+function normalizeTags(value: string[] | undefined) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new BadRequestException('单位标签格式不正确');
+  }
+  return [...new Set(value.map((item) => item.trim()).filter(Boolean))];
+}
+
+function normalizeCustomValues(value: Record<string, string> | undefined, fields: CounterpartyCustomFieldRecord[]) {
+  if (value === undefined) return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new BadRequestException('自定义字段格式不正确');
+  const byId = new Map(fields.map((field) => [String(field.id), field]));
+  const result: Record<string, string> = {};
+  for (const [id, raw] of Object.entries(value)) {
+    const field = byId.get(id);
+    if (!field) throw new BadRequestException('自定义字段已删除或不存在');
+    if (typeof raw !== 'string') throw new BadRequestException(`${field.name}格式不正确`);
+    const text = raw.trim();
+    if (field.type === 'number' && text && !/^-?\d+(?:\.\d+)?$/.test(text)) throw new BadRequestException(`${field.name}必须填写数字`);
+    if (field.type === 'date' && text && (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(Date.parse(`${text}T00:00:00Z`)) || new Date(`${text}T00:00:00Z`).toISOString().slice(0, 10) !== text)) throw new BadRequestException(`${field.name}必须填写日期`);
+    result[id] = text;
+  }
+  return result;
+}
+
+function readCustomValues(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+}
+
+function publicRecord(record: CounterpartyRecord, fields: CounterpartyCustomFieldRecord[]) {
+  const ids = new Set(fields.map((field) => String(field.id)));
+  return { ...record, customValues: Object.fromEntries(Object.entries(record.customValues ?? {}).filter(([id]) => ids.has(id))) };
+}
+
 const defaultChineseNamesByCode: Record<string, string> = {
   'CP-GLOBAL': '环球伙伴',
   'CUS-ACME': '星河贸易',
@@ -176,7 +249,7 @@ function isCounterpartyStatus(value: string | undefined): value is CounterpartyS
 
 const formalCounterpartyFieldLabels = {
   code: '单位编码',
-  name: '单位名称',
+  name: '单位简称',
   ownerName: '所属人员',
 } satisfies Record<string, string>;
 
@@ -223,6 +296,13 @@ function toCounterpartyRecord(record: PrismaCounterpartyRecord): CounterpartyRec
     remark: record.remark ?? '',
     email: record.email ?? '',
     paymentTerms: record.paymentTerms ?? '',
+    paymentMethod: record.paymentMethod ?? '',
+    settlementMethod: record.settlementMethod ?? '',
+    unitTags: Array.isArray(record.unitTags) ? record.unitTags.filter((item): item is string => typeof item === 'string') : [],
+    openingReceivable: record.openingReceivable?.toString() ?? null,
+    payableReceivable: record.payableReceivable?.toString() ?? null,
+    moldFee: record.moldFee?.toString() ?? null,
+    customValues: readCustomValues(record.customValues),
     status: record.status === 'inactive' ? 'inactive' : 'active',
     createdAt: record.createdAt.toISOString(),
     createdBy: record.createdBy,
@@ -272,7 +352,62 @@ export class CounterpartyService {
     return resolveStorageMode() === 'prisma' && this.prisma;
   }
 
-  async list(query: ListCounterpartiesQuery = {}) {
+  async listCustomFields(): Promise<CounterpartyCustomFieldRecord[]> {
+    if (this.shouldUsePrisma()) {
+      const rows = await this.prisma!.counterpartyCustomField.findMany({
+        where: { deletedAt: null }, orderBy: { id: 'asc' },
+      });
+      return rows.map((row) => ({ id: Number(row.id), name: row.name, type: row.type as CounterpartyCustomFieldRecord['type'], createdBy: row.createdBy, createdAt: row.createdAt.toISOString() }));
+    }
+    return this.store.listCustomFields().filter((item) => !item.deletedAt);
+  }
+
+  async createCustomField(payload: { name: string; type: string; createdBy: string }) {
+    const name = normalizeText(payload.name);
+    if (!name || name.length > 64) throw new BadRequestException('字段名称不能为空且不能超过 64 字');
+    if (payload.type !== 'text' && payload.type !== 'number' && payload.type !== 'date') throw new BadRequestException('字段类型不合法');
+    if (this.shouldUsePrisma()) {
+      const row = await this.prisma!.$transaction(async (tx) => {
+        const active = await tx.counterpartyCustomField.findMany({ where: { deletedAt: null } });
+        if (active.length >= 10) throw new BadRequestException('自定义字段数量已达上限（10 个）');
+        if (active.some((field) => field.name === name)) throw new ConflictException('自定义字段名称已存在');
+        return tx.counterpartyCustomField.create({ data: { name, type: payload.type, createdBy: payload.createdBy } });
+      }, { isolationLevel: 'Serializable' });
+      await this.prisma!.operationLog.create({ data: { bizType: 'counterparty', bizId: row.id, operationType: 'create_counterparty_custom_field', operatorId: 0n, afterData: { name, type: payload.type } } });
+      return { id: Number(row.id), name: row.name, type: row.type, createdBy: row.createdBy, createdAt: row.createdAt.toISOString() };
+    }
+    const active = this.store.listCustomFields().filter((field) => !field.deletedAt);
+    if (active.length >= 10) throw new BadRequestException('自定义字段数量已达上限（10 个）');
+    if (active.some((field) => field.name === name)) throw new ConflictException('自定义字段名称已存在');
+    const field: CounterpartyCustomFieldRecord = { id: this.store.nextCustomFieldId(), name, type: payload.type, createdBy: payload.createdBy, createdAt: new Date().toISOString() };
+    this.store.saveCustomFields([...this.store.listCustomFields(), field]);
+    this.store.recordAuditLog({ bizType: 'counterparty', bizId: field.id, operationType: 'create_counterparty_custom_field', operatorId: 0, beforeData: null, afterData: { name, type: payload.type } });
+    return field;
+  }
+
+  async deleteCustomField(id: number) {
+    if (this.shouldUsePrisma()) {
+      const existing = await this.prisma!.counterpartyCustomField.findUnique({ where: { id: BigInt(id) } });
+      if (!existing) throw new NotFoundException('自定义字段不存在');
+      if (!existing.deletedAt) {
+        await this.prisma!.counterpartyCustomField.update({ where: { id: BigInt(id) }, data: { deletedAt: new Date() } });
+        await this.prisma!.operationLog.create({ data: { bizType: 'counterparty', bizId: BigInt(id), operationType: 'delete_counterparty_custom_field', operatorId: 0n, beforeData: { name: existing.name, type: existing.type }, afterData: { deleted: true } } });
+      }
+      return { id, deleted: true };
+    }
+    const fields = this.store.listCustomFields();
+    const existing = fields.find((field) => field.id === id);
+    if (!existing) throw new NotFoundException('自定义字段不存在');
+    if (!existing.deletedAt) {
+      existing.deletedAt = new Date().toISOString();
+      this.store.saveCustomFields(fields);
+      this.store.recordAuditLog({ bizType: 'counterparty', bizId: id, operationType: 'delete_counterparty_custom_field', operatorId: 0, beforeData: { name: existing.name, type: existing.type }, afterData: { deleted: true } });
+    }
+    return { id, deleted: true };
+  }
+
+  async list(query: ListCounterpartiesQuery = {}, canView?: (item: CounterpartyRecord) => boolean) {
+    const customFields = await this.listCustomFields();
     const type = isCounterpartyType(query.type) ? query.type : null;
     const status = isCounterpartyStatus(query.status) ? query.status : null;
     const keyword = normalizeText(query.keyword).toLowerCase();
@@ -286,7 +421,9 @@ export class CounterpartyService {
 
     const items = sourceItems
       .map(normalizeCounterpartyRecordDisplay)
+      .map((item) => publicRecord(item, customFields))
       .filter((item) => {
+        if (canView && !canView(item)) return false;
         if (type && item.type !== type && item.type !== 'both') {
           return false;
         }
@@ -342,11 +479,11 @@ export class CounterpartyService {
         where: { id: BigInt(id) },
       })) as PrismaCounterpartyRecord | null;
 
-      return record ? toCounterpartyRecord(record) : null;
+      return record ? publicRecord(toCounterpartyRecord(record), await this.listCustomFields()) : null;
     }
 
     const record = this.store.getCounterparty(id);
-    return record ? normalizeCounterpartyRecordDisplay(record) : null;
+    return record ? publicRecord(normalizeCounterpartyRecordDisplay(record), await this.listCustomFields()) : null;
   }
 
   async findByCode(code: string) {
@@ -360,14 +497,14 @@ export class CounterpartyService {
         where: { code: normalizedCode },
       })) as PrismaCounterpartyRecord | null;
 
-      return record ? toCounterpartyRecord(record) : null;
+      return record ? publicRecord(toCounterpartyRecord(record), await this.listCustomFields()) : null;
     }
 
     const record = this.store
       .listCounterparties()
       .find((item) => item.code === normalizedCode);
 
-    return record ? normalizeCounterpartyRecordDisplay(record) : null;
+    return record ? publicRecord(normalizeCounterpartyRecordDisplay(record), await this.listCustomFields()) : null;
   }
 
   async create(payload: CreateCounterpartyPayload) {
@@ -384,10 +521,18 @@ export class CounterpartyService {
       bankName: normalizeText(payload.bankName),
       bankAccount: normalizeText(payload.bankAccount),
       remark: normalizeText(payload.remark),
+      paymentMethod: normalizeText(payload.paymentMethod),
+      settlementMethod: normalizeText(payload.settlementMethod),
+      unitTags: normalizeTags(payload.unitTags),
+      openingReceivable: normalizeAmount(payload.openingReceivable, '期初应收款'),
+      payableReceivable: normalizeAmount(payload.payableReceivable, '应付应收款'),
+      moldFee: normalizeAmount(payload.moldFee, '模具费用'),
     };
+    const customFields = await this.listCustomFields();
+    const customValues = normalizeCustomValues(payload.customValues, customFields);
 
     assertRequiredFormalCounterpartyFields(formalFields);
-    this.assertCodeIsUnique(formalFields.code);
+    if (!this.shouldUsePrisma()) this.assertCodeIsUnique(formalFields.code);
 
     if (this.shouldUsePrisma()) {
       await this.assertPrismaCodeIsUnique(formalFields.code);
@@ -396,6 +541,7 @@ export class CounterpartyService {
           type,
           ...formalFields,
           ...optionalFields,
+          customValues,
           email: normalizeOptionalText(payload.email),
           paymentTerms: normalizeOptionalText(payload.paymentTerms),
           status: 'active',
@@ -427,7 +573,7 @@ export class CounterpartyService {
         },
       });
 
-      return toCounterpartyRecord(record);
+      return publicRecord(toCounterpartyRecord(record), customFields);
     }
 
     const record: CounterpartyRecord = {
@@ -435,6 +581,7 @@ export class CounterpartyService {
       type,
       ...formalFields,
       ...optionalFields,
+      customValues,
       email: normalizeText(payload.email),
       paymentTerms: normalizeText(payload.paymentTerms),
       status: 'active',
@@ -465,10 +612,11 @@ export class CounterpartyService {
         status: record.status,
       },
     });
-    return record;
+    return publicRecord(record, customFields);
   }
 
   async update(id: number, payload: UpdateCounterpartyPayload) {
+    const customFields = await this.listCustomFields();
     if (this.shouldUsePrisma()) {
       const existing = (await this.prisma!.counterparty.findUnique({
         where: { id: BigInt(id) },
@@ -485,7 +633,7 @@ export class CounterpartyService {
       });
       assertRequiredFormalCounterpartyFields(requiredFormalFields);
 
-      const data: Record<string, string> = {
+      const data: Record<string, any> = {
         updatedBy: normalizeText(payload.updatedBy) || 'system',
       };
 
@@ -535,10 +683,18 @@ export class CounterpartyService {
         }
       }
 
-      for (const field of ['email', 'paymentTerms'] as const) {
+      for (const field of ['email', 'paymentTerms', 'paymentMethod', 'settlementMethod'] as const) {
         if (payload[field] !== undefined) {
           data[field] = normalizeText(payload[field]);
         }
+      }
+
+      if (payload.unitTags !== undefined) data.unitTags = normalizeTags(payload.unitTags);
+      for (const field of ['openingReceivable', 'payableReceivable', 'moldFee'] as const) {
+        if (payload[field] !== undefined) data[field] = normalizeAmount(payload[field], field === 'moldFee' ? '模具费用' : field === 'openingReceivable' ? '期初应收款' : '应付应收款');
+      }
+      if (payload.customValues !== undefined) {
+        data.customValues = { ...readCustomValues(existing.customValues), ...normalizeCustomValues(payload.customValues, customFields) };
       }
 
       const updated = (await this.prisma!.counterparty.update({
@@ -556,7 +712,7 @@ export class CounterpartyService {
         },
       });
 
-      return toCounterpartyRecord(updated);
+      return publicRecord(toCounterpartyRecord(updated), customFields);
     }
 
     const record = this.store.getCounterparty(id);
@@ -565,7 +721,7 @@ export class CounterpartyService {
       throw new NotFoundException('往来单位不存在');
     }
 
-    const beforeRecord = { ...record };
+    const beforeRecord = { ...record, customValues: { ...record.customValues } };
     const requiredFormalFields = buildRequiredFormalCounterpartyFields({
       code: payload.code ?? record.code,
       name: payload.name ?? record.name,
@@ -633,6 +789,14 @@ export class CounterpartyService {
       record.paymentTerms = normalizeText(payload.paymentTerms);
     }
 
+    if (payload.paymentMethod !== undefined) record.paymentMethod = normalizeText(payload.paymentMethod);
+    if (payload.settlementMethod !== undefined) record.settlementMethod = normalizeText(payload.settlementMethod);
+    if (payload.unitTags !== undefined) record.unitTags = normalizeTags(payload.unitTags);
+    for (const field of ['openingReceivable', 'payableReceivable', 'moldFee'] as const) {
+      if (payload[field] !== undefined) record[field] = normalizeAmount(payload[field], field === 'moldFee' ? '模具费用' : field === 'openingReceivable' ? '期初应收款' : '应付应收款');
+    }
+    if (payload.customValues !== undefined) record.customValues = { ...record.customValues, ...normalizeCustomValues(payload.customValues, customFields) };
+
     record.updatedAt = new Date().toISOString();
     record.updatedBy = normalizeText(payload.updatedBy) || 'system';
 
@@ -649,7 +813,7 @@ export class CounterpartyService {
       afterData: record,
     });
 
-    return record;
+    return publicRecord(record, customFields);
   }
 
   async deactivate(
@@ -669,7 +833,7 @@ export class CounterpartyService {
       }
 
       if (record.status === 'inactive') {
-        return toCounterpartyRecord(record);
+        return publicRecord(toCounterpartyRecord(record), await this.listCustomFields());
       }
 
       const updated = (await this.prisma!.counterparty.update({
@@ -702,7 +866,7 @@ export class CounterpartyService {
         },
       });
 
-      return toCounterpartyRecord(updated);
+      return publicRecord(toCounterpartyRecord(updated), await this.listCustomFields());
     }
 
     const record = this.store.getCounterparty(id);
@@ -712,7 +876,7 @@ export class CounterpartyService {
     }
 
     if (record.status === 'inactive') {
-      return record;
+      return publicRecord(record, await this.listCustomFields());
     }
 
     const beforeRecord = { ...record };
@@ -735,7 +899,7 @@ export class CounterpartyService {
       afterData: record,
     });
 
-    return record;
+    return publicRecord(record, await this.listCustomFields());
   }
 
   async activate(
@@ -755,7 +919,7 @@ export class CounterpartyService {
       }
 
       if (record.status === 'active') {
-        return toCounterpartyRecord(record);
+        return publicRecord(toCounterpartyRecord(record), await this.listCustomFields());
       }
 
       const updated = (await this.prisma!.counterparty.update({
@@ -787,7 +951,7 @@ export class CounterpartyService {
         },
       });
 
-      return toCounterpartyRecord(updated);
+      return publicRecord(toCounterpartyRecord(updated), await this.listCustomFields());
     }
 
     const record = this.store.getCounterparty(id);
@@ -797,7 +961,7 @@ export class CounterpartyService {
     }
 
     if (record.status === 'active') {
-      return record;
+      return publicRecord(record, await this.listCustomFields());
     }
 
     const beforeRecord = { ...record };
@@ -824,10 +988,17 @@ export class CounterpartyService {
       },
     });
 
-    return record;
+    return publicRecord(record, await this.listCustomFields());
   }
 
   async listAuditLogs() {
+    const activeIds = new Set((await this.listCustomFields()).map((field) => String(field.id)));
+    const scrub = (value: unknown) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+      const object = value as Record<string, unknown>;
+      if (!('customValues' in object)) return value;
+      return { ...object, customValues: Object.fromEntries(Object.entries(readCustomValues(object.customValues)).filter(([id]) => activeIds.has(id))) };
+    };
     if (this.shouldUsePrisma()) {
       const logs = (await this.prisma!.operationLog.findMany({
         where: { bizType: 'counterparty' },
@@ -835,12 +1006,12 @@ export class CounterpartyService {
       })) as PrismaOperationLogRecord[];
 
       return {
-        items: logs.map(toAuditLogRecord),
+        items: logs.map(toAuditLogRecord).map((item) => ({ ...item, beforeData: scrub(item.beforeData), afterData: scrub(item.afterData) })),
       };
     }
 
     return {
-      items: this.store.listAuditLogs(),
+      items: this.store.listAuditLogs().map((item) => ({ ...item, beforeData: scrub(item.beforeData), afterData: scrub(item.afterData) })),
     };
   }
 

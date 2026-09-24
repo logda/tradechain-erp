@@ -4,6 +4,7 @@ const defaultActionScopes: Record<string, string[]> = {
     'admin.user.write',
     'admin.role.write',
     'master_data.write',
+    'counterparty.write',
     'sales.quote.write',
     'sales.inquiry.submit',
     'sales.order.write',
@@ -20,6 +21,7 @@ const defaultActionScopes: Record<string, string[]> = {
     'finance.confirm',
   ],
   boss: [
+    'counterparty.write',
     'sales.order.write',
     'sales.sample.approve',
     'purchase.order.approve',
@@ -28,6 +30,7 @@ const defaultActionScopes: Record<string, string[]> = {
     'finance.confirm',
   ],
   sales_manager: [
+    'counterparty.write',
     'sales.quote.write',
     'sales.inquiry.submit',
     'sales.order.write',
@@ -36,6 +39,7 @@ const defaultActionScopes: Record<string, string[]> = {
     'sales.sample.execute',
   ],
   sales: [
+    'counterparty.write',
     'sales.quote.write',
     'sales.inquiry.submit',
     'sales.order.write',
@@ -43,6 +47,7 @@ const defaultActionScopes: Record<string, string[]> = {
     'sales.sample.execute',
   ],
   purchase_manager: [
+    'counterparty.write',
     'sales.inquiry.submit',
     'purchase.order.create',
     'purchase.order.submit',
@@ -52,6 +57,7 @@ const defaultActionScopes: Record<string, string[]> = {
     'after_sales.process',
   ],
   purchase: [
+    'counterparty.write',
     'sales.inquiry.submit',
     'purchase.order.create',
     'purchase.order.submit',

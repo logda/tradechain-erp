@@ -1,8 +1,10 @@
-import { Controller, Get, Inject, Query, UseGuards } from '@nestjs/common';
-import { FormalAnyModules, FormalRoles } from '../auth/formal-role.decorator';
+import { Controller, Get, Inject, Query, Req, UseGuards } from '@nestjs/common';
+import { FormalAnyModules, FormalRoles, type FormalRole } from '../auth/formal-role.decorator';
 import { FormalRoleGuard } from '../auth/formal-role.guard';
+import { canViewCounterparty } from '../counterparty/counterparty.access';
 import { CounterpartyService } from '../counterparty/counterparty.service';
 import { ProductService } from '../product/product.service';
+import { UserManagementService } from '../user-management/user-management.service';
 
 function normalizeActiveStatus(value: string | undefined) {
   return value === 'inactive' ? 'inactive' : 'active';
@@ -21,6 +23,8 @@ export class FormalLookupController {
     private readonly productService: ProductService,
     @Inject(CounterpartyService)
     private readonly counterpartyService: CounterpartyService,
+    @Inject(UserManagementService)
+    private readonly userManagementService: UserManagementService,
   ) {}
 
   @Get('products')
@@ -35,15 +39,21 @@ export class FormalLookupController {
 
   @Get('counterparties')
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales', 'purchase_manager', 'purchase')
-  listCounterparties(
+  async listCounterparties(
     @Query('type') type?: string,
     @Query('status') status?: string,
+    @Req() request?: { headers: Record<string, string | string[] | undefined> },
   ) {
+    const users = await this.userManagementService.listActiveCounterpartyOwners();
+    const actor = {
+      role: request?.headers['x-erp-role'] as FormalRole,
+      user: String(request?.headers['x-erp-user'] ?? ''),
+    };
     return this.counterpartyService.list({
       type: normalizeCounterpartyType(type),
       status: normalizeActiveStatus(status),
       page: 1,
       pageSize: 1000,
-    });
+    }, (item) => canViewCounterparty(actor, item, users));
   }
 }
