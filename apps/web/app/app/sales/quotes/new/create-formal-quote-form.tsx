@@ -1040,7 +1040,7 @@ export function CreateFormalQuoteForm({
         }}
       >
         <legend style={{ color: '#0f172a', fontWeight: 700 }}>
-          需求/报价明细 Line Item <span style={requiredMarkStyle}>*</span>
+          {documentType === 'demand' ? '需求明细' : '报价明细'} Line Item <span style={requiredMarkStyle}>*</span>
         </legend>
         {productFieldError ? <p style={fieldErrorTextStyle}>{productFieldError}</p> : null}
         <div style={{ ...gridStyle, marginBottom: '16px' }}>
@@ -1262,11 +1262,11 @@ export function CreateFormalQuoteForm({
           </div>
         ) : (
           <p style={{ margin: 0, color: '#64748b', fontSize: '13px' }}>
-            支持一次上传多张真实图片，提交时会随报价一起保存。
+            支持一次上传多张真实图片，提交时会随{documentType === 'demand' ? '需求单' : '报价单'}一起保存。
           </p>
         )}
         <label style={labelStyle}>
-          报价附件 Quote Attachments
+          {documentType === 'demand' ? '附件 Attachments' : '报价附件 Quote Attachments'}
           <input
             name="quoteAttachmentFiles"
             type="file"
@@ -1278,7 +1278,9 @@ export function CreateFormalQuoteForm({
         </label>
         {savedQuoteAttachments.length > 0 ? (
           <div style={{ display: 'grid', gap: '10px' }}>
-            <span style={helperTextStyle}>已保存的报价附件</span>
+            <span style={helperTextStyle}>
+              已保存的{documentType === 'demand' ? '附件' : '报价附件'}
+            </span>
             <div style={{ display: 'grid', gap: '8px' }}>
               {savedQuoteAttachments.map((attachment) => (
                 <div
@@ -1359,7 +1361,7 @@ export function CreateFormalQuoteForm({
         {selectedQuoteAttachmentPreviews.length > 0 ? (
           <div style={{ display: 'grid', gap: '10px' }}>
             <span style={helperTextStyle}>
-              已选择 {selectedQuoteAttachmentCount} 个报价附件
+              已选择 {selectedQuoteAttachmentCount} 个{documentType === 'demand' ? '附件' : '报价附件'}
             </span>
             <div
               style={{

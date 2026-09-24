@@ -255,9 +255,10 @@ describe('formal sales list pages', () => {
     expect(quoteRow).not.toBeNull();
     const cells = within(quoteRow as HTMLTableRowElement).getAllByRole('cell');
     expect(cells[1]).toHaveTextContent('报价单 / Quote');
-    expect(cells[3]).toHaveTextContent('draft / 草稿');
-    expect(cells[3]).not.toHaveTextContent('tiktok');
-    expect(cells[4]).toHaveTextContent('TikTok / tiktok');
+    expect(cells[2]).toHaveTextContent('draft / 草稿');
+    expect(cells[2]).not.toHaveTextContent('tiktok');
+    expect(cells[3]).toHaveTextContent('分页测试客户有限公司 / Paged Customer');
+    expect(cells[4]).toHaveTextContent('-');
   });
 
   it('keeps rendering the live quote list when the API requires a signed formal session', async () => {

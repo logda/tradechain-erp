@@ -54,6 +54,12 @@ export type QuoteListItem = {
   inquiryDate?: string;
   destination?: string;
   requirements?: string;
+  items?: Array<{
+    lineNo: number;
+    productName: string;
+    quantity: number;
+    unit: string;
+  }>;
   bossConfirmed: boolean;
   linkedSalesOrderId?: number;
   linkedSalesOrderNo?: string;

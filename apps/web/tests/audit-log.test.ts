@@ -10,6 +10,23 @@ import {
 } from '../app/app/_lib/audit-log';
 
 describe('audit log helpers', () => {
+  it('shows quote audit statuses bilingually without changing stored snapshots or other modules', () => {
+    const item = {
+      id: 1, bizType: 'quote', bizId: 810, operationType: 'approve_demand',
+      operatorId: 2, createdAt: '2026-09-24T01:00:00.000Z',
+      beforeData: { status: 'pending_boss_approval' },
+      afterData: { status: 'boss_approved' },
+    };
+    expect(buildAuditChangeSummary(item).rows).toEqual([{
+      field: '状态', before: 'pending_boss_approval / 待老板审批需求单', after: 'boss_approved / 需求单审批通过',
+    }]);
+    expect(buildAuditChangeSummary({ ...item, beforeData: null }).rows[0].after).toBe('boss_approved / 需求单审批通过');
+    expect(buildAuditChangeSummary({ ...item, afterData: null }).rows[0].before).toBe('pending_boss_approval / 待老板审批需求单');
+    expect(item.beforeData.status).toBe('pending_boss_approval');
+    expect(item.afterData.status).toBe('boss_approved');
+    expect(buildAuditChangeSummary({ ...item, bizType: 'sales_order', beforeData: null, afterData: { status: 'draft' } }).rows[0].after).toBe('草稿 / draft');
+  });
+
   it('accepts a well-formed audit log payload', () => {
     expect(
       hasValidAuditLogResponse({

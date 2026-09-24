@@ -629,6 +629,12 @@ function toQuoteListItem(item: QuoteDetailRecord): QuoteListItem {
     inquiryDate: item.inquiryDate,
     destination: item.destination,
     requirements: item.requirements,
+    items: item.items.map(({ lineNo, productName, quantity, unit }) => ({
+      lineNo,
+      productName,
+      quantity,
+      unit,
+    })),
     bossConfirmed:
       item.status === 'boss_confirmed' ||
       item.status === 'boss_approved' ||

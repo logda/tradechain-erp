@@ -28,6 +28,7 @@ import {
 } from '../../_lib/formal-access';
 import { formatCounterpartyBilingualDisplay } from '../../_lib/counterparty-display';
 import { loadQuoteSourceOptions } from '../../_lib/quote-source-options';
+import { formatQuoteStatus, isKnownQuoteStatus } from '../../_lib/quote-status';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -50,40 +51,6 @@ function normalizeTriStateFilter(value: string | undefined) {
   }
 
   return 'all';
-}
-
-const quoteStatusLabels: Record<string, string> = {
-  draft: '草稿',
-  submitted: '已提交',
-  quoted: '已报价',
-  revised: '已修订',
-  sample_requested: '已申请打样',
-  ordered: '已转订单',
-  closed: '已关闭',
-  boss_pending: '待老板确认',
-  pending_boss_confirm: '待老板确认',
-  pending_boss_confirmation: '待老板确认',
-  boss_confirmed: '老板已确认',
-  revision_pending: '待修订',
-};
-
-function toQuoteStatusLabel(status: string | undefined) {
-  const normalized = status?.trim();
-  if (!normalized) {
-    return '-';
-  }
-
-  const label = quoteStatusLabels[normalized];
-  return label ? `${normalized} / ${label}` : normalized;
-}
-
-function toQuoteSecondaryStatusLabel(status: string | undefined) {
-  const normalized = status?.trim();
-  if (!normalized || !quoteStatusLabels[normalized]) {
-    return null;
-  }
-
-  return toQuoteStatusLabel(normalized);
 }
 
 function toFormalQuoteDetailHref(detailHref: string) {
@@ -236,6 +203,21 @@ const tableCellStyle = {
   verticalAlign: 'top' as const,
 } satisfies React.CSSProperties;
 
+const lineDisplayStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  height: '30px',
+  whiteSpace: 'nowrap',
+} satisfies React.CSSProperties;
+
+const lineNumberStyle = {
+  flex: '0 0 22px',
+  color: '#64748b',
+  fontSize: '12px',
+  fontWeight: 700,
+} satisfies React.CSSProperties;
+
 const rowLinkStyle = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -350,7 +332,7 @@ export default async function AppQuoteListPage({
     ['keyword', query.keyword],
     ['documentType', query.documentType ? toQuoteDocumentTypeLabel(query.documentType) : undefined],
     ['docNo', query.docNo],
-    ['status', query.status ? toQuoteStatusLabel(query.status) : undefined],
+    ['status', query.status ? formatQuoteStatus(query.status) : undefined],
     ['customerName', query.customerName],
     ['createdBy', query.createdBy],
     ['sourceType', query.sourceType ? formatQuoteSourceType(query.sourceType) : undefined],
@@ -435,7 +417,7 @@ export default async function AppQuoteListPage({
               <option value="">全部</option>
               {QUOTE_STATUSES.map((status) => (
                 <option key={status} value={status}>
-                  {toQuoteStatusLabel(status)}
+                  {formatQuoteStatus(status)}
                 </option>
               ))}
             </select>
@@ -507,9 +489,10 @@ export default async function AppQuoteListPage({
             <tr>
               <th style={tableHeadCellStyle}>单号</th>
               <th style={tableHeadCellStyle}>类型 Type</th>
-              <th style={tableHeadCellStyle}>客户 Customer</th>
               <th style={tableHeadCellStyle}>状态 Status</th>
-              <th style={tableHeadCellStyle}>来源 Source</th>
+              <th style={tableHeadCellStyle}>客户 Customer</th>
+              <th style={tableHeadCellStyle}>产品 Product</th>
+              <th style={tableHeadCellStyle}>数量 Qty</th>
               <th style={tableHeadCellStyle}>创建人 Created By</th>
               <th style={{ ...tableHeadCellStyle, minWidth: '148px' }}>操作 Action</th>
             </tr>
@@ -519,11 +502,18 @@ export default async function AppQuoteListPage({
               <tr key={item.detailHref}>
                 <td style={tableCellStyle}>
                   <strong>{item.docNo}</strong>
-                  <br />
-                  {item.title}
                 </td>
                 <td style={tableCellStyle}>
                   {toQuoteDocumentTypeLabel(item.documentType)}
+                </td>
+                <td style={tableCellStyle}>
+                  {formatQuoteStatus(item.status)}
+                  {isKnownQuoteStatus(item.secondaryStatus) ? (
+                    <>
+                      <br />
+                      {formatQuoteStatus(item.secondaryStatus)}
+                    </>
+                  ) : null}
                 </td>
                 <td style={tableCellStyle}>
                   {formatCounterpartyListDisplayName(
@@ -532,15 +522,38 @@ export default async function AppQuoteListPage({
                   )}
                 </td>
                 <td style={tableCellStyle}>
-                  {toQuoteStatusLabel(item.status)}
-                  {toQuoteSecondaryStatusLabel(item.secondaryStatus) ? (
-                    <>
-                      <br />
-                      {toQuoteSecondaryStatusLabel(item.secondaryStatus)}
-                    </>
-                  ) : null}
+                  {item.items?.length ? item.items.map((line, index) => (
+                    <div
+                      key={line.lineNo}
+                      style={{ ...lineDisplayStyle, width: 'clamp(160px, 22vw, 280px)', borderTop: index ? '1px solid #e2e8f0' : undefined }}
+                    >
+                      <span style={lineNumberStyle}>{`${line.lineNo}. `}</span>
+                      <Link
+                        href={toFormalQuoteDetailHref(item.detailHref)}
+                        title={line.productName}
+                        style={{
+                          display: 'block',
+                          flex: 1,
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          color: 'inherit',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        {line.productName || '-'}
+                      </Link>
+                    </div>
+                  )) : '-'}
                 </td>
-                <td style={tableCellStyle}>{formatQuoteSourceType(item.sourceType)}</td>
+                <td style={tableCellStyle}>
+                  {item.items?.length ? item.items.map((line, index) => (
+                    <div key={line.lineNo} style={{ ...lineDisplayStyle, borderTop: index ? '1px solid #e2e8f0' : undefined }}>
+                      <span style={lineNumberStyle}>{`${line.lineNo}. `}</span>
+                      <span>{line.quantity}{line.unit ? ` ${line.unit}` : ''}</span>
+                    </div>
+                  )) : '-'}
+                </td>
                 <td style={tableCellStyle}>{item.createdBy}</td>
                 <td style={tableCellStyle}>
                   <div style={actionStackStyle}>

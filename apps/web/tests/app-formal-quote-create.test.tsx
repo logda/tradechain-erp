@@ -133,7 +133,7 @@ describe('formal quote create page', () => {
     expect(screen.getAllByRole('option', { name: 'Leo / 销售 Leo' })).toHaveLength(1);
     expect(screen.getByLabelText('目的地 Destination')).toBeInTheDocument();
     expect(
-      screen.getByText((_, element) => element?.textContent === '需求/报价明细 Line Item *'),
+      screen.getByText((_, element) => element?.textContent === '需求明细 Line Item *'),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '选择产品库产品 Product Picker' }),
@@ -147,6 +147,7 @@ describe('formal quote create page', () => {
     expect(screen.getByRole('option', { name: 'TikTok / tiktok' })).toBeInTheDocument();
     expect(screen.queryByLabelText('产品编码 Product Code')).not.toBeInTheDocument();
     expect(screen.getByLabelText('需求说明 Requirements')).toBeInTheDocument();
+    expect(screen.getByLabelText('附件 Attachments')).toHaveAttribute('type', 'file');
     expect(screen.getByRole('button', { name: '保存需求草稿' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '提交需求单' })).toBeInTheDocument();
   });

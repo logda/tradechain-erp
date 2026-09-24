@@ -175,10 +175,10 @@ describe('formal detail pages', () => {
       'x-erp-session': expect.any(String),
       'x-erp-session-signature': expect.any(String),
     });
-    expect(screen.getByText('草稿')).toBeInTheDocument();
+    expect(screen.getByText('draft / 草稿')).toBeInTheDocument();
     expect(screen.getAllByText('报价附件 Quote Attachments')).toHaveLength(2);
     expect(screen.getAllByText('quote-spec.pdf')).toHaveLength(2);
-    expect(screen.getByRole('heading', { name: '需求/报价明细' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '报价明细' })).toBeInTheDocument();
     expect(screen.getByText('星河贸易 / Acme Trading')).toBeInTheDocument();
     expect(screen.getByText('SKU-LED-001')).toBeInTheDocument();
     expect(screen.getByText('智能 LED 灯带')).toBeInTheDocument();

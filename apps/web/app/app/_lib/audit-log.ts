@@ -1,3 +1,5 @@
+import { formatQuoteStatus } from './quote-status';
+
 export type AuditLogItem = {
   id: number;
   bizType: string;
@@ -411,6 +413,10 @@ export function formatAuditCreatedAt(createdAt: string) {
 export function buildAuditChangeSummary(item: AuditLogItem): AuditChangeSummary {
   const beforeRecord = isPlainRecord(item.beforeData) ? item.beforeData : null;
   const afterRecord = isPlainRecord(item.afterData) ? item.afterData : null;
+  const formatFieldValue = (field: string, value: unknown) =>
+    item.bizType === 'quote' && field === 'status' && typeof value === 'string'
+      ? formatQuoteStatus(value)
+      : formatAuditValue(value);
 
   if (!beforeRecord && afterRecord) {
     const rows = Object.entries(afterRecord)
@@ -419,7 +425,7 @@ export function buildAuditChangeSummary(item: AuditLogItem): AuditChangeSummary 
       .map(([field, value]) => ({
         field: formatAuditFieldName(field),
         before: '-',
-        after: formatAuditValue(value),
+        after: formatFieldValue(field, value),
       }));
 
     return {
@@ -434,7 +440,7 @@ export function buildAuditChangeSummary(item: AuditLogItem): AuditChangeSummary 
       .slice(0, 4)
       .map(([field, value]) => ({
         field: formatAuditFieldName(field),
-        before: formatAuditValue(value),
+        before: formatFieldValue(field, value),
         after: '-',
       }));
 
@@ -457,8 +463,8 @@ export function buildAuditChangeSummary(item: AuditLogItem): AuditChangeSummary 
       .slice(0, 5)
       .map((field) => ({
         field: formatAuditFieldName(field),
-        before: formatAuditValue(beforeRecord[field]),
-        after: formatAuditValue(afterRecord[field]),
+        before: formatFieldValue(field, beforeRecord[field]),
+        after: formatFieldValue(field, afterRecord[field]),
       }));
 
     return {

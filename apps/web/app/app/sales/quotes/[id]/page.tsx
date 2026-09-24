@@ -24,6 +24,7 @@ import { buildSignedFormalRequestHeaders } from '../../../_lib/formal-request-si
 import { loadActiveCounterpartyOptions } from '../../../_lib/counterparty-options';
 import { loadActiveProductOptions } from '../../../_lib/product-options';
 import { loadQuoteSourceOptions } from '../../../_lib/quote-source-options';
+import { formatQuoteStatus } from '../../../_lib/quote-status';
 import {
   loadSalesUserOptions,
   resolveDefaultSalesUserId,
@@ -432,23 +433,15 @@ function renderQuoteAttachments(attachments: QuoteDetail['quoteAttachments']) {
   );
 }
 
-function resolveQuoteStatusText(quote: Pick<QuoteDetail, 'status' | 'currentProgress'>) {
-  if (quote.status === 'draft') {
-    return '草稿';
-  }
-
-  return quote.currentProgress ?? quote.status;
-}
-
 function resolveQuoteDocumentLabel(documentType?: QuoteDetail['documentType']) {
   return documentType === 'demand' ? '需求单' : '报价单';
 }
 
 function resolveFeedbackLabel(result?: QuoteDetail['customerFeedbackResult']) {
-  if (result === 'accepted') return '客户已接受';
-  if (result === 'no_follow_up') return '暂无后续';
-  if (result === 'price_issue') return '价格有问题';
-  return '待反馈';
+  if (result === 'accepted') return 'accepted / 客户已接受';
+  if (result === 'no_follow_up') return 'no_follow_up / 暂无后续';
+  if (result === 'price_issue') return 'price_issue / 价格有问题';
+  return 'pending / 待反馈';
 }
 
 function formatOperationTime(value?: string) {
@@ -599,15 +592,11 @@ export default async function AppQuoteDetailPage({
         <div style={gridStyle}>
           <article style={infoCardStyle}>
             <p style={labelStyle}>当前进度 Current Status</p>
-            <p style={valueStyle}>{resolveQuoteStatusText(quote)}</p>
+            <p style={valueStyle}>{formatQuoteStatus(quote.status)}</p>
           </article>
           <article style={infoCardStyle}>
             <p style={labelStyle}>来源 Source</p>
             <p style={valueStyle}>{quote.sourceCode}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>版本 Version</p>
-            <p style={valueStyle}>V{quote.currentVersionNo}</p>
           </article>
           {quote.linkedSalesOrderId ? (
             <article style={infoCardStyle}>
@@ -668,14 +657,18 @@ export default async function AppQuoteDetailPage({
         </article>
 
         <article style={infoCardStyle}>
-          <p style={labelStyle}>报价附件 Quote Attachments</p>
+          <p style={labelStyle}>
+            {quote.documentType === 'demand' ? '附件 Attachments' : '报价附件 Quote Attachments'}
+          </p>
           <div style={detailTextStyle}>
             {renderQuoteAttachments(quote.quoteAttachments)}
           </div>
         </article>
 
         <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>需求/报价明细</h3>
+          <h3 style={{ marginTop: 0 }}>
+            {quote.documentType === 'demand' ? '需求明细' : '报价明细'}
+          </h3>
           <div style={tableWrapStyle}>
             <table style={tableStyle}>
               <thead>
@@ -710,6 +703,11 @@ export default async function AppQuoteDetailPage({
           </div>
         </article>
 
+        <article style={infoCardStyle}>
+          <p style={labelStyle}>版本 Version</p>
+          <p style={valueStyle}>V{quote.currentVersionNo}</p>
+        </article>
+
         {(quote.items ?? []).some((item) => Number(item.confirmedSalePrice) > 0) ? (
           <article style={infoCardStyle}>
             <h3 style={{ marginTop: 0 }}>报价结果</h3>
@@ -740,34 +738,6 @@ export default async function AppQuoteDetailPage({
           </article>
         ) : null}
 
-        {quote.documentType === 'demand' && quote.productSource !== 'candidate' ? (
-          <article style={actionPanelStyle}>
-            <h2 style={{ marginTop: 0 }}>老板审批需求单</h2>
-            <ActionPermissionNote>
-              老板只审批需求是否通过，不在这里填写或修改销售价格。
-            </ActionPermissionNote>
-            {quote.status === 'pending_boss_approval' && canUseBossActions ? (
-              <MutationActionForm
-                endpoint={`${getQuoteApiBaseUrl()}/quotes/${quote.id}/approve-demand`}
-                label="审批通过"
-                successLabel="需求单审批通过"
-                requiredAction="boss.confirm"
-                requiredActionLabel="老板审批"
-                requestHeaders={actionRequestHeaders}
-                fields={[]}
-              />
-            ) : (
-              <p style={detailTextStyle}>
-                {quote.status === 'boss_approved'
-                  ? '需求单已审批通过，可以转为销售单。'
-                  : quote.status === 'pending_boss_approval'
-                    ? '当前账号仅可查看，等待老板审批。'
-                    : `当前状态：${resolveQuoteStatusText(quote)}`}
-              </p>
-            )}
-          </article>
-        ) : null}
-
         {quote.documentType === 'quote' ? (
           <article style={actionPanelStyle}>
             <h2 style={{ marginTop: 0 }}>老板确认报价售价</h2>
@@ -785,7 +755,7 @@ export default async function AppQuoteDetailPage({
               <p style={detailTextStyle}>
                 {quote.status === 'pending_boss_price_confirmation'
                   ? '当前账号仅可查看，等待老板确认最终售价。'
-                  : `当前状态：${resolveQuoteStatusText(quote)}`}
+                  : `当前状态：${formatQuoteStatus(quote.status)}`}
               </p>
             )}
           </article>
@@ -839,7 +809,7 @@ export default async function AppQuoteDetailPage({
                     <div key={`${version.versionNo}-${version.confirmedAt ?? version.status}`} style={infoCardStyle}>
                       <strong>V{version.versionNo}</strong>
                       <p style={detailTextStyle}>
-                        {version.status} · {version.confirmedBy || '-'} ·{' '}
+                        {formatQuoteStatus(version.status)} · {version.confirmedBy || '-'} ·{' '}
                         {formatOperationTime(version.confirmedAt)}
                       </p>
                     </div>
@@ -868,11 +838,18 @@ export default async function AppQuoteDetailPage({
         ) : null}
 
         <article style={actionPanelStyle}>
+          <h2 style={{ marginTop: 0 }}>
+            {quote.documentType === 'demand' ? '需求单操作' : '报价单操作'}
+          </h2>
           <ActionPermissionNote>
             {quote.documentType === 'demand' && quote.linkedSalesOrderId
               ? '需求单已转为销售单，可前往销售单继续查看和处理。'
               : quote.documentType === 'quote' && quote.linkedSalesOrderId
                 ? '报价单已转为销售单，可前往销售单继续查看和处理。'
+              : quote.documentType === 'demand' && quote.status === 'pending_boss_approval'
+                ? canUseBossActions
+                  ? '老板只审批需求是否通过，不在这里填写或修改销售价格。'
+                  : '当前账号仅可查看，等待老板审批。'
               : isConvertible
               ? quote.documentType === 'demand'
                 ? '需求单已通过老板审批，可以转为销售单。'
@@ -885,6 +862,20 @@ export default async function AppQuoteDetailPage({
                   ? '需求单尚未满足转销售单条件，请按当前流程状态继续处理。'
                   : '报价单尚未满足转销售单条件：必须先由老板确认售价，再由销售记录客户接受。'}
           </ActionPermissionNote>
+          {quote.documentType === 'demand' &&
+          quote.productSource !== 'candidate' &&
+          quote.status === 'pending_boss_approval' &&
+          canUseBossActions ? (
+            <MutationActionForm
+              endpoint={`${getQuoteApiBaseUrl()}/quotes/${quote.id}/approve-demand`}
+              label="审批通过"
+              successLabel="需求单审批通过"
+              requiredAction="boss.confirm"
+              requiredActionLabel="老板审批"
+              requestHeaders={actionRequestHeaders}
+              fields={[]}
+            />
+          ) : null}
           {isDraftQuote && draftEditData ? (
             <CreateFormalQuoteForm
               customerOptions={draftEditData[0]}
