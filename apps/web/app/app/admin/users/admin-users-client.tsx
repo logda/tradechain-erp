@@ -401,10 +401,10 @@ export function AdminUsersClient({
       <section style={sectionStyle}>
         <h3 style={{ marginTop: 0 }}>角色权限配置</h3>
         <p style={{ color: '#475569', lineHeight: 1.7 }}>
-          每个角色可以单独配置可见模块和数据范围。管理员和老板默认保留全业务能力。
+          管理员权限固定，无法在此修改。其他角色可单独配置可见模块、数据范围和动作权限。
         </p>
         <div style={{ display: 'grid', gap: '16px' }}>
-          {rolePermissionItems.map((item) => (
+          {rolePermissionItems.filter((item) => item.roleCode !== 'admin').map((item) => (
             <RolePermissionEditor
               key={item.roleCode}
               endpoint={`${apiBaseUrl}/admin/users/role-permissions/${item.roleCode}`}

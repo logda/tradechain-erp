@@ -76,6 +76,16 @@ describe('admin users page', () => {
           json: async () => ({
             items: [
               {
+                roleCode: 'admin',
+                accessScopes: {
+                  modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'admin'],
+                  dataScope: 'all',
+                  actions: ['audit.view', 'admin.role.write'],
+                },
+                updatedBy: 'system',
+                updatedAt: '2026-07-11T09:00:00.000Z',
+              },
+              {
                 roleCode: 'sales',
                 accessScopes: {
                   modules: ['sales'],
@@ -105,6 +115,8 @@ describe('admin users page', () => {
     expect(screen.getByText('Zoe')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '审计日志' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '角色权限配置' })).toBeInTheDocument();
+    expect(screen.queryByText('角色 Role: admin')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '保存权限' })).toHaveLength(1);
     expect(screen.getByText('停用账号 / deactivate_user')).toBeInTheDocument();
     expect(
       screen.getByText('销售、采购、运营、老板看板、用户管理'),

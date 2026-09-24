@@ -45,6 +45,19 @@ describe('UserManagementService prisma storage', () => {
     expect(rolePermission.findMany).toHaveBeenCalledTimes(1);
   });
 
+  it('does not write fixed admin role permissions in Prisma mode', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const upsert = jest.fn();
+    const service = new UserManagementService({
+      rolePermission: { upsert },
+    } as unknown as PrismaService);
+
+    await expect(service.updateRolePermission('admin', {
+      modules: ['sales'], dataScope: 'all', actions: [], updatedBy: 'admin',
+    })).rejects.toThrow('管理员权限固定');
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
   it('authenticates users from Prisma and writes login audit logs', async () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const prisma = {

@@ -264,6 +264,21 @@ describe('UserManagementService', () => {
       .toContain('audit.view');
   });
 
+  it('rejects updates to fixed admin permissions instead of reporting a false success', async () => {
+    const service = new UserManagementService();
+    const before = (await service.listRolePermissions()).items.find((item) => item.roleCode === 'admin');
+
+    await expect(service.updateRolePermission('admin', {
+      modules: ['sales'],
+      dataScope: 'own_sales',
+      actions: [],
+      updatedBy: 'admin',
+    })).rejects.toThrow('管理员权限固定');
+
+    const after = (await service.listRolePermissions()).items.find((item) => item.roleCode === 'admin');
+    expect(after).toEqual(before);
+  });
+
   it('updates a role permission and uses it for login/session access scopes', async () => {
     const service = new UserManagementService();
 

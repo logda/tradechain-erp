@@ -516,6 +516,9 @@ export class UserManagementService {
     }
 
     const roleCode = roleCodeValue as RoleCode;
+    if (roleCode === 'admin') {
+      throw new BadRequestException('管理员权限固定，不能在此修改');
+    }
     const updatedBy = payload.updatedBy.trim() || 'admin';
     const accessScopes = normalizeAccessScopes(roleCode, payload);
 
