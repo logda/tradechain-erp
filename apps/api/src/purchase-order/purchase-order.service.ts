@@ -1637,7 +1637,7 @@ export class PurchaseOrderService {
     record: CreatedPurchaseOrderRecord,
     session?: FormalSession,
   ) {
-    if (record.lockedPurchaseOwner && session?.user &&
+    if (session?.user &&
         record.ownerName !== session.user?.trim()) {
       throw new BadRequestException('仅指定采购负责人可处理此采购单');
     }
@@ -1763,7 +1763,6 @@ export class PurchaseOrderService {
       if (await this.needsExistingDirectOwnerAssignment(beforeData)) {
         throw new BadRequestException('请先分配采购负责人');
       }
-      this.assertPurchaseOwnerForMutation(beforeData, payload.session);
       if (
         beforeData.status !== 'draft' &&
         beforeData.status !== 'pending_purchase_claim'
@@ -1778,9 +1777,10 @@ export class PurchaseOrderService {
         fallbackOwnerName: beforeData.ownerName,
         session: payload.session,
       });
-      if (beforeData.lockedPurchaseOwner && ownerName !== beforeData.ownerName) {
-        throw new BadRequestException('来源销售单的采购负责人不可修改');
+      if (ownerName !== beforeData.ownerName) {
+        throw new BadRequestException('采购负责人不可通过保存草稿修改');
       }
+      this.assertPurchaseOwnerForMutation(beforeData, payload.session);
       const supplierId =
         payload.supplierId === undefined
           ? beforeData.supplierId
@@ -1833,7 +1833,6 @@ export class PurchaseOrderService {
       if (await this.needsExistingDirectOwnerAssignment(created)) {
         throw new BadRequestException('请先分配采购负责人');
       }
-      this.assertPurchaseOwnerForMutation(created, payload.session);
       if (
         created.status !== 'draft' &&
         created.status !== 'pending_purchase_claim'
@@ -1849,9 +1848,10 @@ export class PurchaseOrderService {
         fallbackOwnerName: created.ownerName,
         session: payload.session,
       });
-      if (created.lockedPurchaseOwner && ownerName !== created.ownerName) {
-        throw new BadRequestException('来源销售单的采购负责人不可修改');
+      if (ownerName !== created.ownerName) {
+        throw new BadRequestException('采购负责人不可通过保存草稿修改');
       }
+      this.assertPurchaseOwnerForMutation(created, payload.session);
       const supplierId =
         payload.supplierId === undefined
           ? created.supplierId

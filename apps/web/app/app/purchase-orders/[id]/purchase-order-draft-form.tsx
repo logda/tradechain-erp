@@ -15,14 +15,6 @@ import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import type { CounterpartyOption } from '../../_lib/counterparty-options';
 import type { MutationField } from '../../_lib/mutation-action';
 
-type PurchaseOwnerOption = {
-  id: number;
-  username: string;
-  realName: string;
-  roleCode: string;
-  status: string;
-};
-
 type PurchaseDraftLineItem = {
   lineNo: number;
   sku: string;
@@ -36,14 +28,11 @@ type PurchaseOrderDraftFormProps = {
   endpoint: string;
   currentStatus: string;
   currentOwnerName: string;
-  ownerOptions: PurchaseOwnerOption[];
   supplierOptions: CounterpartyOption[];
   currentSupplierId: number;
   currentSupplierName: string;
   items: PurchaseDraftLineItem[];
   requestHeaders: Record<string, string>;
-  isPurchaseUser: boolean;
-  lockedOwner?: boolean;
 };
 
 const fieldGridStyle = {
@@ -125,14 +114,11 @@ export function PurchaseOrderDraftForm({
   endpoint,
   currentStatus,
   currentOwnerName,
-  ownerOptions,
   supplierOptions,
   currentSupplierId,
   currentSupplierName,
   items,
   requestHeaders,
-  isPurchaseUser,
-  lockedOwner,
 }: PurchaseOrderDraftFormProps) {
   let router: { refresh?: () => void } = {};
   try {
@@ -140,7 +126,6 @@ export function PurchaseOrderDraftForm({
   } catch {
     router = {};
   }
-  const [ownerName, setOwnerName] = useState(currentOwnerName);
   const [supplierMode, setSupplierMode] = useState<SupplierMode>(
     resolveInitialSupplierMode(currentSupplierId, currentSupplierName),
   );
@@ -186,7 +171,7 @@ export function PurchaseOrderDraftForm({
     const formData = new FormData(event.currentTarget);
     const fields: MutationField[] = [
       { name: 'currentStatus', value: currentStatus },
-      { name: 'ownerName', value: ownerName },
+      { name: 'ownerName', value: currentOwnerName },
       { name: 'supplierId', value: supplierIdValue, dataType: 'number' },
       { name: 'supplierName', value: supplierNameValue },
       ...items.map((item) => ({
@@ -224,27 +209,16 @@ export function PurchaseOrderDraftForm({
   return (
     <form onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={formalActionFormStyle}>
       <input name="currentStatus" type="hidden" value={currentStatus} />
+      <input name="ownerName" type="hidden" value={currentOwnerName} />
       <input name="supplierId" type="hidden" value={supplierIdValue} />
       <input name="supplierName" type="hidden" value={supplierNameValue} />
 
       <div style={fieldGridStyle}>
         <label style={fieldLabelStyle}>
           采购负责人 Purchase Owner *
-          {lockedOwner ? <strong>{ownerName}</strong> : <select
-            name="ownerName"
-            value={ownerName}
-            required
-            onChange={(event) => setOwnerName(event.target.value)}
-            style={inputStyle}
-          >
-            {ownerOptions.map((owner) => (
-              <option key={owner.id} value={owner.realName}>
-                {owner.realName} / {owner.roleCode}
-              </option>
-            ))}
-          </select>}
+          <strong>{currentOwnerName}</strong>
           <span style={helpTextStyle}>
-            {lockedOwner ? '由来源销售单的采购归属确定，不可更改' : isPurchaseUser ? '普通采购只能选择自己' : '可选范围按当前角色权限控制'}
+            采购负责人已确定；保存草稿与提交审批都不能更改。
           </span>
         </label>
 

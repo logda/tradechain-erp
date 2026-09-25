@@ -618,7 +618,7 @@ describe('PurchaseOrderService', () => {
     ).rejects.toThrow('请先补充采购价后再提交采购审批');
   });
 
-  it('saves purchase owner edits while keeping draft and claim statuses unchanged', async () => {
+  it('does not reassign a purchase owner through draft saving', async () => {
     const service = new PurchaseOrderService();
 
     const draftCreatedResult = await service.createFromSalesOrder({
@@ -635,14 +635,13 @@ describe('PurchaseOrderService', () => {
       ],
     });
     const draftCreated = draftCreatedResult.purchaseOrders[0];
-    const draftResult = await service.saveDraft({
+    await expect(service.saveDraft({
       purchaseOrderId: draftCreated.id,
       currentStatus: 'draft',
       ownerName: 'Nina',
-    });
-    expect(draftResult).toMatchObject({
-      status: 'draft',
-      ownerName: 'Nina',
+    })).rejects.toThrow('采购负责人不可通过保存草稿修改');
+    expect(await service.getDetail(draftCreated.id)).toMatchObject({
+      status: 'draft', ownerName: draftCreated.ownerName,
     });
 
     const createdResult = await service.createFromSalesOrder({

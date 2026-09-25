@@ -109,13 +109,13 @@ describe('stage 09 purchase ownership', () => {
       currentStatus: 'pending_purchase_claim',
       ownerName: 'Nina',
       session: { role: 'purchase', user: 'Nina' },
-    })).rejects.toThrow('仅指定采购负责人');
+    })).rejects.toThrow('采购负责人不可通过保存草稿修改');
     await expect(service.saveDraft({
       purchaseOrderId,
       currentStatus: 'pending_purchase_claim',
       ownerName: 'Nina',
       session: { role: 'purchase_manager', user: 'Leo' },
-    })).rejects.toThrow('负责人不可修改');
+    })).rejects.toThrow('采购负责人不可通过保存草稿修改');
     await expect(service.submit({
       purchaseOrderId,
       currentStatus: 'pending_purchase_claim',
@@ -166,7 +166,7 @@ describe('stage 09 purchase ownership', () => {
     await expect(service.saveDraft({
       purchaseOrderId: legacy.id, currentStatus: 'pending_purchase_claim', ownerName: 'Leo',
       session: { role: 'purchase', user: 'Leo' },
-    })).rejects.toThrow('仅指定采购负责人');
+    })).rejects.toThrow('采购负责人不可通过保存草稿修改');
   });
 
   it('persists an existing direct purchase assignment in Prisma without changing the supplier', async () => {
@@ -211,6 +211,29 @@ describe('stage 09 purchase ownership', () => {
     });
     expect(await service.getDetail(504)).toMatchObject({ needsPurchaseAssignment: false });
     expect(prisma.operationLog.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let draft saving silently reassign an already-owned purchase order', async () => {
+    const directory = { listAssignablePurchaseUsers: jest.fn().mockResolvedValue([
+      { id: 2002, realName: 'Leo', username: 'leo', roleCode: 'purchase', status: 'active' },
+      { id: 2003, realName: 'Nina', username: 'nina', roleCode: 'purchase', status: 'active' },
+    ]) };
+    const service = new PurchaseOrderService(undefined, undefined, directory as never);
+    const created = await service.createFromSalesOrder({
+      salesOrderId: 905, createdBy: 2001, ownerName: 'Leo',
+      initialStatus: 'pending_purchase_claim',
+      items: [{ salesItemId: 1, supplierId: 3001, productId: 501, quantity: 1, unitPrice: 10 }],
+    });
+    const purchaseOrderId = created.purchaseOrders[0].id;
+    await expect(service.saveDraft({
+      purchaseOrderId, currentStatus: 'pending_purchase_claim', ownerName: 'Nina',
+      session: { role: 'purchase_manager', user: 'Mia' },
+    })).rejects.toThrow('采购负责人不可通过保存草稿修改');
+    expect(await service.getDetail(purchaseOrderId)).toMatchObject({ ownerName: 'Leo' });
+    await expect(service.saveDraft({
+      purchaseOrderId, currentStatus: 'pending_purchase_claim', ownerName: 'Leo',
+      session: { role: 'purchase', user: 'Leo' },
+    })).resolves.toMatchObject({ ownerName: 'Leo' });
   });
 
   it('uses the actual inquiry comparison submitter for quote-sourced purchase conversion', async () => {

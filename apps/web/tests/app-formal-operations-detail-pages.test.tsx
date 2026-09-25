@@ -155,7 +155,7 @@ describe('formal operations detail pages', () => {
           params: Promise.resolve({ id: '101' }),
           searchParams: Promise.resolve({
             role: 'admin',
-            user: 'Admin',
+            user: 'Zoe',
           }),
         })}
       </>,
@@ -190,7 +190,7 @@ describe('formal operations detail pages', () => {
     expect(
       screen.getByRole('button', { name: '保存草稿' }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText(/采购负责人 Purchase Owner/)).toHaveValue('Zoe');
+    expect(screen.getByText(/采购负责人 Purchase Owner \*/)).toHaveTextContent('Zoe');
     expect(
       screen.queryByRole('link', { name: '打开发货批次页' }),
     ).not.toBeInTheDocument();
@@ -570,7 +570,7 @@ describe('formal operations detail pages', () => {
     expect(
       screen.getByRole('button', { name: '保存草稿' }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText(/采购负责人 Purchase Owner/)).toHaveValue('Leo');
+    expect(screen.getByText(/采购负责人 Purchase Owner \*/)).toHaveTextContent('Leo');
     expect(screen.getByText('供应商：待补供应商')).toBeInTheDocument();
     expect(screen.getByRole('group', { name: '供应商录入方式 Supplier Mode' })).toBeInTheDocument();
     expect(screen.getByLabelText(/供应商 Supplier/)).toHaveValue('');

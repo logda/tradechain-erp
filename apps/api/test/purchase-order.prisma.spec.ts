@@ -282,5 +282,11 @@ describe('PurchaseOrderService prisma document storage', () => {
       status: 'pending_purchase_claim',
       ownerName: 'Leo',
     });
+    await expect(service.saveDraft({
+      purchaseOrderId: 303,
+      currentStatus: 'pending_purchase_claim',
+      ownerName: 'Nina',
+    })).rejects.toThrow('采购负责人不可通过保存草稿修改');
+    expect(prismaMock.businessDocument.update).toHaveBeenCalledTimes(1);
   });
 });

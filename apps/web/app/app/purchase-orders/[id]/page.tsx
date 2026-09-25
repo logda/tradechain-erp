@@ -843,7 +843,7 @@ export default async function AppPurchaseOrderDetailPage({
   const canShowPurchaseSubmitAction =
     canSubmitPurchaseOrder &&
     !purchaseOrder.needsPurchaseAssignment &&
-    (!purchaseOrder.lockedPurchaseOwner || purchaseOrder.ownerName === session.user) &&
+    purchaseOrder.ownerName === session.user &&
     (purchaseOrder.status === 'draft' ||
       purchaseOrder.status === 'pending_purchase_claim');
   const canSavePurchaseDraft = canShowPurchaseSubmitAction;
@@ -1198,8 +1198,6 @@ export default async function AppPurchaseOrderDetailPage({
                 endpoint={`${getPurchaseOrderApiBaseUrl()}/purchase-orders/${purchaseOrder.id}/draft`}
                 currentStatus={purchaseOrder.status}
                 currentOwnerName={purchaseOrder.ownerName ?? purchaseOwnerOptions[0]?.realName ?? session.user}
-                ownerOptions={purchaseOwnerOptions}
-                lockedOwner={purchaseOrder.lockedPurchaseOwner}
                 supplierOptions={supplierPickerOptions}
                 currentSupplierId={purchaseOrder.supplierId ?? 0}
                 currentSupplierName={purchaseOrder.supplierName ?? ''}
@@ -1210,7 +1208,6 @@ export default async function AppPurchaseOrderDetailPage({
                   unitPrice: item.unitPrice,
                 }))}
                 requestHeaders={actionRequestHeaders}
-                isPurchaseUser={session.role === 'purchase'}
               />
             ) : null}
             {canApprovePurchaseOrder &&
