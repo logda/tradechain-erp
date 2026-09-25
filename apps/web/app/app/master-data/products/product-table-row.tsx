@@ -11,6 +11,7 @@ import type {
 } from './create-product-form';
 import type { ProductSupplierOption } from './product-supplier-options';
 import { UpdateProductForm } from './update-product-form';
+import type { CounterpartyCustomField } from '../counterparties/counterparty-extra-fields';
 
 type ProductTableRowItem = {
   id: number;
@@ -35,7 +36,8 @@ type ProductTableRowItem = {
   unit: string;
   currency: string;
   defaultSalePrice: number;
-  defaultPurchasePrice: number;
+  defaultPurchasePrice?: number;
+  customValues?: Record<string, string>;
   salePriceTiers?: Array<{
     id: number;
     minQuantity: number;
@@ -53,6 +55,8 @@ type ProductTableRowItem = {
 type ProductTableRowProps = {
   item: ProductTableRowItem;
   canManageMasterData: boolean;
+  salesView?: boolean;
+  customFields?: CounterpartyCustomField[];
   updatedBy: string;
   supplierOptions: ProductSupplierOption[];
   actorAccessScopes?: {
@@ -62,6 +66,7 @@ type ProductTableRowProps = {
   };
   requestHeaders: Record<string, string>;
   apiBaseUrl: string;
+  mutationApiBaseUrl?: string;
 };
 
 const categoryLabels: Record<ProductCategory, string> = {
@@ -279,11 +284,14 @@ function renderStatusBadge(status: ProductTableRowItem['status']) {
 export function ProductTableRow({
   item,
   canManageMasterData,
+  salesView = false,
+  customFields = [],
   updatedBy,
   supplierOptions,
   actorAccessScopes,
   requestHeaders,
   apiBaseUrl,
+  mutationApiBaseUrl = apiBaseUrl,
 }: ProductTableRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [currentItem, setCurrentItem] = useState(item);
@@ -300,13 +308,13 @@ export function ProductTableRow({
         <td style={isEditing ? rowEditingCellStyle : cellStyle}>
           <div style={stackCellStyle}>
             <div>
-              <div style={fieldLabelStyle}>销售编码 Sales</div>
+              <div style={fieldLabelStyle}>产品编码 Product Code</div>
               <div style={primaryValueStyle}>{currentItem.salesCode || '-'}</div>
             </div>
-            <div>
+            {!salesView ? <div>
               <div style={fieldLabelStyle}>采购编码 Purchase</div>
               <div style={secondaryValueStyle}>{currentItem.purchaseCode || '-'}</div>
-            </div>
+            </div> : null}
           </div>
         </td>
         <td style={isEditing ? rowEditingCellStyle : cellStyle}>
@@ -327,7 +335,7 @@ export function ProductTableRow({
             </div>
           </div>
         </td>
-        <td style={isEditing ? rowEditingCellStyle : cellStyle}>
+        {!salesView ? <td style={isEditing ? rowEditingCellStyle : cellStyle}>
           <div style={stackCellStyle}>
             <div>
               <div style={fieldLabelStyle}>工厂 Factory</div>
@@ -344,7 +352,7 @@ export function ProductTableRow({
               <div style={secondaryValueStyle}>{renderMutedValue(currentItem.defaultSupplierCode)}</div>
             </div>
           </div>
-        </td>
+        </td> : null}
         <td style={isEditing ? rowEditingCellStyle : cellStyle}>
           <div style={stackCellStyle}>
             <div>
@@ -402,9 +410,9 @@ export function ProductTableRow({
               ))}
             </div>
             <div>
-              <div style={fieldLabelStyle}>默认销售价 / 默认采购价</div>
+              <div style={fieldLabelStyle}>{salesView ? '默认销售价' : '默认销售价 / 默认采购价'}</div>
               <div style={secondaryValueStyle}>
-                {`Sale ${currentItem.defaultSalePrice} / Purchase ${currentItem.defaultPurchasePrice}`}
+                {salesView ? `Sale ${currentItem.defaultSalePrice}` : `Sale ${currentItem.defaultSalePrice} / Purchase ${currentItem.defaultPurchasePrice}`}
               </div>
             </div>
           </div>
@@ -419,7 +427,7 @@ export function ProductTableRow({
             )}
           </div>
         </td>
-        <td style={isEditing ? rowEditingCellStyle : cellStyle}>
+        {!salesView ? <td style={isEditing ? rowEditingCellStyle : cellStyle}>
           {canEditItem ? (
             <button
               type="button"
@@ -434,13 +442,13 @@ export function ProductTableRow({
           ) : (
             <span style={mutedValueStyle}>无权限</span>
           )}
-        </td>
-        <td style={isEditing ? rowEditingCellStyle : cellStyle}>
+        </td> : null}
+        {!salesView ? <td style={isEditing ? rowEditingCellStyle : cellStyle}>
           {canManageMasterData && currentItem.status !== 'deleted' ? (
             <div style={actionStackStyle}>
               {currentItem.status === 'active' ? (
                 <MutationActionForm
-                  endpoint={`${apiBaseUrl}/products/${currentItem.id}/deactivate`}
+                  endpoint={`${mutationApiBaseUrl}/products/${currentItem.id}/deactivate`}
                   label="停用"
                   successLabel="操作成功，商品已停用（假删除）"
                   requiredAction="master_data.write"
@@ -469,7 +477,7 @@ export function ProductTableRow({
                 />
               ) : (
                 <MutationActionForm
-                  endpoint={`${apiBaseUrl}/products/${currentItem.id}/activate`}
+                  endpoint={`${mutationApiBaseUrl}/products/${currentItem.id}/activate`}
                   label="启用"
                   successLabel="操作成功，商品已重新启用"
                   requiredAction="master_data.write"
@@ -495,7 +503,7 @@ export function ProductTableRow({
                 />
               )}
               <MutationActionForm
-                endpoint={`${apiBaseUrl}/products/${currentItem.id}/delete`}
+                endpoint={`${mutationApiBaseUrl}/products/${currentItem.id}/delete`}
                 label="删除"
                 successLabel="操作成功，商品已删除并退出业务调用"
                 requiredAction="master_data.write"
@@ -526,7 +534,7 @@ export function ProductTableRow({
               />
               {currentItem.productStage === 'quote_candidate' ? (
                 <MutationActionForm
-                  endpoint={`${apiBaseUrl}/products/${currentItem.id}/convert-to-formal`}
+                  endpoint={`${mutationApiBaseUrl}/products/${currentItem.id}/convert-to-formal`}
                   label="转正式产品"
                   successLabel="操作成功，候选产品已转为正式产品"
                   requiredAction="master_data.write"
@@ -553,7 +561,7 @@ export function ProductTableRow({
           ) : (
             <span style={mutedValueStyle}>无权限</span>
           )}
-        </td>
+        </td> : null}
       </tr>
       {isEditing ? (
         <tr>
@@ -575,10 +583,11 @@ export function ProductTableRow({
                 </button>
               </div>
               <UpdateProductForm
-                endpoint={`${apiBaseUrl}/products/${currentItem.id}`}
+                endpoint={`${mutationApiBaseUrl}/products/${currentItem.id}`}
                 item={currentItem}
                 updatedBy={updatedBy}
                 supplierOptions={supplierOptions}
+                customFields={customFields}
                 actorAccessScopes={actorAccessScopes}
                 onSuccess={(nextItem) => {
                   setCurrentItem((previous) => ({

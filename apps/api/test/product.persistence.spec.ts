@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ProductService } from '../src/product/product.service';
+import { ProductService, type ProductRecord } from '../src/product/product.service';
 
 describe('ProductService persistence', () => {
   let runtimeDir: string;
@@ -101,5 +101,36 @@ describe('ProductService persistence', () => {
     expect(logs.items.map((item) => item.operationType)).toEqual(
       expect.arrayContaining(['deactivate_product', 'activate_product']),
     );
+  });
+
+  it('shows sales the full product code without purchase price, purchase code, or supplier details', async () => {
+    const service = new ProductService();
+    const visible = await service.list({ keyword: 'SALE-LED-001' }, 'sales');
+    expect(visible.items[0]).toMatchObject({ salesCode: 'SALE-LED-001', quoteEligible: true });
+    expect(visible.items[0]).not.toHaveProperty('purchaseCode');
+    expect(visible.items[0]).not.toHaveProperty('defaultPurchasePrice');
+    expect(visible.items[0]).not.toHaveProperty('defaultSupplierCode');
+    expect(visible.items[0]).not.toHaveProperty('factoryName');
+    expect((await service.list({ keyword: 'PUR-LED-001' }, 'sales')).total).toBe(0);
+    expect((await service.list({ keyword: 'SUP-LIGHT' }, 'sales')).total).toBe(0);
+  });
+
+  it('keeps deleted custom values in runtime storage while removing them from ordinary responses', async () => {
+    const service = new ProductService();
+    const field = await service.createCustomField({ name: '包装备注', type: 'text', createdBy: 'Admin' });
+    const created = await service.create({
+      sku: 'SKU-CUSTOM-1', salesCode: 'P-CUSTOM-1', nameCn: '自定义产品', nameEn: 'Custom Product',
+      category: 'electronics', unit: 'pcs', currency: 'USD', defaultSalePrice: 10,
+      defaultPurchasePrice: 5, ownerName: 'Admin', createdBy: 'Admin',
+      customValues: { [field.id]: '旧包装' },
+    });
+    expect(((await service.list()).items.find((item) => item.id === created.id) as ProductRecord)?.customValues).toEqual({ [field.id]: '旧包装' });
+    await service.deleteCustomField(field.id);
+    const restarted = new ProductService();
+    expect(await restarted.listCustomFields()).toEqual([]);
+    expect(((await restarted.list()).items.find((item) => item.id === created.id) as ProductRecord)?.customValues).toEqual({});
+    const stored = JSON.parse(readFileSync(join(runtimeDir, 'product-runtime.json'), 'utf8')) as { products: Array<{ id: number; customValues?: Record<string, string> }> };
+    expect(stored.products.find((item) => item.id === created.id)?.customValues).toEqual({ [field.id]: '旧包装' });
+    await expect(restarted.update(created.id, { updatedBy: 'Admin', customValues: { [field.id]: '改写旧值' } })).rejects.toThrow('自定义字段已删除或不存在');
   });
 });

@@ -2,6 +2,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { ProductRecord } from './product.service';
 
+export type ProductCustomFieldRecord = {
+  id: number;
+  name: string;
+  type: 'text' | 'number' | 'date';
+  createdBy: string;
+  createdAt: string;
+  deletedAt?: string;
+};
+
 export type ProductAuditLogRecord = {
   id: number;
   bizType: 'product';
@@ -18,6 +27,8 @@ type ProductRuntimeState = {
   auditLogs: ProductAuditLogRecord[];
   nextId: number;
   nextAuditLogId: number;
+  customFields: ProductCustomFieldRecord[];
+  nextCustomFieldId: number;
 };
 
 const productStoreCache = new Map<string, ProductRuntimeStore>();
@@ -122,6 +133,8 @@ function createSeedState(): ProductRuntimeState {
     auditLogs: [],
     nextId: 4,
     nextAuditLogId: 1,
+    customFields: [],
+    nextCustomFieldId: 1,
   };
 }
 
@@ -143,6 +156,7 @@ function cloneProduct(record: ProductRecord): ProductRecord {
     cartonWeight: record.cartonWeight ?? null,
     defaultSupplierCode: record.defaultSupplierCode ?? '',
     salePriceTiers: (record.salePriceTiers ?? []).map((tier) => ({ ...tier })),
+    customValues: { ...record.customValues },
     updatedAt: record.updatedAt ?? undefined,
     updatedBy: record.updatedBy ?? undefined,
     deactivatedAt: record.deactivatedAt ?? undefined,
@@ -165,6 +179,8 @@ function readState(filePath: string): ProductRuntimeState {
     nextId: typeof parsed.nextId === 'number' ? parsed.nextId : 1,
     nextAuditLogId:
       typeof parsed.nextAuditLogId === 'number' ? parsed.nextAuditLogId : 1,
+    customFields: Array.isArray(parsed.customFields) ? parsed.customFields : [],
+    nextCustomFieldId: typeof parsed.nextCustomFieldId === 'number' ? parsed.nextCustomFieldId : 1,
   };
 }
 
@@ -189,6 +205,21 @@ export class ProductRuntimeStore {
 
   listAuditLogs() {
     return this.state.auditLogs.map((item) => ({ ...item }));
+  }
+
+  listCustomFields() {
+    return this.state.customFields.map((item) => ({ ...item }));
+  }
+
+  saveCustomFields(fields: ProductCustomFieldRecord[]) {
+    this.state.customFields = fields.map((item) => ({ ...item }));
+    this.persist();
+  }
+
+  nextCustomFieldId() {
+    const id = this.state.nextCustomFieldId++;
+    this.persist();
+    return id;
   }
 
   getProduct(id: number) {

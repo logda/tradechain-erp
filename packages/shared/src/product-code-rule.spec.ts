@@ -101,12 +101,9 @@ describe('product code rule', () => {
     ).toBe('SALE-ELEC-2026-09-007');
   });
 
-  it('rejects supplier segments in a sales code rule', () => {
+  it('allows the supplier segment in a product code rule', () => {
     expect(
       validateProductCodeRule(composedRule, { kind: 'sales' }),
-    ).toEqual({
-      ok: false,
-      error: '销售编码规则不能使用供应商编码段',
-    });
+    ).toEqual({ ok: true });
   });
 });

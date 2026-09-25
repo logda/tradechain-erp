@@ -29,12 +29,13 @@ export class FormalLookupController {
 
   @Get('products')
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales', 'purchase_manager', 'purchase')
-  listProducts(@Query('status') status?: string) {
+  listProducts(@Query('status') status?: string, @Req() request?: { headers: Record<string, string | string[] | undefined> }) {
+    const role = request?.headers['x-erp-role'] as FormalRole | undefined;
     return this.productService.list({
       status: normalizeActiveStatus(status),
       page: 1,
       pageSize: 1000,
-    });
+    }, role === 'sales' || role === 'sales_manager' ? 'sales' : 'full');
   }
 
   @Get('counterparties')

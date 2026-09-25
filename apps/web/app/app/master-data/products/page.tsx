@@ -24,6 +24,7 @@ import {
 } from './product-supplier-options';
 import { ProductMasterDataClient } from './product-master-data-client';
 import { buildFormalApiRequestHeaders } from '../../_lib/formal-api-request-headers';
+import type { CounterpartyCustomField } from '../counterparties/counterparty-extra-fields';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -50,7 +51,8 @@ type ProductItem = {
   unit: string;
   currency: string;
   defaultSalePrice: number;
-  defaultPurchasePrice: number;
+  defaultPurchasePrice?: number;
+  customValues?: Record<string, string>;
   salePriceTiers?: Array<{
     id: number;
     minQuantity: number;
@@ -376,6 +378,19 @@ async function loadProductCodeRules(session: ReturnType<typeof resolveDemoSessio
   }
 }
 
+async function loadCustomFields(session: ReturnType<typeof resolveDemoSession>): Promise<CounterpartyCustomField[]> {
+  try {
+    const response = await fetch(`${getProductApiBaseUrl()}/products/custom-fields`, {
+      cache: 'no-store', headers: buildFormalApiRequestHeaders(session),
+    });
+    if (!response.ok) return [];
+    const result = await response.json();
+    return Array.isArray(result) ? result : [];
+  } catch {
+    return [];
+  }
+}
+
 function hasValidSupplierListResponse(
   value: unknown,
 ): value is { items: Array<{ code: string; name: string; shortName?: string }> } {
@@ -486,9 +501,11 @@ export default async function AppProductsPage({
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = resolveDemoSession(resolvedSearchParams);
-  const canManageMasterData = canUseFormalMasterDataActions(session);
+  const canManageMasterData = session.role === 'admin' && canUseFormalMasterDataActions(session);
+  const salesView = session.role === 'sales' || session.role === 'sales_manager';
+  const canConfigureFields = session.role === 'admin' || session.role === 'boss';
 
-  if (!canViewFormalModule(session, 'admin')) {
+  if (!canViewFormalModule(session, 'admin') && !canViewFormalModule(session, 'sales') && !canViewFormalModule(session, 'purchase')) {
     return (
       <AppShell
         title="商品 / SKU 主数据"
@@ -513,20 +530,25 @@ export default async function AppProductsPage({
     page: normalizePageNumber(readParam(resolvedSearchParams.page), 1),
     pageSize: normalizePageNumber(readParam(resolvedSearchParams.pageSize), 20),
   };
-  const [result, auditLogs, productCodeRules, supplierOptions] = await Promise.all([
+  const [result, auditLogs, productCodeRules, supplierOptions, customFields] = await Promise.all([
     loadProducts(query, session),
-    loadAuditLogs(session),
-    loadProductCodeRules(session),
-    loadSupplierOptions(session),
+    session.role === 'admin' ? loadAuditLogs(session) : Promise.resolve(null),
+    canManageMasterData ? loadProductCodeRules(session) : Promise.resolve(defaultProductCodeRuleSet),
+    canManageMasterData ? loadSupplierOptions(session) : Promise.resolve([]),
+    salesView ? Promise.resolve([]) : loadCustomFields(session),
   ]);
   const productResult =
     result ??
     paginateItems(
-      filterFallbackItems(fallbackItems, query),
+      salesView ? [] : filterFallbackItems(fallbackItems, query),
       query.page,
       query.pageSize,
     );
-  const visibleProductItems = filterVisibleProductItems(productResult.items);
+  const visibleProductItems = filterVisibleProductItems(productResult.items).map((item) => {
+    if (!salesView) return item;
+    const { purchaseCode: _purchaseCode, purchaseCodeMode: _purchaseCodeMode, defaultPurchasePrice: _defaultPurchasePrice, defaultSupplierCode: _defaultSupplierCode, factoryName: _factoryName, customValues: _customValues, ...visible } = item;
+    return visible;
+  });
   const auditLogItems = auditLogs?.items ?? [];
   const masterDataRequestHeaders = buildFormalRequestHeaders(session);
 
@@ -542,18 +564,15 @@ export default async function AppProductsPage({
             <p style={heroEyebrowStyle}>Product Library</p>
             <h3 style={heroTitleStyle}>产品资料总览</h3>
             <p style={heroCopyStyle}>
-              这里承接正式版商品主数据，统一维护销售编码、采购编码、工厂与价格规则，让报价、
-              销售、采购和后续库存动作都复用同一套产品底账。
+              这里展示产品资料、编码、包装和价格，供后续单据复用。
             </p>
           </div>
           <div style={heroActionWrapStyle}>
             <Link href="/app" style={linkStyle}>
               返回正式首页
             </Link>
-            <Link href="/app/master-data/product-code-rule" style={linkStyle}>
-              产品编码规则设置
-            </Link>
-            <span style={heroMetaBadgeStyle}>当前页面支持商品主数据维护</span>
+            {canManageMasterData ? <Link href="/app/master-data/product-code-rule" style={linkStyle}>产品编码规则设置</Link> : null}
+            <span style={heroMetaBadgeStyle}>{canManageMasterData ? '可维护产品' : '产品只读'}</span>
           </div>
         </div>
       </section>
@@ -563,6 +582,9 @@ export default async function AppProductsPage({
         initialTotal={productResult.total}
         initialQuery={query}
         canManageMasterData={canManageMasterData}
+        canConfigureFields={canConfigureFields}
+        salesView={salesView}
+        customFields={customFields}
         updatedBy={session.user}
         codeRule={productCodeRules.purchase}
         salesCodeRule={productCodeRules.sales}
@@ -570,6 +592,7 @@ export default async function AppProductsPage({
         actorAccessScopes={session.accessScopes}
         requestHeaders={masterDataRequestHeaders}
         apiBaseUrl={getProductBrowserApiBaseUrl()}
+        mutationApiBaseUrl={getProductApiBaseUrl()}
       />
 
       <AuditLogTable session={session} items={auditLogItems} />

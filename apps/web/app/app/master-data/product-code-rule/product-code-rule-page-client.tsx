@@ -71,7 +71,7 @@ export function ProductCodeRulePageClient({
   return (
     <>
       {renderRule('purchase', '采购编码规则')}
-      {renderRule('sales', '销售编码规则')}
+      {renderRule('sales', '产品编码生成规则')}
     </>
   );
 }

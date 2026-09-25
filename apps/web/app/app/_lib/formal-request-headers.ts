@@ -4,6 +4,7 @@ const defaultActionScopes: Record<string, string[]> = {
     'admin.user.write',
     'admin.role.write',
     'master_data.write',
+    'product.custom_field.write',
     'counterparty.write',
     'sales.quote.write',
     'sales.inquiry.submit',
@@ -21,6 +22,7 @@ const defaultActionScopes: Record<string, string[]> = {
     'finance.confirm',
   ],
   boss: [
+    'product.custom_field.write',
     'counterparty.write',
     'sales.order.write',
     'sales.sample.approve',

@@ -49,6 +49,7 @@ const actionCodes = [
   'admin.user.write',
   'admin.role.write',
   'master_data.write',
+  'product.custom_field.write',
   'counterparty.write',
   'sales.quote.write',
   'sales.inquiry.submit',

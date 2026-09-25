@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -21,7 +22,7 @@ import {
   resolveProductCodeRuleStore,
   type ProductCodeRuleRecord,
 } from './product-code-rule.store';
-import { resolveProductStore } from './product.store';
+import { resolveProductStore, type ProductCustomFieldRecord } from './product.store';
 
 const productCategories = ['electronics', 'consumables', 'service'] as const;
 const productStatuses = ['active', 'inactive', 'deleted'] as const;
@@ -82,6 +83,7 @@ export type ProductRecord = {
   defaultSalePrice: number;
   defaultPurchasePrice: number;
   salePriceTiers: ProductSalePriceTierRecord[];
+  customValues?: Record<string, string>;
   ownerName: string;
   status: ProductStatus;
   createdAt: string;
@@ -151,6 +153,7 @@ export type CreateProductPayload = {
   defaultSalePrice: number;
   defaultPurchasePrice: number;
   salePriceTiers?: ProductSalePriceTierInput[];
+  customValues?: Record<string, string>;
   ownerName: string;
   createdBy: string;
   status?: string;
@@ -195,12 +198,14 @@ export type UpdateProductPayload = Partial<
       | 'defaultPurchasePrice'
       | 'ownerName'
       | 'salePriceTiers'
+      | 'customValues'
     >,
     'factorySourceMode'
   >
 > &
   {
     salePriceTiers?: ProductSalePriceTierInput[];
+    customValues?: Record<string, string>;
   } & {
   factorySourceMode?: string;
   updatedBy: string;
@@ -243,6 +248,7 @@ type PrismaProductRecord = {
   currency: string;
   defaultSalePrice: DecimalLike;
   defaultPurchasePrice: DecimalLike;
+  customValues?: unknown;
   ownerName: string;
   status: string;
   createdBy: string;
@@ -286,6 +292,33 @@ const productSalePriceTiersInclude = {
 
 function normalizeText(value: string | undefined) {
   return value?.trim() ?? '';
+}
+
+function readCustomValues(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+}
+
+function normalizeCustomValues(value: Record<string, string> | undefined, fields: ProductCustomFieldRecord[]) {
+  if (value === undefined) return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new BadRequestException('自定义字段格式不正确');
+  const byId = new Map(fields.map((field) => [String(field.id), field]));
+  const result: Record<string, string> = {};
+  for (const [id, raw] of Object.entries(value)) {
+    const field = byId.get(id);
+    if (!field) throw new BadRequestException('自定义字段已删除或不存在');
+    if (typeof raw !== 'string') throw new BadRequestException(`${field.name}格式不正确`);
+    const text = raw.trim();
+    if (field.type === 'number' && text && !/^-?\d+(?:\.\d+)?$/.test(text)) throw new BadRequestException(`${field.name}必须填写数字`);
+    if (field.type === 'date' && text && (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(Date.parse(`${text}T00:00:00Z`)) || new Date(`${text}T00:00:00Z`).toISOString().slice(0, 10) !== text)) throw new BadRequestException(`${field.name}必须填写日期`);
+    result[id] = text;
+  }
+  return result;
+}
+
+function publicProduct(record: ProductRecord, fields: ProductCustomFieldRecord[]) {
+  const ids = new Set(fields.map((field) => String(field.id)));
+  return { ...record, customValues: Object.fromEntries(Object.entries(record.customValues ?? {}).filter(([id]) => ids.has(id))) };
 }
 
 function normalizeSku(value: string) {
@@ -510,6 +543,7 @@ function toProductRecord(record: PrismaProductRecord): ProductRecord {
     currency: record.currency,
     defaultSalePrice: toNumber(record.defaultSalePrice),
     defaultPurchasePrice: toNumber(record.defaultPurchasePrice),
+    customValues: readCustomValues(record.customValues),
     salePriceTiers: Array.isArray(record.salePriceTiers)
       ? record.salePriceTiers.map((tier) => ({
           id: Number(tier.id),
@@ -572,6 +606,64 @@ export class ProductService {
     return this.prisma?.product;
   }
 
+  async listCustomFields(): Promise<ProductCustomFieldRecord[]> {
+    if (this.shouldUsePrisma()) {
+      const rows = await this.prisma!.productCustomField.findMany({
+        where: { deletedAt: null }, orderBy: { id: 'asc' },
+      });
+      return rows.map((row) => ({ id: Number(row.id), name: row.name, type: row.type as ProductCustomFieldRecord['type'], createdBy: row.createdBy, createdAt: row.createdAt.toISOString() }));
+    }
+    return this.store.listCustomFields().filter((item) => !item.deletedAt);
+  }
+
+  async createCustomField(payload: { name: string; type: string; createdBy: string }) {
+    const name = normalizeText(payload.name);
+    if (!name || name.length > 64) throw new BadRequestException('字段名称不能为空且不能超过 64 字');
+    if (payload.type !== 'text' && payload.type !== 'number' && payload.type !== 'date') throw new BadRequestException('字段类型不合法');
+    if (this.shouldUsePrisma()) {
+      const row = await this.prisma!.$transaction(async (tx) => {
+        const active = await tx.productCustomField.findMany({ where: { deletedAt: null } });
+        if (active.length >= 10) throw new BadRequestException('自定义字段数量已达上限（10 个）');
+        if (active.some((field) => field.name === name)) throw new ConflictException('自定义字段名称已存在');
+        return tx.productCustomField.create({ data: { name, type: payload.type, createdBy: payload.createdBy } });
+      }, { isolationLevel: 'Serializable' });
+      await this.prisma!.operationLog.create({ data: { bizType: 'product', bizId: row.id, operationType: 'create_product_custom_field', operatorId: 0n, afterData: { name, type: payload.type } } });
+      return { id: Number(row.id), name: row.name, type: row.type, createdBy: row.createdBy, createdAt: row.createdAt.toISOString() };
+    }
+    const active = this.store.listCustomFields().filter((field) => !field.deletedAt);
+    if (active.length >= 10) throw new BadRequestException('自定义字段数量已达上限（10 个）');
+    if (active.some((field) => field.name === name)) throw new ConflictException('自定义字段名称已存在');
+    const field: ProductCustomFieldRecord = { id: this.store.nextCustomFieldId(), name, type: payload.type, createdBy: payload.createdBy, createdAt: new Date().toISOString() };
+    this.store.saveCustomFields([...this.store.listCustomFields(), field]);
+    this.store.recordAuditLog({ bizType: 'product', bizId: field.id, operationType: 'create_product_custom_field', operatorId: 0, beforeData: null, afterData: { name, type: payload.type } });
+    return field;
+  }
+
+  async deleteCustomField(id: number) {
+    if (this.shouldUsePrisma()) {
+      const existing = await this.prisma!.productCustomField.findUnique({ where: { id: BigInt(id) } });
+      if (!existing) throw new NotFoundException('自定义字段不存在');
+      if (!existing.deletedAt) {
+        await this.prisma!.productCustomField.update({ where: { id: BigInt(id) }, data: { deletedAt: new Date() } });
+        await this.prisma!.operationLog.create({ data: { bizType: 'product', bizId: BigInt(id), operationType: 'delete_product_custom_field', operatorId: 0n, beforeData: { name: existing.name, type: existing.type }, afterData: { deleted: true } } });
+      }
+      return { id, deleted: true };
+    }
+    const fields = this.store.listCustomFields();
+    const existing = fields.find((field) => field.id === id);
+    if (!existing) throw new NotFoundException('自定义字段不存在');
+    if (!existing.deletedAt) {
+      existing.deletedAt = new Date().toISOString();
+      this.store.saveCustomFields(fields);
+      this.store.recordAuditLog({ bizType: 'product', bizId: id, operationType: 'delete_product_custom_field', operatorId: 0, beforeData: { name: existing.name, type: existing.type }, afterData: { deleted: true } });
+    }
+    return { id, deleted: true };
+  }
+
+  async present(record: ProductRecord) {
+    return publicProduct(record, await this.listCustomFields());
+  }
+
   private assertProductNotDeleted(
     record: Pick<ProductRecord, 'status'> | Pick<PrismaProductRecord, 'status'>,
     message = '已删除商品不可操作',
@@ -627,7 +719,8 @@ export class ProductService {
     return this.store.getProduct(id);
   }
 
-  async list(query: ListProductsQuery = {}) {
+  async list(query: ListProductsQuery = {}, audience: 'sales' | 'full' = 'full') {
+    const customFields = await this.listCustomFields();
     const keyword = normalizeText(query.keyword).toLowerCase();
     const status = isProductStatus(query.status) ? query.status : null;
     const category = isProductCategory(query.category) ? query.category : null;
@@ -669,12 +762,12 @@ export class ProductService {
           ![
             item.sku,
             item.salesCode,
-            item.purchaseCode,
+            ...(audience === 'sales' ? [] : [item.purchaseCode]),
             item.nameCn,
             item.nameEn,
             categoryLabels[item.category],
             item.unit,
-            item.defaultSupplierCode,
+            ...(audience === 'sales' ? [] : [item.defaultSupplierCode]),
           ]
             .join(' ')
             .toLowerCase()
@@ -691,7 +784,13 @@ export class ProductService {
       })
       .sort((left, right) => left.sku.localeCompare(right.sku));
 
-    return paginateItems(items, query.page ?? 1, query.pageSize ?? 20);
+    return paginateItems(items.map((raw) => {
+      const item = publicProduct(raw, customFields);
+      if (audience !== 'sales') return item;
+      const { purchaseCode: _purchaseCode, purchaseCodeMode: _purchaseCodeMode, defaultPurchasePrice, defaultSupplierCode: _defaultSupplierCode, factoryName: _factoryName, ...visible } = item;
+      const { customValues: _customValues, ...salesVisible } = visible;
+      return { ...salesVisible, quoteEligible: item.defaultSalePrice > 0 && defaultPurchasePrice > 0 };
+    }), query.page ?? 1, query.pageSize ?? 20);
   }
 
   async resolvePurchaseSupplierForLine(input: {
@@ -729,6 +828,7 @@ export class ProductService {
   }
 
   async create(payload: CreateProductPayload) {
+    const customValues = normalizeCustomValues(payload.customValues, await this.listCustomFields());
     const sku = normalizeSku(payload.sku);
     const nameCn = normalizeText(payload.nameCn);
     const nameEn = normalizeText(payload.nameEn);
@@ -785,7 +885,7 @@ export class ProductService {
     }
 
     if (salesCodeMode === 'generated') {
-      salesCode = await this.generateSalesCodeByRule(category);
+      salesCode = await this.generateSalesCodeByRule(category, defaultSupplierCode);
     }
 
     if (productStage === 'formal' && !salesCode) {
@@ -848,6 +948,7 @@ export class ProductService {
             currency,
             defaultSalePrice,
             defaultPurchasePrice,
+            customValues,
             ownerName,
             status: productStatus,
             createdBy: normalizeText(payload.createdBy) || 'system',
@@ -888,7 +989,7 @@ export class ProductService {
         },
       });
 
-      return toProductRecord(record);
+      return this.present(toProductRecord(record));
     }
 
     this.assertSkuUnique(sku);
@@ -916,6 +1017,7 @@ export class ProductService {
       currency,
       defaultSalePrice,
       defaultPurchasePrice,
+      customValues,
       salePriceTiers,
       ownerName,
       status: productStatus,
@@ -939,7 +1041,7 @@ export class ProductService {
         status: record.status,
       },
     });
-    return record;
+    return this.present(record);
   }
 
   async findOrCreateQuoteCandidate(
@@ -980,6 +1082,7 @@ export class ProductService {
   }
 
   async update(id: number, payload: UpdateProductPayload) {
+    const customFields = payload.customValues !== undefined ? await this.listCustomFields() : [];
     if (this.shouldUsePrisma()) {
       const existing = (await this.prismaProductDelegate.findUnique({
         include: productSalePriceTiersInclude,
@@ -995,6 +1098,9 @@ export class ProductService {
       const data: Record<string, unknown> = {
         updatedBy: normalizeText(payload.updatedBy) || 'system',
       };
+      if (payload.customValues !== undefined) {
+        data.customValues = { ...readCustomValues(existing.customValues), ...normalizeCustomValues(payload.customValues, customFields) };
+      }
 
       if (payload.sku !== undefined) {
         const sku = normalizeSku(payload.sku);
@@ -1134,7 +1240,7 @@ export class ProductService {
         },
       });
 
-      return toProductRecord(updated);
+      return this.present(toProductRecord(updated));
     }
 
     const record = this.store.getProduct(id);
@@ -1146,6 +1252,9 @@ export class ProductService {
     this.assertProductNotDeleted(record, '已删除商品不可编辑');
 
     const beforeRecord = { ...record };
+    if (payload.customValues !== undefined) {
+      record.customValues = { ...record.customValues, ...normalizeCustomValues(payload.customValues, customFields) };
+    }
 
     if (payload.sku !== undefined) {
       const sku = normalizeSku(payload.sku);
@@ -1261,7 +1370,7 @@ export class ProductService {
       afterData: record,
     });
 
-    return record;
+    return this.present(record);
   }
 
   async deactivate(
@@ -1284,7 +1393,7 @@ export class ProductService {
       this.assertProductNotDeleted(record);
 
       if (record.status === 'inactive') {
-        return toProductRecord(record);
+        return this.present(toProductRecord(record));
       }
 
       const updated = (await this.prismaProductDelegate.update({
@@ -1318,7 +1427,7 @@ export class ProductService {
         },
       });
 
-      return toProductRecord(updated);
+      return this.present(toProductRecord(updated));
     }
 
     const record = this.store.getProduct(id);
@@ -1330,7 +1439,7 @@ export class ProductService {
     this.assertProductNotDeleted(record);
 
     if (record.status === 'inactive') {
-      return record;
+      return this.present(record);
     }
 
     const beforeRecord = { ...record };
@@ -1351,7 +1460,7 @@ export class ProductService {
       afterData: record,
     });
 
-    return record;
+    return this.present(record);
   }
 
   async activate(
@@ -1374,7 +1483,7 @@ export class ProductService {
       this.assertProductNotDeleted(record, '已删除商品不可启用');
 
       if (record.status === 'active') {
-        return toProductRecord(record);
+        return this.present(toProductRecord(record));
       }
 
       const updated = (await this.prismaProductDelegate.update({
@@ -1407,7 +1516,7 @@ export class ProductService {
         },
       });
 
-      return toProductRecord(updated);
+      return this.present(toProductRecord(updated));
     }
 
     const record = this.store.getProduct(id);
@@ -1419,7 +1528,7 @@ export class ProductService {
     this.assertProductNotDeleted(record, '已删除商品不可启用');
 
     if (record.status === 'active') {
-      return record;
+      return this.present(record);
     }
 
     const beforeRecord = { ...record };
@@ -1444,7 +1553,7 @@ export class ProductService {
       },
     });
 
-    return record;
+    return this.present(record);
   }
 
   async deleteProduct(
@@ -1465,7 +1574,7 @@ export class ProductService {
       }
 
       if (normalizeProductStatus(record.status) === 'deleted') {
-        return toProductRecord(record);
+        return this.present(toProductRecord(record));
       }
 
       const updated = (await this.prismaProductDelegate.update({
@@ -1499,7 +1608,7 @@ export class ProductService {
         },
       });
 
-      return toProductRecord(updated);
+      return this.present(toProductRecord(updated));
     }
 
     const record = this.store.getProduct(id);
@@ -1509,7 +1618,7 @@ export class ProductService {
     }
 
     if (record.status === 'deleted') {
-      return record;
+      return this.present(record);
     }
 
     const beforeRecord = { ...record };
@@ -1530,7 +1639,7 @@ export class ProductService {
       afterData: record,
     });
 
-    return record;
+    return this.present(record);
   }
 
   async convertToFormal(
@@ -1562,11 +1671,11 @@ export class ProductService {
 
       const normalized = toProductRecord(record);
       if (normalized.productStage === 'formal') {
-        return normalized;
+        return this.present(normalized);
       }
       const salesCode =
         normalized.salesCode ||
-        (await this.generateSalesCodeByRule(normalized.category));
+        (await this.generateSalesCodeByRule(normalized.category, normalized.defaultSupplierCode));
       this.assertFormalProductReady({ ...normalized, salesCode });
 
       const updated = (await this.prismaProductDelegate.update({
@@ -1596,7 +1705,7 @@ export class ProductService {
         },
       });
 
-      return toProductRecord(updated);
+      return this.present(toProductRecord(updated));
     }
 
     const record = this.store.getProduct(id);
@@ -1608,10 +1717,10 @@ export class ProductService {
     this.assertProductNotDeleted(record);
 
     if (record.productStage === 'formal') {
-      return record;
+      return this.present(record);
     }
     const salesCode =
-      record.salesCode || (await this.generateSalesCodeByRule(record.category));
+      record.salesCode || (await this.generateSalesCodeByRule(record.category, record.defaultSupplierCode));
     this.assertFormalProductReady({ ...record, salesCode });
 
     const updated: ProductRecord = {
@@ -1641,10 +1750,17 @@ export class ProductService {
       },
     });
 
-    return updated;
+    return this.present(updated);
   }
 
   async listAuditLogs() {
+    const activeIds = new Set((await this.listCustomFields()).map((field) => String(field.id)));
+    const hideDeletedValues = (value: unknown) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+      const object = value as Record<string, unknown>;
+      if (!('customValues' in object)) return value;
+      return { ...object, customValues: Object.fromEntries(Object.entries(readCustomValues(object.customValues)).filter(([id]) => activeIds.has(id))) };
+    };
     if (this.shouldUsePrisma()) {
       const logs = (await this.prisma!.operationLog.findMany({
         where: { bizType: 'product' },
@@ -1652,12 +1768,15 @@ export class ProductService {
       })) as PrismaOperationLogRecord[];
 
       return {
-        items: logs.map(toAuditLogRecord),
+        items: logs.map((log) => {
+          const item = toAuditLogRecord(log);
+          return { ...item, beforeData: hideDeletedValues(item.beforeData), afterData: hideDeletedValues(item.afterData) };
+        }),
       };
     }
 
     return {
-      items: this.store.listAuditLogs(),
+      items: this.store.listAuditLogs().map((item) => ({ ...item, beforeData: hideDeletedValues(item.beforeData), afterData: hideDeletedValues(item.afterData) })),
     };
   }
 
@@ -1857,7 +1976,7 @@ export class ProductService {
     });
   }
 
-  async generateSalesCodeByRule(category: string) {
+  async generateSalesCodeByRule(category: string, defaultSupplierCode = '') {
     if (!isProductCategory(category)) {
       throw new BadRequestException('商品分类不合法');
     }
@@ -1866,9 +1985,13 @@ export class ProductService {
     if (!validation.ok) {
       throw new BadRequestException(validation.error);
     }
-    let sequence = (await this.countProductsForCodeRule(rule, '')) + 1;
+    if (rule.segments.some((segment) => segment.enabled && segment.key === 'supplier_code') && !defaultSupplierCode) {
+      throw new BadRequestException('自动生成产品编码前必须填写供应商编码');
+    }
+    let sequence = (await this.countProductsForCodeRule(rule, defaultSupplierCode)) + 1;
     for (;;) {
       const salesCode = buildProductCodePreview(rule, {
+        supplierCode: defaultSupplierCode,
         category,
         now: new Date().toISOString(),
         sequence,

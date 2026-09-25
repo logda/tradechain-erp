@@ -28,6 +28,8 @@ import {
   createEditableSalePriceTiers,
   SalePriceTierEditor,
 } from './sale-price-tier-editor';
+import type { CounterpartyCustomField } from '../counterparties/counterparty-extra-fields';
+import { ProductCustomValueFields, readProductCustomValues } from './product-custom-value-fields';
 
 type ProductItem = {
   id: number;
@@ -52,7 +54,8 @@ type ProductItem = {
   unit: string;
   currency: string;
   defaultSalePrice: number;
-  defaultPurchasePrice: number;
+  defaultPurchasePrice?: number;
+  customValues?: Record<string, string>;
   salePriceTiers?: Array<{
     id: number;
     minQuantity: number;
@@ -73,6 +76,7 @@ type UpdateProductFormProps = {
   item: ProductItem;
   updatedBy: string;
   supplierOptions?: ProductSupplierOption[];
+  customFields?: CounterpartyCustomField[];
   actorAccessScopes?: {
     modules: string[];
     dataScope: string;
@@ -202,6 +206,7 @@ export function UpdateProductForm({
   item,
   updatedBy,
   supplierOptions = fallbackProductSupplierOptions,
+  customFields = [],
   actorAccessScopes,
   onSuccess,
 }: UpdateProductFormProps) {
@@ -285,6 +290,7 @@ export function UpdateProductForm({
           defaultSalePrice: Number(formData.get('defaultSalePrice')),
           defaultPurchasePrice: Number(formData.get('defaultPurchasePrice')),
           salePriceTiers: buildSalePriceTierPayload(pricingMode, salePriceTiers),
+          customValues: readProductCustomValues(formData, customFields),
           ownerName: item.ownerName,
           updatedBy,
         },
@@ -331,6 +337,7 @@ export function UpdateProductForm({
         defaultSalePrice: Number(formData.get('defaultSalePrice')),
         defaultPurchasePrice: Number(formData.get('defaultPurchasePrice')),
         salePriceTiers: nextSalePriceTiers,
+        customValues: readProductCustomValues(formData, customFields),
       };
       const responseItem =
         typeof result.result === 'object' && result.result !== null
@@ -360,9 +367,9 @@ export function UpdateProductForm({
         <h5 style={sectionTitleStyle}>基础信息 Basic Info</h5>
         <div style={gridStyle}>
           <label style={fieldStyle}>
-            <span style={fieldLabelStyle}>产品销售编码 Sales Code</span>
+            <span style={fieldLabelStyle}>产品编码 Product Code</span>
             <input
-              aria-label={`产品销售编码 Sales Code ${item.sku}`}
+              aria-label={`产品编码 Product Code ${item.sku}`}
               name="salesCode"
               defaultValue={item.salesCode ?? ''}
               style={inputStyle}
@@ -655,6 +662,7 @@ export function UpdateProductForm({
           compact
         />
       </section>
+      <ProductCustomValueFields fields={customFields} values={item.customValues} />
       {error ? (
         <p role="alert" style={{ margin: 0, color: '#b91c1c', fontSize: '12px' }}>
           {error}

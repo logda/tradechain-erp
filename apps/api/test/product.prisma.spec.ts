@@ -12,10 +12,33 @@ describe('ProductService prisma storage', () => {
     }
   });
 
+  it('stores product field definitions in Prisma and soft-deletes them', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const row = { id: 7n, name: '外箱标记', type: 'text', createdBy: 'Admin', createdAt: new Date('2026-09-25T00:00:00.000Z'), deletedAt: null };
+    const productCustomField = {
+      findMany: jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([row]).mockResolvedValueOnce([]),
+      create: jest.fn().mockResolvedValue(row),
+      findUnique: jest.fn().mockResolvedValue(row),
+      update: jest.fn().mockResolvedValue({ ...row, deletedAt: new Date() }),
+    };
+    const prisma = {
+      productCustomField,
+      $transaction: jest.fn().mockImplementation((callback: (tx: unknown) => Promise<unknown>) => callback({ productCustomField })),
+      operationLog: { create: jest.fn().mockResolvedValue({ id: 1n }) },
+    } as unknown as PrismaService;
+    const service = new ProductService(prisma);
+    expect(await service.createCustomField({ name: '外箱标记', type: 'text', createdBy: 'Admin' })).toMatchObject({ id: 7, name: '外箱标记' });
+    expect(await service.listCustomFields()).toHaveLength(1);
+    await service.deleteCustomField(7);
+    expect(productCustomField.update).toHaveBeenCalledWith({ where: { id: 7n }, data: { deletedAt: expect.any(Date) } });
+    expect(await service.listCustomFields()).toEqual([]);
+  });
+
   it('creates products in Prisma and writes audit logs', async () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const createdAt = new Date('2026-07-13T09:30:00.000Z');
     const prisma = {
+      productCustomField: { findMany: jest.fn().mockResolvedValue([]) },
       counterparty: {
         findUnique: jest.fn().mockResolvedValue({
           id: 2n,
@@ -211,6 +234,7 @@ describe('ProductService prisma storage', () => {
       })),
     };
     const prisma = {
+      productCustomField: { findMany: jest.fn().mockResolvedValue([]) },
       product,
       operationLog: {
         create: jest.fn().mockResolvedValue({ id: 1n }),
@@ -248,6 +272,7 @@ describe('ProductService prisma storage', () => {
   it('translates Prisma sales code uniqueness errors into business validation messages', async () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const prisma = {
+      productCustomField: { findMany: jest.fn().mockResolvedValue([]) },
       product: {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockRejectedValue({
@@ -346,6 +371,7 @@ describe('ProductService prisma storage', () => {
       deactivatedReason: null,
     };
     const prisma = {
+      productCustomField: { findMany: jest.fn().mockResolvedValue([]) },
       product: {
         findMany: jest.fn().mockResolvedValue([activeRecord]),
         findUnique: jest

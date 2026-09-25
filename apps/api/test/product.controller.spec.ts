@@ -1,16 +1,19 @@
 import { ParseIntPipe } from '@nestjs/common';
 import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { Test } from '@nestjs/testing';
-import { AdminOnlyGuard } from '../src/auth/admin-only.guard';
-import { FORMAL_ACTIONS_KEY } from '../src/auth/formal-role.decorator';
+import { FormalRoleGuard } from '../src/auth/formal-role.guard';
+import { FORMAL_ACTIONS_KEY, FORMAL_ROLES_KEY } from '../src/auth/formal-role.decorator';
 import { ProductController } from '../src/product/product.controller';
 import { ProductService } from '../src/product/product.service';
 
 describe('ProductController', () => {
-  it('protects product master data with admin and action permissions', () => {
+  it('allows sales to read products while restricting mutations to admin', () => {
     expect(Reflect.getMetadata(GUARDS_METADATA, ProductController)).toEqual(
-      expect.arrayContaining([AdminOnlyGuard]),
+      expect.arrayContaining([FormalRoleGuard]),
     );
+    expect(Reflect.getMetadata(FORMAL_ROLES_KEY, ProductController)).toContain('sales');
+    expect(Reflect.getMetadata(FORMAL_ROLES_KEY, ProductController.prototype.create)).toEqual(['admin']);
+    expect(Reflect.getMetadata(FORMAL_ROLES_KEY, ProductController.prototype.createCustomField)).toEqual(['admin', 'boss']);
     expect(
       Reflect.getMetadata(FORMAL_ACTIONS_KEY, ProductController.prototype.create),
     ).toEqual(['master_data.write']);
@@ -71,7 +74,7 @@ describe('ProductController', () => {
       status: 'active',
       page: 2,
       pageSize: 5,
-    });
+    }, 'full');
   });
 
   it('falls back to safe list pagination defaults', async () => {
@@ -90,7 +93,14 @@ describe('ProductController', () => {
     expect(list).toHaveBeenCalledWith({
       page: 1,
       pageSize: 20,
-    });
+    }, 'full');
+  });
+
+  it('passes the sales audience to the service from the signed role', async () => {
+    const list = jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
+    const controller = new ProductController({ list } as unknown as ProductService);
+    await controller.list({}, { headers: { 'x-erp-role': 'sales' } });
+    expect(list).toHaveBeenCalledWith({ page: 1, pageSize: 20 }, 'sales');
   });
 
   it('creates a product from admin input', async () => {

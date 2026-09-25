@@ -11,7 +11,9 @@ export async function proxyProductRequest(
 ) {
   const session = await loadAuthenticatedSession(request.cookies.get(FORMAL_SESSION_COOKIE)?.value);
   if (!session) return new Response('请先登录', { status: 401 });
-  if (session.role !== 'admin') return new Response('无权访问产品管理', { status: 403 });
+  if (!['admin', 'boss', 'sales_manager', 'sales', 'purchase_manager', 'purchase'].includes(session.role)) {
+    return new Response('无权访问产品库', { status: 403 });
+  }
   const targetUrl = new URL(backendApiBaseUrl.replace(/\/$/, ''));
   targetUrl.pathname = [
     targetUrl.pathname.replace(/\/$/, ''),

@@ -85,6 +85,7 @@ async function seedRolePermissions() {
         'counterparty.write',
         'admin.role.write',
         'master_data.write',
+        'product.custom_field.write',
         'sales.quote.write',
         'sales.inquiry.submit',
         'sales.order.write',
@@ -105,6 +106,7 @@ async function seedRolePermissions() {
       modules: ['sales', 'purchase', 'operations', 'boss_dashboard'],
       dataScope: 'all',
       actions: [
+        'product.custom_field.write',
         'sales.order.write',
         'counterparty.write',
         'sales.sample.approve',

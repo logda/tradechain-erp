@@ -92,7 +92,7 @@ describe('formal product master data page', () => {
     );
 
     expect(screen.getByRole('heading', { name: '商品 / SKU 主数据' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: '销售编码 / 采购编码' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '产品编码 / 采购编码' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: '产品名称 Product Name' })).toBeInTheDocument();
     expect(screen.getByText('智能 LED 灯带')).toBeInTheDocument();
     expect(screen.getByText('SALE-LED-001')).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe('formal product master data page', () => {
     expect(screen.getByText('SUP-LIGHT')).toBeInTheDocument();
     expect(screen.getByText('Starlight')).toBeInTheDocument();
     expect(screen.getByText('深圳光源制造有限公司')).toBeInTheDocument();
-    expect(screen.getByText('销售编码 Sales')).toBeInTheDocument();
+    expect(screen.getByText('产品编码 Product Code')).toBeInTheDocument();
     expect(screen.getByText('采购编码 Purchase')).toBeInTheDocument();
     expect(screen.getByText('供应商编码 Supplier Code')).toBeInTheDocument();
     expect(screen.getByText('SL-001')).toBeInTheDocument();
@@ -114,7 +114,8 @@ describe('formal product master data page', () => {
     expect(screen.getByText('产品编码规则设置')).toBeInTheDocument();
     expect(screen.queryByText('Owner: Zoe')).not.toBeInTheDocument();
     expect(screen.queryByText('USD')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '新增商品' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新增' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '新增产品' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '查询' })).toHaveClass(
       'erp-button',
       'erp-button--primary',
@@ -617,8 +618,10 @@ describe('formal product master data page', () => {
     expect(screen.getByLabelText('阶梯售价 Tier Price 2')).toHaveValue(14.5);
   });
 
-  it('blocks non-admin users from opening product master data', async () => {
-    const fetchMock = vi.fn();
+  it('shows sales a read-only product list without purchase or supplier data', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      items: [{ id: 1, sku: 'SKU-LED-001', salesCode: 'PD-SUP-LIGHT-001', purchaseCode: 'PUR-LED-001', factoryName: '秘密工厂', defaultSupplierCode: 'SUP-LIGHT', nameCn: '智能 LED 灯带', nameEn: 'Smart LED Strip', category: 'electronics', unit: 'set', currency: 'USD', defaultSalePrice: 15.9, defaultPurchasePrice: 8.5, ownerName: 'Zoe', status: 'active', createdAt: '2026-07-11T09:00:00.000Z', createdBy: 'system' }], total: 1, page: 1, pageSize: 20,
+    }) });
     vi.stubGlobal('fetch', fetchMock);
 
     render(
@@ -632,9 +635,13 @@ describe('formal product master data page', () => {
       </>,
     );
 
-    expect(screen.getByText('无权限访问商品主数据')).toBeInTheDocument();
-    expect(screen.queryByText('智能 LED 灯带')).not.toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByText('智能 LED 灯带')).toBeInTheDocument();
+    expect(screen.getByText('PD-SUP-LIGHT-001')).toBeInTheDocument();
+    expect(screen.queryByText('PUR-LED-001')).not.toBeInTheDocument();
+    expect(screen.queryByText('秘密工厂')).not.toBeInTheDocument();
+    expect(screen.queryByText('供应商编码 Supplier Code')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '新增' })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it('submits create product payload', async () => {
@@ -648,6 +655,7 @@ describe('formal product master data page', () => {
       <CreateProductForm
         endpoint="http://127.0.0.1:3001/api/products"
         createdBy="Admin"
+        customFields={[{ id: 3, name: '包装备注', type: 'text' }]}
         codeRule={{
           strategy: 'composed_segments',
           serialLength: 4,
@@ -672,16 +680,16 @@ describe('formal product master data page', () => {
     );
 
     expect(screen.queryByLabelText('内部编码 Internal Code')).not.toBeInTheDocument();
-    expect(screen.getByText('产品销售编码 Sales Code')).toBeInTheDocument();
+    expect(screen.getByText('产品编码 Product Code')).toBeInTheDocument();
     expect(
-      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+      within(screen.getByRole('group', { name: '产品编码模式 Product Code Mode' })).getByRole(
         'button',
         { name: 'generated / 自动生成' },
       ),
     ).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByLabelText('产品销售编码 Sales Code')).toHaveClass('erp-control');
+    expect(screen.getByLabelText('产品编码 Product Code')).toHaveClass('erp-control');
     expect(
-      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+      within(screen.getByRole('group', { name: '产品编码模式 Product Code Mode' })).getByRole(
         'button',
         { name: 'generated / 自动生成' },
       ),
@@ -690,7 +698,7 @@ describe('formal product master data page', () => {
       'erp-button--primary',
     );
     fireEvent.click(
-      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+      within(screen.getByRole('group', { name: '产品编码模式 Product Code Mode' })).getByRole(
         'button',
         { name: 'manual / 手工填写' },
       ),
@@ -700,13 +708,14 @@ describe('formal product master data page', () => {
     expect(screen.getByText('单位 Unit')).toBeInTheDocument();
     expect(screen.getByText('产品阶段 Product Stage')).toBeInTheDocument();
     expect(screen.getAllByText('*').length).toBeGreaterThanOrEqual(4);
+    fireEvent.click(within(screen.getByRole('group', { name: '采购编码模式 Purchase Code Mode' })).getByRole('button', { name: 'generated / 自动生成' }));
     expect(
       within(screen.getByRole('group', { name: '采购编码模式 Purchase Code Mode' })).getByRole(
         'button',
         { name: 'generated / 自动生成' },
       ),
     ).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.change(screen.getByLabelText('产品销售编码 Sales Code'), {
+    fireEvent.change(screen.getByLabelText('产品编码 Product Code'), {
       target: { value: 'SALE-CAM-009' },
     });
     fireEvent.click(
@@ -723,7 +732,8 @@ describe('formal product master data page', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('生成前提：已选择供应商，已填写产品分类。')).toBeInTheDocument();
-    expect(screen.getByText(/当前示例：PD-SUP-BRAVO-ELEC-2026-\d{2}-0001/)).toBeInTheDocument();
+    const currentPeriod = new Date().toISOString().slice(0, 7);
+    expect(screen.getByText(`当前示例：PD-SUP-BRAVO-ELEC-${currentPeriod}-0001`)).toBeInTheDocument();
     expect(screen.queryByLabelText('币种 Currency')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('归属人 Owner')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('品牌 Brand'), {
@@ -760,6 +770,7 @@ describe('formal product master data page', () => {
     fireEvent.change(screen.getByLabelText('默认采购价 Purchase Price'), {
       target: { value: '21.5' },
     });
+    fireEvent.change(screen.getByLabelText('包装备注'), { target: { value: '避光保存' } });
     fireEvent.click(screen.getByRole('button', { name: '新增商品' }));
 
     await waitFor(() => {
@@ -799,6 +810,7 @@ describe('formal product master data page', () => {
         body: expect.stringContaining('"currency":"USD"'),
       }),
     );
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:3001/api/products', expect.objectContaining({ body: expect.stringContaining('"customValues":{"3":"避光保存"}') }));
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3001/api/products',
       expect.objectContaining({
@@ -863,12 +875,12 @@ describe('formal product master data page', () => {
       }),
     );
     expect(
-      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+      within(screen.getByRole('group', { name: '产品编码模式 Product Code Mode' })).getByRole(
         'button',
         { name: 'generated / 自动生成' },
       ),
     ).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByLabelText('产品销售编码 Sales Code')).toBeDisabled();
+    expect(screen.getByLabelText('产品编码 Product Code')).toBeDisabled();
     fireEvent.change(screen.getByLabelText('产品名称 Product Name'), {
       target: { value: '测试商品自动采购编码031' },
     });
@@ -932,22 +944,16 @@ describe('formal product master data page', () => {
     expect(
       within(screen.getByRole('group', { name: '采购编码模式 Purchase Code Mode' })).getByRole(
         'button',
-        { name: 'generated / 自动生成' },
+        { name: 'manual / 手工填写' },
       ),
     ).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(
-      within(screen.getByRole('group', { name: '采购编码模式 Purchase Code Mode' })).getByRole(
+      within(screen.getByRole('group', { name: '产品编码模式 Product Code Mode' })).getByRole(
         'button',
         { name: 'manual / 手工填写' },
       ),
     );
-    fireEvent.click(
-      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
-        'button',
-        { name: 'manual / 手工填写' },
-      ),
-    );
-    fireEvent.change(screen.getByLabelText('产品销售编码 Sales Code'), {
+    fireEvent.change(screen.getByLabelText('产品编码 Product Code'), {
       target: { value: 'SALE-TIER-010' },
     });
     fireEvent.change(screen.getByLabelText('产品名称 Product Name'), {
@@ -1029,13 +1035,15 @@ describe('formal product master data page', () => {
       />,
     );
 
+    fireEvent.click(within(screen.getByRole('group', { name: '采购编码模式 Purchase Code Mode' })).getByRole('button', { name: 'generated / 自动生成' }));
+
     fireEvent.click(
-      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+      within(screen.getByRole('group', { name: '产品编码模式 Product Code Mode' })).getByRole(
         'button',
         { name: 'manual / 手工填写' },
       ),
     );
-    fireEvent.change(screen.getByLabelText('产品销售编码 Sales Code'), {
+    fireEvent.change(screen.getByLabelText('产品编码 Product Code'), {
       target: { value: 'SALE-NO-PRICE-001' },
     });
     fireEvent.change(screen.getByLabelText('产品名称 Product Name'), {
@@ -1161,6 +1169,8 @@ describe('formal product master data page', () => {
       </>,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: '新增' }));
+
     fireEvent.click(
       within(screen.getByRole('group', { name: '采购编码模式 Purchase Code Mode' })).getByRole(
         'button',
@@ -1168,12 +1178,12 @@ describe('formal product master data page', () => {
       ),
     );
     fireEvent.click(
-      within(screen.getByRole('group', { name: '销售编码模式 Sales Code Mode' })).getByRole(
+      within(screen.getByRole('group', { name: '产品编码模式 Product Code Mode' })).getByRole(
         'button',
         { name: 'manual / 手工填写' },
       ),
     );
-    fireEvent.change(screen.getByLabelText('产品销售编码 Sales Code'), {
+    fireEvent.change(screen.getByLabelText('产品编码 Product Code'), {
       target: { value: 'SALE-CAM-009' },
     });
     fireEvent.change(screen.getByLabelText('产品名称 Product Name'), {

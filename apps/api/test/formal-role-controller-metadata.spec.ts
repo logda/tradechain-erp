@@ -111,7 +111,8 @@ describe('formal role controller metadata', () => {
       );
     });
 
-    [ProductController, UserManagementController].forEach(
+    expect(getClassGuards(ProductController)).toEqual(expect.arrayContaining([FormalRoleGuard]));
+    [UserManagementController].forEach(
       (controller) => {
         expect(getClassGuards(controller)).toEqual(
           expect.arrayContaining([AdminOnlyGuard]),
@@ -153,7 +154,8 @@ describe('formal role controller metadata', () => {
   });
 
   it('declares dynamic module permissions on admin-only controllers', () => {
-    [ProductController, UserManagementController].forEach(
+    expect(getClassAnyModules(ProductController)).toEqual(['admin', 'sales', 'purchase']);
+    [UserManagementController].forEach(
       (controller) => {
         expect(getClassModules(controller)).toEqual(['admin']);
       },

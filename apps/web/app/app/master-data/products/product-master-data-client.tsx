@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CreateProductForm,
   type PricingMode,
@@ -8,9 +8,11 @@ import {
   type ProductStage,
   type PurchaseCodeMode,
 } from './create-product-form';
-import { describeProductCodeRule, type ProductCodeRule } from './product-code-rule';
+import type { ProductCodeRule } from './product-code-rule';
 import { ProductTableRow } from './product-table-row';
 import type { ProductSupplierOption } from './product-supplier-options';
+import { CounterpartyCustomFieldManager } from '../counterparties/counterparty-custom-field-manager';
+import type { CounterpartyCustomField } from '../counterparties/counterparty-extra-fields';
 
 type ProductQuery = {
   keyword?: string;
@@ -46,7 +48,8 @@ type ProductItem = {
   unit: string;
   currency: string;
   defaultSalePrice: number;
-  defaultPurchasePrice: number;
+  defaultPurchasePrice?: number;
+  customValues?: Record<string, string>;
   salePriceTiers?: Array<{
     id: number;
     minQuantity: number;
@@ -66,6 +69,9 @@ type ProductMasterDataClientProps = {
   initialTotal: number;
   initialQuery: ProductQuery;
   canManageMasterData: boolean;
+  canConfigureFields?: boolean;
+  salesView?: boolean;
+  customFields?: CounterpartyCustomField[];
   updatedBy: string;
   codeRule: ProductCodeRule;
   salesCodeRule: ProductCodeRule;
@@ -77,6 +83,7 @@ type ProductMasterDataClientProps = {
   };
   requestHeaders: Record<string, string>;
   apiBaseUrl: string;
+  mutationApiBaseUrl?: string;
 };
 
 const sectionStyle = {
@@ -90,11 +97,6 @@ const sectionStyle = {
 
 const sectionHeadingStyle = {
   marginTop: 0,
-} satisfies React.CSSProperties;
-
-const sectionCopyStyle = {
-  color: '#475569',
-  lineHeight: 1.7,
 } satisfies React.CSSProperties;
 
 const filterHeadingStyle = {
@@ -339,6 +341,9 @@ export function ProductMasterDataClient({
   initialTotal,
   initialQuery,
   canManageMasterData,
+  canConfigureFields = false,
+  salesView = false,
+  customFields: initialCustomFields = [],
   updatedBy,
   codeRule,
   salesCodeRule,
@@ -346,8 +351,12 @@ export function ProductMasterDataClient({
   actorAccessScopes,
   requestHeaders,
   apiBaseUrl,
+  mutationApiBaseUrl = apiBaseUrl,
 }: ProductMasterDataClientProps) {
   const [items, setItems] = useState(initialItems);
+  const [customFields, setCustomFields] = useState(initialCustomFields);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const closeCreateRef = useRef<HTMLButtonElement>(null);
   const [total, setTotal] = useState(initialTotal);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
   const [draftQuery, setDraftQuery] = useState(initialQuery);
@@ -358,6 +367,16 @@ export function ProductMasterDataClient({
   const formalCount = countProductsByStage(items, 'formal');
   const tieredCount = countProductsByPricingMode(items, 'tiered');
   const linkedSupplierCount = countLinkedSuppliers(items);
+
+  useEffect(() => {
+    if (!isCreateOpen) return;
+    closeCreateRef.current?.focus();
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsCreateOpen(false);
+    };
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [isCreateOpen]);
 
   async function fetchProducts(nextQuery: ProductQuery) {
     const nextRequestSeq = requestSeqRef.current + 1;
@@ -468,40 +487,21 @@ export function ProductMasterDataClient({
             <strong style={metricValueStyle}>{tieredCount}</strong>
             <span style={metricHintStyle}>当前页中启用数量阶梯报价模式的产品数量。</span>
           </article>
-          <article style={metricCardStyle}>
+          {!salesView ? <article style={metricCardStyle}>
             <span style={metricLabelStyle}>已关联供应商</span>
             <strong style={metricValueStyle}>{linkedSupplierCount}</strong>
             <span style={metricHintStyle}>已带出工厂或供应商编码的产品资料数。</span>
-          </article>
+          </article> : null}
         </div>
       </section>
 
-      <section style={sectionStyle}>
-        <h3 style={sectionHeadingStyle}>新增商品</h3>
-        <p style={sectionCopyStyle}>
-          这是单据明细行的基础，先把销售、采购和价格资料补齐，便于追溯、报价和采购复用。
-        </p>
-        <p style={{ color: '#94a3b8', lineHeight: 1.7 }}>
-          销售编码自动生成规则：{describeProductCodeRule(salesCodeRule)}；采购编码自动生成规则：
-          {describeProductCodeRule(codeRule)}
-        </p>
-        {canManageMasterData ? (
-          <CreateProductForm
-            endpoint={`${apiBaseUrl}/products`}
-            createdBy={updatedBy}
-            codeRule={codeRule}
-            salesCodeRule={salesCodeRule}
-            supplierOptions={supplierOptions}
-            actorAccessScopes={actorAccessScopes}
-            onSuccess={handleCreated}
-          />
-        ) : (
-          <p style={{ color: '#64748b', marginBottom: 0 }}>当前角色仅可查看商品主数据。</p>
-        )}
-      </section>
+      {canConfigureFields ? <CounterpartyCustomFieldManager fields={customFields} onChange={setCustomFields} endpoint={`${mutationApiBaseUrl}/products/custom-fields`} requestHeaders={requestHeaders} /> : null}
 
       <section style={sectionStyle}>
-        <h3 style={{ marginTop: 0 }}>商品列表</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <h3 style={{ marginTop: 0 }}>商品列表</h3>
+          {canManageMasterData ? <button type="button" className="erp-button erp-button--primary" onClick={() => setIsCreateOpen(true)}>新增</button> : null}
+        </div>
         <form onSubmit={handleFilterSubmit} className="erp-filter-form erp-card">
           <h4 style={filterHeadingStyle}>筛选视图 Product Filters</h4>
           <div className="erp-form-grid">
@@ -598,18 +598,18 @@ export function ProductMasterDataClient({
           <table style={tableStyle}>
             <thead>
               <tr>
-                <th style={headCellStyle}>销售编码 / 采购编码</th>
+                <th style={headCellStyle}>{salesView ? '产品编码' : '产品编码 / 采购编码'}</th>
                 <th style={headCellStyle}>产品名称 Product Name</th>
                 <th style={headCellStyle}>英文名称 Name EN</th>
                 <th style={headCellStyle}>品牌 / 分类</th>
-                <th style={headCellStyle}>工厂 / 供应商</th>
+                {!salesView ? <th style={headCellStyle}>工厂 / 供应商</th> : null}
                 <th style={headCellStyle}>型号 / 规格 / 重量</th>
                 <th style={headCellStyle}>包装信息</th>
                 <th style={headCellStyle}>单位 Unit</th>
                 <th style={headCellStyle}>阶段 / 价格</th>
                 <th style={headCellStyle}>状态</th>
-                <th style={headCellStyle}>编辑 Edit</th>
-                <th style={headCellStyle}>操作 Action</th>
+                {!salesView ? <th style={headCellStyle}>编辑 Edit</th> : null}
+                {!salesView ? <th style={headCellStyle}>操作 Action</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -618,11 +618,14 @@ export function ProductMasterDataClient({
                   key={item.id}
                   item={item}
                   canManageMasterData={canManageMasterData}
+                  salesView={salesView}
+                  customFields={customFields}
                   updatedBy={updatedBy}
                   supplierOptions={supplierOptions}
                   actorAccessScopes={actorAccessScopes}
                   requestHeaders={requestHeaders}
                   apiBaseUrl={apiBaseUrl}
+                  mutationApiBaseUrl={mutationApiBaseUrl}
                 />
               ))}
             </tbody>
@@ -658,6 +661,14 @@ export function ProductMasterDataClient({
           </div>
         </nav>
       </section>
+      {isCreateOpen ? <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.58)', display: 'grid', placeItems: 'center', padding: '20px' }}>
+        <section role="dialog" aria-modal="true" aria-label="新增产品" style={{ width: 'min(1100px, 100%)', maxHeight: '90vh', overflowY: 'auto', background: '#fff', color: '#0f172a', borderRadius: '20px', padding: '24px', boxShadow: '0 24px 80px rgba(15, 23, 42, 0.28)' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', alignItems: 'center' }}>
+            <button ref={closeCreateRef} type="button" className="erp-button" onClick={() => setIsCreateOpen(false)}>关闭</button>
+          </div>
+          <CreateProductForm endpoint={`${mutationApiBaseUrl}/products`} createdBy={updatedBy} codeRule={codeRule} salesCodeRule={salesCodeRule} supplierOptions={supplierOptions} actorAccessScopes={actorAccessScopes} customFields={customFields} onSuccess={(item) => { handleCreated(item); setIsCreateOpen(false); }} />
+        </section>
+      </div> : null}
     </>
   );
 }

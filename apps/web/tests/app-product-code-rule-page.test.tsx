@@ -52,13 +52,13 @@ describe('AppProductCodeRulePage', () => {
       screen.getByText('固定前缀 + 供应商编码 + 分类编码 + 年 + 月 + 4 位流水号，例如 PD-SUP-BRAVO-ELEC-2026-08-0001'),
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '采购编码规则' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '销售编码规则' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '产品编码生成规则' })).toBeInTheDocument();
     expect(screen.getByText('采购编码规则段配置')).toBeInTheDocument();
-    expect(screen.getByText('销售编码规则段配置')).toBeInTheDocument();
+    expect(screen.getByText('产品编码规则段配置')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '保存采购编码规则' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '保存销售编码规则' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存产品编码规则' })).toBeInTheDocument();
     expect(screen.getAllByText('生成前提与提示')).toHaveLength(2);
-    expect(screen.getAllByText('供应商编码')).toHaveLength(1);
+    expect(screen.getAllByText('供应商编码')).toHaveLength(2);
   });
 
   it('updates the current-rule summary locally after saving the rule', async () => {
@@ -125,7 +125,7 @@ describe('AppProductCodeRulePage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('最近更新：2026-07-16T08:00:00.000Z / Admin')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('供应商编码'));
+    fireEvent.click(screen.getAllByLabelText('供应商编码')[0]);
     fireEvent.click(screen.getAllByLabelText('月')[0]);
     fireEvent.change(screen.getAllByLabelText('流水位数')[0], {
       target: { value: '5' },

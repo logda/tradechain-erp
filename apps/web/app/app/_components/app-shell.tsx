@@ -23,6 +23,7 @@ const navEntries: Array<{
     label: '主数据中心',
     visible: 'all' as const,
   },
+  { href: '/app/master-data/products', label: '产品库', visible: 'salesOrPurchase' as const },
   { href: '/app/sales', label: '销售中心', visible: 'sales' as const },
   { href: '/app/purchase', label: '采购中心', visible: 'purchase' as const },
   {

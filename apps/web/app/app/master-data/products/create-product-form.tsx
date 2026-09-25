@@ -28,6 +28,8 @@ import {
   createEditableSalePriceTiers,
   SalePriceTierEditor,
 } from './sale-price-tier-editor';
+import type { CounterpartyCustomField } from '../counterparties/counterparty-extra-fields';
+import { ProductCustomValueFields, readProductCustomValues } from './product-custom-value-fields';
 
 export type ProductCategory = 'electronics' | 'consumables' | 'service';
 export type ProductStage = 'quote_candidate' | 'formal';
@@ -42,6 +44,7 @@ type CreateProductFormProps = {
   codeRule?: ProductCodeRule;
   salesCodeRule?: ProductCodeRule;
   supplierOptions?: ProductSupplierOption[];
+  customFields?: CounterpartyCustomField[];
   actorAccessScopes?: {
     modules: string[];
     dataScope: string;
@@ -71,6 +74,7 @@ type CreateProductFormProps = {
     currency: string;
     defaultSalePrice: number;
     defaultPurchasePrice: number;
+    customValues?: Record<string, string>;
     salePriceTiers?: Array<{
       id: number;
       minQuantity: number;
@@ -381,6 +385,7 @@ export function CreateProductForm({
   codeRule = defaultProductCodeRule,
   salesCodeRule = defaultSalesProductCodeRule,
   supplierOptions = fallbackProductSupplierOptions,
+  customFields = [],
   actorAccessScopes,
   onSuccess,
 }: CreateProductFormProps) {
@@ -389,7 +394,7 @@ export function CreateProductForm({
   const attempt = useMutationAttempt();
   const generatedSku = useRef<string | null>(null);
   const [salesCodeMode, setSalesCodeMode] = useState<SalesCodeMode>('generated');
-  const [purchaseCodeMode, setPurchaseCodeMode] = useState<PurchaseCodeMode>('generated');
+  const [purchaseCodeMode, setPurchaseCodeMode] = useState<PurchaseCodeMode>('manual');
   const [factorySourceMode, setFactorySourceMode] = useState<FactorySourceMode>('manual');
   const [pricingMode, setPricingMode] = useState<PricingMode>('fixed');
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory>('electronics');
@@ -423,12 +428,13 @@ export function CreateProductForm({
   const generationPreview = buildProductCodePreview(codeRule, {
     supplierCode: selectedSupplierCode || resolvedUnitCode || 'SUP-BRAVO',
     category: selectedCategory,
-    now: '2026-07-17T08:00:00.000Z',
+    now: new Date().toISOString(),
     sequence: 1,
   });
   const salesGenerationPreview = buildProductCodePreview(salesCodeRule, {
+    supplierCode: resolvedUnitCode || 'SUP-BRAVO',
     category: selectedCategory,
-    now: '2026-07-17T08:00:00.000Z',
+    now: new Date().toISOString(),
     sequence: 1,
   });
   const requirementText = [
@@ -457,6 +463,10 @@ export function CreateProductForm({
         error: '自动生成采购编码需要单位编码。请选择供应商自动带出，或切换为手工填写采购编码。',
         success: null,
       });
+      return;
+    }
+    if (salesCodeMode === 'generated' && salesCodeRule.segments.some((segment) => segment.enabled && segment.key === 'supplier_code') && !resolvedUnitCode.trim()) {
+      setState({ error: '自动生成产品编码需要填写供应商编码。', success: null });
       return;
     }
 
@@ -490,6 +500,7 @@ export function CreateProductForm({
       defaultSalePrice: readPriceOrZero(formData, 'defaultSalePrice'),
       defaultPurchasePrice: readPriceOrZero(formData, 'defaultPurchasePrice'),
       salePriceTiers: buildSalePriceTierPayload(pricingMode, salePriceTiers),
+      customValues: readProductCustomValues(formData, customFields),
       ownerName: createdBy,
       createdBy,
     };
@@ -538,6 +549,7 @@ export function CreateProductForm({
               currency: string;
               defaultSalePrice: number;
               defaultPurchasePrice: number;
+              customValues: Record<string, string>;
               salePriceTiers: Array<{
                 id: number;
                 minQuantity: number;
@@ -582,6 +594,7 @@ export function CreateProductForm({
         currency: responseItem?.currency ?? 'USD',
         defaultSalePrice: responseItem?.defaultSalePrice ?? payload.defaultSalePrice,
         defaultPurchasePrice: responseItem?.defaultPurchasePrice ?? payload.defaultPurchasePrice,
+        customValues: responseItem?.customValues ?? payload.customValues,
         salePriceTiers:
           responseItem?.salePriceTiers ??
           buildSalePriceTierPayload(pricingMode, salePriceTiers).map((tier, index) => ({
@@ -598,7 +611,7 @@ export function CreateProductForm({
       };
 
       form.reset();
-      setPurchaseCodeMode('generated');
+      setPurchaseCodeMode('manual');
       setFactorySourceMode('manual');
       setPricingMode('fixed');
       setSelectedSupplierCode(supplierOptions[0]?.code ?? '');
@@ -633,7 +646,7 @@ export function CreateProductForm({
         <div style={{ display: 'grid', gap: '8px' }}>
           <h3 style={heroTitleStyle}>新增商品</h3>
           <p style={heroCopyStyle}>
-            这是正式商品主数据的建档入口。销售编码和采购编码均可手填或按各自规则自动生成。
+            这是正式商品主数据的建档入口。产品编码和采购编码均可手填或按各自规则自动生成。
           </p>
         </div>
         <div style={heroMetaGridStyle}>
@@ -660,14 +673,14 @@ export function CreateProductForm({
         <div style={sectionHeaderStyle}>
           <h4 style={sectionTitleStyle}>编码与来源</h4>
           <p style={sectionCopyStyle}>
-            先分别确定销售编码、采购编码的生成模式，再维护工厂来源。
+            先分别确定产品编码、采购编码的生成模式，再维护工厂来源。
           </p>
         </div>
         <div style={codeSourceGridStyle}>
           <div style={labelStyle}>
             <input type="hidden" name="salesCodeMode" value={salesCodeMode} />
-            <span>销售编码模式 Sales Code Mode</span>
-            <span role="group" aria-label="销售编码模式 Sales Code Mode" style={segmentedControlStyle}>
+            <span>产品编码模式 Product Code Mode</span>
+            <span role="group" aria-label="产品编码模式 Product Code Mode" style={segmentedControlStyle}>
               {Object.entries(salesCodeModeLabels).map(([key, value]) => (
                 <button
                   className="erp-mode-button"
@@ -684,15 +697,15 @@ export function CreateProductForm({
             <span style={helperTextStyle}>自动生成规则：{describeProductCodeRule(salesCodeRule)}。</span>
           </div>
           <label style={labelStyle}>
-            {renderRequiredLabel('产品销售编码 Sales Code')}
+            {renderRequiredLabel('产品编码 Product Code')}
             <input
               className="erp-control"
               name="salesCode"
-              aria-label="产品销售编码 Sales Code"
+              aria-label="产品编码 Product Code"
               style={inputStyle}
               disabled={salesCodeMode === 'generated'}
               placeholder={
-                salesCodeMode === 'generated' ? '系统按规则自动生成' : '请手工填写销售编码'
+                salesCodeMode === 'generated' ? '系统按规则自动生成' : '请手工填写产品编码'
               }
             />
             <span style={mutedTextStyle}>
@@ -734,7 +747,7 @@ export function CreateProductForm({
             <span style={helperTextStyle}>
               {purchaseCodeMode === 'generated'
                 ? `当前示例：${generationPreview}`
-                : '切换为手工模式后，可填写独立采购编码。'}
+                : '可选填独立采购编码。'}
             </span>
           </label>
           <div style={labelStyle}>
@@ -956,6 +969,7 @@ export function CreateProductForm({
         tiers={salePriceTiers}
         onChange={setSalePriceTiers}
       />
+      <ProductCustomValueFields fields={customFields} />
       {state.error ? (
         <p role="alert" style={{ margin: 0, color: '#b91c1c', fontSize: '13px' }}>
           {state.error}

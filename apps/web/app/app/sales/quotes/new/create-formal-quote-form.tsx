@@ -283,7 +283,7 @@ function isDemandEligibleProduct(option: ProductOption) {
   return (
     option.productStage === 'formal' &&
     Number(option.defaultSalePrice ?? 0) > 0 &&
-    Number(option.defaultPurchasePrice ?? 0) > 0
+    (option.quoteEligible ?? Number(option.defaultPurchasePrice ?? 0) > 0)
   );
 }
 

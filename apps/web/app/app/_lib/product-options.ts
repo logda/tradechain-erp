@@ -15,6 +15,7 @@ export type ProductOption = {
   pricingMode?: 'fixed' | 'tiered';
   defaultSalePrice?: number | null;
   defaultPurchasePrice?: number | null;
+  quoteEligible?: boolean;
   salePriceTiers?: Array<{
     id?: number;
     minQuantity: number;
@@ -37,6 +38,7 @@ type ProductListResponse = {
     pricingMode?: 'fixed' | 'tiered';
     defaultSalePrice?: number | null;
     defaultPurchasePrice?: number | null;
+    quoteEligible?: boolean;
     salePriceTiers?: Array<{
       id?: number;
       minQuantity: number;
@@ -93,6 +95,7 @@ function hasValidProductListResponse(value: unknown): value is ProductListRespon
 }
 
 export async function loadActiveProductOptions(session?: FormalRequestSession) {
+  const salesView = session?.role === 'sales' || session?.role === 'sales_manager';
   try {
     const response = await fetch(
       `${getProductApiBaseUrl()}/formal-lookup/products?status=active`,
@@ -123,12 +126,17 @@ export async function loadActiveProductOptions(session?: FormalRequestSession) {
         unit: item.unit,
         pricingMode: item.pricingMode,
         defaultSalePrice: item.defaultSalePrice,
-        defaultPurchasePrice: item.defaultPurchasePrice,
+        ...(salesView ? {} : { defaultPurchasePrice: item.defaultPurchasePrice }),
+        quoteEligible: item.quoteEligible ?? (Number(item.defaultSalePrice ?? 0) > 0 && Number(item.defaultPurchasePrice ?? 0) > 0),
         salePriceTiers: item.salePriceTiers ?? [],
         status: item.status,
       }))
       .sort((left, right) => left.id - right.id);
   } catch {
-    return [...fallbackProductOptions].sort((left, right) => left.id - right.id);
+    return fallbackProductOptions.map((item) => {
+      if (!salesView) return { ...item };
+      const { defaultPurchasePrice, ...visible } = item;
+      return { ...visible, quoteEligible: Number(item.defaultSalePrice ?? 0) > 0 && Number(defaultPurchasePrice ?? 0) > 0 };
+    }).sort((left, right) => left.id - right.id);
   }
 }

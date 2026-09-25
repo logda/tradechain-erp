@@ -226,12 +226,6 @@ export function validateProductCodeRule(
   }
 
   const enabledSegments = normalizedRule.segments.filter((segment) => segment.enabled);
-  if (
-    options.kind === 'sales' &&
-    enabledSegments.some((segment) => segment.key === 'supplier_code')
-  ) {
-    return { ok: false, error: '销售编码规则不能使用供应商编码段' };
-  }
   const serialSegment = enabledSegments.find((segment) => segment.key === 'serial');
 
   if (!serialSegment) {

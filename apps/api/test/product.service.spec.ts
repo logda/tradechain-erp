@@ -330,7 +330,9 @@ describe('ProductService', () => {
         ],
         updatedBy: 'Admin',
       }),
-    ).rejects.toThrow('销售编码规则不能使用供应商编码段');
+    ).resolves.toMatchObject({ serialLength: 3 });
+    await expect(service.generateSalesCodeByRule('electronics', 'SUP-LIGHT')).resolves.toMatch(/^SUP-LIGHT-\d{3}$/);
+    await expect(service.generateSalesCodeByRule('electronics')).rejects.toThrow('供应商编码');
   });
 
   it('generates purchase code from supplier code and sequence', async () => {

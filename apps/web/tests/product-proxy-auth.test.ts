@@ -28,4 +28,20 @@ describe('产品接口代理会话', () => {
     expect(fetchMock.mock.calls[1][1].headers.get('x-erp-session-signature')).toBeTruthy();
     vi.unstubAllGlobals();
   });
+
+  it('forwards the authenticated sales role for read-only product requests', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        role: 'sales', user: 'Zoe', username: 'zoe',
+        accessScopes: { modules: ['sales'], dataScope: 'own_sales', actions: [] },
+      }) })
+      .mockResolvedValueOnce({ status: 200, arrayBuffer: async () => new ArrayBuffer(0), headers: new Headers() });
+    vi.stubGlobal('fetch', fetchMock);
+    const response = await proxyProductRequest(new NextRequest('http://localhost:3000/api/products', {
+      headers: { cookie: 'erp_formal_session=valid-ticket', 'x-erp-role': 'admin' },
+    }));
+    expect(response.status).toBe(200);
+    expect(fetchMock.mock.calls[1][1].headers.get('x-erp-role')).toBe('sales');
+    vi.unstubAllGlobals();
+  });
 });

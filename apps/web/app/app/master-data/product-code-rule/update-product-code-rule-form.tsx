@@ -181,7 +181,7 @@ export function UpdateProductCodeRuleForm({
   const [prefixEnabled, setPrefixEnabled] = useState(hasEnabledSegment(item, 'prefix'));
   const [prefixValue, setPrefixValue] = useState(getSegmentValue(item, 'prefix') || 'PD');
   const [supplierEnabled, setSupplierEnabled] = useState(
-    !isSalesRule && hasEnabledSegment(item, 'supplier_code'),
+    hasEnabledSegment(item, 'supplier_code'),
   );
   const [categoryEnabled, setCategoryEnabled] = useState(hasEnabledSegment(item, 'category_code'));
   const [yearEnabled, setYearEnabled] = useState(hasEnabledSegment(item, 'year'));
@@ -198,7 +198,7 @@ export function UpdateProductCodeRuleForm({
     segments: buildSegments({
       prefixEnabled,
       prefixValue,
-      supplierEnabled: !isSalesRule && supplierEnabled,
+      supplierEnabled,
       categoryEnabled,
       yearEnabled,
       monthEnabled,
@@ -211,7 +211,7 @@ export function UpdateProductCodeRuleForm({
     prefix: prefixValue,
     supplierCode: 'SUP-BRAVO',
     category: 'electronics',
-    now: '2026-07-17T08:00:00.000Z',
+    now: new Date().toISOString(),
     sequence: 1,
   });
 
@@ -271,10 +271,10 @@ export function UpdateProductCodeRuleForm({
     <form onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={formStyle}>
       <section style={cardStyle}>
         <div>
-          <h3 style={{ margin: '0 0 6px' }}>{isSalesRule ? '销售编码规则段配置' : '采购编码规则段配置'}</h3>
+          <h3 style={{ margin: '0 0 6px' }}>{isSalesRule ? '产品编码规则段配置' : '采购编码规则段配置'}</h3>
           <p style={helperStyle}>
             {isSalesRule
-              ? '可组合固定前缀、分类编码、年、月，流水号固定放在最后。销售编码不使用供应商编码。'
+              ? '可组合固定前缀、供应商编码、分类编码、年、月，流水号固定放在最后。'
               : '可自由组合固定前缀、供应商编码、分类编码、年、月，流水号固定放在最后。'}
           </p>
         </div>
@@ -296,8 +296,7 @@ export function UpdateProductCodeRuleForm({
               placeholder="例如 PD"
             />
           </label>
-          {!isSalesRule ? (
-            <label style={inlineLabelStyle}>
+          <label style={inlineLabelStyle}>
               <input
                 type="checkbox"
                 checked={supplierEnabled}
@@ -305,7 +304,6 @@ export function UpdateProductCodeRuleForm({
               />
               供应商编码
             </label>
-          ) : null}
           <label style={inlineLabelStyle}>
             <input
               type="checkbox"
@@ -397,7 +395,7 @@ export function UpdateProductCodeRuleForm({
       <button type="submit" style={buttonStyle} disabled={isSubmitting || attempt.isComplete}>
         {isSubmitting
           ? '保存中...'
-          : `保存${isSalesRule ? '销售' : '采购'}编码规则`}
+          : `保存${isSalesRule ? '产品' : '采购'}编码规则`}
       </button>
     </form>
   );

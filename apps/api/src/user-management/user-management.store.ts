@@ -59,6 +59,7 @@ type RuntimeState = {
   nextUserId: number;
   nextAuditLogId: number;
   counterpartyActionMigrated?: boolean;
+  productFieldActionMigrated?: boolean;
 };
 
 const runtimeStoreCache = new Map<string, UserManagementRuntimeStore>();
@@ -72,6 +73,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
       'admin.user.write',
       'admin.role.write',
       'master_data.write',
+      'product.custom_field.write',
       'counterparty.write',
       'sales.quote.write',
       'sales.inquiry.submit',
@@ -93,6 +95,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
     modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'audit'],
     dataScope: 'all',
     actions: [
+      'product.custom_field.write',
       'counterparty.write',
       'sales.order.write',
       'sales.sample.approve',
@@ -220,6 +223,7 @@ function createSeedState(): RuntimeState {
     nextUserId: 5,
     nextAuditLogId: 1,
     counterpartyActionMigrated: true,
+    productFieldActionMigrated: true,
   };
 }
 
@@ -238,6 +242,7 @@ function cloneState(state: RuntimeState): RuntimeState {
     nextUserId: state.nextUserId,
     nextAuditLogId: state.nextAuditLogId,
     counterpartyActionMigrated: state.counterpartyActionMigrated,
+    productFieldActionMigrated: state.productFieldActionMigrated,
   };
 }
 
@@ -263,6 +268,7 @@ function readState(filePath: string): RuntimeState {
     nextAuditLogId:
       typeof parsed.nextAuditLogId === 'number' ? parsed.nextAuditLogId : 1,
     counterpartyActionMigrated: true,
+    productFieldActionMigrated: true,
   };
   if (!parsed.counterpartyActionMigrated) {
     state.rolePermissions = state.rolePermissions.map((item) => ({
@@ -272,6 +278,13 @@ function readState(filePath: string): RuntimeState {
         actions: [...new Set([...(item.accessScopes.actions ?? []), 'counterparty.write'])],
       },
     }));
+    writeState(filePath, state);
+  }
+  if (!parsed.productFieldActionMigrated) {
+    state.rolePermissions = state.rolePermissions.map((item) => item.roleCode === 'admin' || item.roleCode === 'boss' ? {
+      ...item,
+      accessScopes: { ...item.accessScopes, actions: [...new Set([...(item.accessScopes.actions ?? []), 'product.custom_field.write'])] },
+    } : item);
     writeState(filePath, state);
   }
   return state;
