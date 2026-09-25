@@ -101,7 +101,7 @@ export class FormalTodoService {
     @Inject(QuoteService)
     private readonly quoteService: Pick<QuoteService, 'list'>,
     @Inject(SalesOrderService)
-    private readonly salesOrderService: Pick<SalesOrderService, 'list'>,
+    private readonly salesOrderService: Pick<SalesOrderService, 'list' | 'listPendingPurchaseAssignments'>,
     @Inject(PurchaseOrderService)
     private readonly purchaseOrderService: Pick<PurchaseOrderService, 'list'>,
     @Inject(ShipmentBatchService)
@@ -364,6 +364,40 @@ export class FormalTodoService {
         });
       });
 
+    const pendingAssignments = await this.salesOrderService.listPendingPurchaseAssignments?.() ?? [];
+    pendingAssignments.forEach((item) => {
+      items.push({
+        id: `purchase-assignment-${item.salesNo}`,
+        docNo: item.salesNo,
+        title: '销售单待分配采购负责人',
+        domain: 'purchase',
+        moduleLabel: '采购分配',
+        statusLabel: '待分配',
+        ownerName: '',
+        href: '/app/purchase-orders/assignments',
+        priority: 'high',
+        description: `${item.title} 需要采购主管或老板指定采购负责人。`,
+      });
+    });
+
+    purchaseOrders.items
+      .filter((item) => !countClosed(item, 'purchase'))
+      .filter((item) => item.status === 'pending_purchase_claim')
+      .forEach((item) => {
+        items.push({
+          id: `purchase-claim-${item.docNo}`,
+          docNo: item.docNo,
+          title: '采购单待负责人建单',
+          domain: 'purchase',
+          moduleLabel: '采购单',
+          statusLabel: '待采购建单',
+          ownerName: item.ownerName ?? '',
+          href: formalDetailHref(item.detailHref, '/app/purchase-orders'),
+          priority: 'high',
+          description: `${item.title} 已指定采购负责人，请补齐采购信息并提交审批。`,
+        });
+      });
+
     purchaseOrders.items
       .filter((item) => !countClosed(item, 'purchase'))
       .filter((item) => item.status === 'pending_purchase_manager_approval')
@@ -375,7 +409,7 @@ export class FormalTodoService {
           domain: 'purchase',
           moduleLabel: '采购单',
           statusLabel: '待采购主管审批',
-          ownerName: item.ownerName ?? item.createdBy,
+          ownerName: '',
           href: formalDetailHref(item.detailHref, '/app/purchase-orders'),
           priority: 'high',
           description: `${item.title} 需要采购主管审批后进入采购执行。`,

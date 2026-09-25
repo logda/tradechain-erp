@@ -19,7 +19,6 @@ import {
 } from '../_lib/demo-session';
 import { hasValidAuditLogResponse, type AuditLogResponse } from '../_lib/audit-log';
 import { formatCounterpartyChineseDisplay } from '../_lib/counterparty-display';
-import { canSubmitFormalPurchaseOrder } from '../_lib/formal-access';
 import { buildFormalApiRequestHeaders } from '../_lib/formal-api-request-headers';
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -216,7 +215,6 @@ export default async function AppPurchaseOrdersPage({
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = resolveDemoSession(resolvedSearchParams);
-  const canSubmitPurchaseOrder = canSubmitFormalPurchaseOrder(session);
   const query = {
     keyword: readParam(resolvedSearchParams.keyword),
     docNo: readParam(resolvedSearchParams.docNo),
@@ -313,11 +311,13 @@ export default async function AppPurchaseOrdersPage({
         <Link href="/app" style={mutedLinkStyle}>
           返回正式首页
         </Link>
-        {canSubmitPurchaseOrder ? (
-          <Link href="/app/purchase-orders/new" style={mutedLinkStyle}>
-            采购转单页
-          </Link>
-        ) : null}
+        {['admin', 'boss', 'purchase_manager'].includes(session.role) &&
+          canViewFormalModule(session, 'purchase') &&
+          session.accessScopes?.actions?.includes('purchase.order.approve') !== false ? (
+            <Link href="/app/purchase-orders/assignments" style={mutedLinkStyle}>
+              分配采购负责人
+            </Link>
+          ) : null}
       </div>
 
       <StatStrip

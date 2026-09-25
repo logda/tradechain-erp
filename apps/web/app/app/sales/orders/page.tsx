@@ -108,6 +108,7 @@ const salesOrderStatusLabels: Record<string, string> = {
   draft: '草稿',
   rejected: '已驳回',
   pending_sales_manager_approval: '待销售主管审批',
+  pending_purchase_assignment: '待分配采购负责人',
   purchasing: '采购中',
   partial_purchasing: '部分采购中',
   partial_shipped: '部分已发货',

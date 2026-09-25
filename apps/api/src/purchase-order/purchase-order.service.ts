@@ -59,6 +59,7 @@ export type CreateFromSalesOrderPayload = {
   purchaseOrderAttachments?: PurchaseOrderAttachmentInfo[];
   ownerName?: string;
   session?: FormalSession;
+  allowPendingAssignment?: boolean;
 };
 
 export type PurchaseOrderLineItem = {
@@ -104,6 +105,8 @@ export type CreatedPurchaseOrderRecord = {
   supplierId: number;
   supplierName: string;
   ownerName: string;
+  lockedPurchaseOwner?: boolean;
+  sourceInquiryId?: number;
   currentVersionNo: number;
   status: string;
   itemCount: number;
@@ -128,6 +131,7 @@ export type CreatedPurchaseOrderRecord = {
 export type PurchaseOrderTransitionPayload = {
   purchaseOrderId: number;
   currentStatus: string;
+  session?: FormalSession;
 };
 
 export type PurchaseOrderRecord = CreatedPurchaseOrderRecord;
@@ -667,6 +671,7 @@ function resolvePurchaseAggregateStatus(records: CreatedPurchaseOrderRecord[]) {
 @Injectable()
 export class PurchaseOrderService {
   private readonly store = resolvePurchaseOrderStore();
+  private readonly activeSalesTransfers = new Map<number, Promise<{ purchaseOrders: CreatedPurchaseOrderRecord[] }>>();
 
   constructor(
     @Optional()
@@ -1146,10 +1151,45 @@ export class PurchaseOrderService {
   }
 
   async createFromSalesOrder(payload: CreateFromSalesOrderPayload) {
+    const active = this.activeSalesTransfers.get(payload.salesOrderId);
+    if (active) return active;
+    const transfer = this.createFromSalesOrderOnce(payload);
+    this.activeSalesTransfers.set(payload.salesOrderId, transfer);
+    try {
+      return await transfer;
+    } finally {
+      this.activeSalesTransfers.delete(payload.salesOrderId);
+    }
+  }
+
+  private async createFromSalesOrderOnce(payload: CreateFromSalesOrderPayload) {
     const groupedByProduct = new Map<string, PurchaseOrderItem[]>();
+    payload.items.forEach((item) => {
+      const groupKey = resolvePurchaseOrderProductGroupKey(item);
+      const currentItems = groupedByProduct.get(groupKey) ?? [];
+      currentItems.push(item);
+      groupedByProduct.set(groupKey, currentItems);
+    });
     const sourceSalesOrder = await this.loadSourceSalesOrderDetail(payload.salesOrderId);
     if (this.salesOrderService?.getDetail && !sourceSalesOrder) {
       throw new NotFoundException('来源销售单不存在');
+    }
+    if (sourceSalesOrder) {
+      if (sourceSalesOrder.status !== 'purchasing' &&
+          !(payload.allowPendingAssignment && sourceSalesOrder.status === 'pending_purchase_assignment')) {
+        throw new BadRequestException('销售单尚未进入采购转换节点');
+      }
+      if (sourceSalesOrder.purchaseOwnerName &&
+          sourceSalesOrder.purchaseOwnerName !== payload.ownerName) {
+        throw new BadRequestException('采购负责人必须与来源销售单一致');
+      }
+      if (sourceSalesOrder.purchaseOwnerName && payload.session?.user &&
+          sourceSalesOrder.purchaseOwnerName !== payload.session.user) {
+        throw new BadRequestException('仅指定采购负责人可将销售单转为采购单');
+      }
+      if (sourceSalesOrder.status === 'pending_purchase_assignment' && !payload.ownerName) {
+        throw new BadRequestException('请先指定采购负责人');
+      }
     }
     const salesOrderNo = sourceSalesOrder?.salesNo || payload.salesOrderNo?.trim() ||
       `S20260708${String(payload.salesOrderId).padStart(4, '0')}`;
@@ -1164,6 +1204,29 @@ export class PurchaseOrderService {
           where: { bizType: 'purchase_order' },
         })) as PrismaBusinessDocumentRecord[]).map(toPurchaseDocumentPayload)
       : this.store.listPurchaseOrders();
+    const alreadyCreated = existingPurchaseOrders.filter(
+      (record) => record.sourceSalesOrderId === payload.salesOrderId && record.status !== 'void',
+    );
+    if (alreadyCreated.length > 0) {
+      if (payload.ownerName && alreadyCreated.some((record) => record.ownerName !== payload.ownerName)) {
+        throw new BadRequestException('采购单已由其他负责人创建，不能重复分配');
+      }
+      const createdGroups = new Set(alreadyCreated.map((record) => {
+        const firstItem = record.items?.[0];
+        return firstItem ? resolvePurchaseOrderProductGroupKey({
+          salesItemId: firstItem.sourceSalesItemId,
+          supplierId: firstItem.supplierId,
+          productId: firstItem.productId,
+          sku: firstItem.sku,
+          quantity: firstItem.quantity,
+        }) : '';
+      }));
+      if (createdGroups.has('') || alreadyCreated.length !== createdGroups.size) {
+        throw new BadRequestException('来源销售单已有不完整采购单，请先核对');
+      }
+      for (const groupKey of createdGroups) groupedByProduct.delete(groupKey);
+      if (groupedByProduct.size === 0) return { purchaseOrders: alreadyCreated };
+    }
     const existingCodes = existingPurchaseOrders
       .filter((record) => record.sourceSalesOrderId === payload.salesOrderId)
       .map((record) => record.purchaseNo);
@@ -1177,19 +1240,13 @@ export class PurchaseOrderService {
         ? 'pending_purchase_claim'
         : 'draft';
 
-    payload.items.forEach((item) => {
-      const groupKey = resolvePurchaseOrderProductGroupKey(item);
-      const currentItems = groupedByProduct.get(groupKey) ?? [];
-      currentItems.push(item);
-      groupedByProduct.set(groupKey, currentItems);
-    });
-    const splitCount = groupedByProduct.size;
+    const splitCount = groupedByProduct.size + alreadyCreated.length;
     const nextPurchaseNo = () => splitCount > 1 || useSuffix
       ? `${purchaseNoBase}-${++nextSuffix}`
       : purchaseNoBase;
 
     if (this.shouldUsePrisma()) {
-      const purchaseOrders: CreatedPurchaseOrderRecord[] = [];
+      const purchaseOrders: CreatedPurchaseOrderRecord[] = [...alreadyCreated];
 
       for (const [groupKey, items] of groupedByProduct.entries()) {
         const supplierId = items[0]?.supplierId ?? 0;
@@ -1203,6 +1260,9 @@ export class PurchaseOrderService {
             items[0]?.purchaseOwnerName || resolvePurchaseOwnerName(supplierId),
           session: payload.session,
         });
+        const ownerUserId = (await this.listAssignablePurchaseOwners()).find(
+          (owner) => owner.realName === ownerName && owner.id > 0,
+        )?.id;
         const basePayload: CreatedPurchaseOrderRecord = {
           id: 0,
           purchaseNo: 'PENDING-PURCHASE',
@@ -1210,6 +1270,8 @@ export class PurchaseOrderService {
           supplierId,
           supplierName,
           ownerName,
+          lockedPurchaseOwner: Boolean(sourceSalesOrder),
+          sourceInquiryId: sourceSalesOrder?.sourceInquiryId,
           currentVersionNo: 1,
           status: initialStatus,
           itemCount: items.length,
@@ -1241,7 +1303,7 @@ export class PurchaseOrderService {
             bizType: 'purchase_order',
             docNo: `PENDING-PURCHASE-${Date.now()}-${groupKey}`,
             status: initialStatus,
-            ownerUserId: BigInt(payload.createdBy),
+            ownerUserId: BigInt(ownerUserId ?? payload.createdBy),
             counterpartyId: supplierId > 0 ? BigInt(supplierId) : null,
             payload: basePayload,
             createdBy: BigInt(payload.createdBy),
@@ -1281,7 +1343,7 @@ export class PurchaseOrderService {
       return { purchaseOrders };
     }
 
-    const purchaseOrders: CreatedPurchaseOrderRecord[] = [];
+    const purchaseOrders: CreatedPurchaseOrderRecord[] = [...alreadyCreated];
 
     for (const [, items] of groupedByProduct.entries()) {
       const supplierId = items[0]?.supplierId ?? 0;
@@ -1303,6 +1365,8 @@ export class PurchaseOrderService {
           supplierId,
           supplierName,
           ownerName,
+          lockedPurchaseOwner: Boolean(sourceSalesOrder),
+          sourceInquiryId: sourceSalesOrder?.sourceInquiryId,
           currentVersionNo: 1,
           status: initialStatus,
           itemCount: items.length,
@@ -1479,6 +1543,16 @@ export class PurchaseOrderService {
     };
   }
 
+  private assertPurchaseOwnerForMutation(
+    record: CreatedPurchaseOrderRecord,
+    session?: FormalSession,
+  ) {
+    if (record.lockedPurchaseOwner && session?.user &&
+        record.ownerName !== session.user?.trim()) {
+      throw new BadRequestException('仅指定采购负责人可处理此采购单');
+    }
+  }
+
   async submit(payload: PurchaseOrderTransitionPayload) {
     if (
       payload.currentStatus !== 'draft' &&
@@ -1495,6 +1569,10 @@ export class PurchaseOrderService {
       })) as PrismaBusinessDocumentRecord | null;
       if (existing?.bizType === 'purchase_order') {
         const detail = toPurchaseDocumentPayload(existing);
+        this.assertPurchaseOwnerForMutation(detail, payload.session);
+        if (detail.status !== payload.currentStatus) {
+          throw new BadRequestException('采购单状态已变更，请刷新页面');
+        }
         if (!hasConfiguredPurchaseSupplier(detail)) {
           throw new BadRequestException('请先补充供应商后再提交采购审批');
         }
@@ -1532,6 +1610,10 @@ export class PurchaseOrderService {
 
     const created = this.store.getPurchaseOrder(payload.purchaseOrderId);
     if (created) {
+      this.assertPurchaseOwnerForMutation(created, payload.session);
+      if (created.status !== payload.currentStatus) {
+        throw new BadRequestException('采购单状态已变更，请刷新页面');
+      }
       if (!hasConfiguredPurchaseSupplier(created)) {
         throw new BadRequestException('请先补充供应商后再提交采购审批');
       }
@@ -1582,6 +1664,7 @@ export class PurchaseOrderService {
       }
 
       const beforeData = toPurchaseDocumentPayload(existing);
+      this.assertPurchaseOwnerForMutation(beforeData, payload.session);
       if (
         beforeData.status !== 'draft' &&
         beforeData.status !== 'pending_purchase_claim'
@@ -1596,6 +1679,9 @@ export class PurchaseOrderService {
         fallbackOwnerName: beforeData.ownerName,
         session: payload.session,
       });
+      if (beforeData.lockedPurchaseOwner && ownerName !== beforeData.ownerName) {
+        throw new BadRequestException('来源销售单的采购负责人不可修改');
+      }
       const supplierId =
         payload.supplierId === undefined
           ? beforeData.supplierId
@@ -1615,6 +1701,9 @@ export class PurchaseOrderService {
         where: { id: existing.id },
         data: {
           status: beforeData.status,
+          ownerUserId: BigInt((await this.listAssignablePurchaseOwners()).find(
+            (owner) => owner.realName === ownerName && owner.id > 0,
+          )?.id ?? Number(existing.ownerUserId ?? existing.createdBy ?? 0n)),
           counterpartyId: nextPayload.supplierId > 0 ? BigInt(nextPayload.supplierId) : null,
           payload: nextPayload,
         },
@@ -1642,6 +1731,7 @@ export class PurchaseOrderService {
 
     const created = this.store.getPurchaseOrder(payload.purchaseOrderId);
     if (created) {
+      this.assertPurchaseOwnerForMutation(created, payload.session);
       if (
         created.status !== 'draft' &&
         created.status !== 'pending_purchase_claim'
@@ -1657,6 +1747,9 @@ export class PurchaseOrderService {
         fallbackOwnerName: created.ownerName,
         session: payload.session,
       });
+      if (created.lockedPurchaseOwner && ownerName !== created.ownerName) {
+        throw new BadRequestException('来源销售单的采购负责人不可修改');
+      }
       const supplierId =
         payload.supplierId === undefined
           ? created.supplierId

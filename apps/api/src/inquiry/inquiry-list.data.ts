@@ -39,6 +39,7 @@ export type InquiryListItem = {
   customerCode?: string;
   customerId?: number;
   createdBy: string;
+  comparisonSubmittedBy?: string;
   supplierCount: number;
   comparisonSummary: string;
   createdAt: string;

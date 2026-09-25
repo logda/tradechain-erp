@@ -89,6 +89,7 @@ describe('PurchaseOrderService', () => {
     const source = {
       getDetail: jest.fn().mockResolvedValue({
         salesNo: 'S2609250099',
+        status: 'purchasing',
         customerOrderNo: 'CUSTOMER-PO-99',
       }),
       syncOperationalAggregates: jest.fn().mockResolvedValue(undefined),
@@ -497,6 +498,7 @@ describe('PurchaseOrderService', () => {
         getDetail: jest.fn().mockResolvedValue({
           id: 88,
           salesNo: 'S202607080088',
+          status: 'purchasing',
           items: [
             {
               lineNo: 1,
@@ -644,7 +646,7 @@ describe('PurchaseOrderService', () => {
     });
 
     const createdResult = await service.createFromSalesOrder({
-      salesOrderId: 88,
+      salesOrderId: 89,
       createdBy: 2001,
       initialStatus: 'pending_purchase_claim',
       items: [

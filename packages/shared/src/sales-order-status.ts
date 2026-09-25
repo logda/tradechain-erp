@@ -2,6 +2,7 @@ export const salesApprovalStatuses = [
   'draft',
   'rejected',
   'pending_sales_manager_approval',
+  'pending_purchase_assignment',
   'purchasing',
   'void',
 ] as const;

@@ -240,6 +240,17 @@ describe('formal role controller metadata', () => {
   });
 
   it('restricts purchase-domain mutation actions to purchase-domain roles', () => {
+    expect(getMethodRoles(SalesOrderController, 'assignPurchaser')).toEqual([
+      'admin', 'boss', 'purchase_manager',
+    ]);
+    expect(getMethodModules(SalesOrderController, 'assignPurchaser')).toEqual(['purchase']);
+    expect(getMethodActions(SalesOrderController, 'assignPurchaser')).toEqual(['purchase.order.approve']);
+    expect(getMethodRoles(PurchaseOrderController, 'getSourceInquiryForApproval')).toEqual([
+      'admin', 'boss', 'purchase_manager',
+    ]);
+    expect(getMethodActions(PurchaseOrderController, 'getSourceInquiryForApproval')).toEqual([
+      'purchase.order.approve',
+    ]);
     expect(getMethodRoles(InquiryController, 'list')).toEqual([
       'admin',
       'boss',

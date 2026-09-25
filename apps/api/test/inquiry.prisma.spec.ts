@@ -389,7 +389,7 @@ describe('InquiryService prisma document storage', () => {
           ],
         },
       ],
-    });
+    }, { role: 'purchase', user: 'Leo' });
     const confirmed = await service.confirmByBoss({
       inquiryId: 202,
       items: [
@@ -458,6 +458,7 @@ describe('InquiryService prisma document storage', () => {
       }),
     });
     expect(submitted.status).toBe('pending_boss_review');
+    expect(inquiryPayload).toMatchObject({ comparisonSubmittedBy: 'Leo' });
     expect(confirmed.status).toBe('boss_confirmed');
     expect(
       (prismaMock as typeof prismaMock & { $transaction: jest.Mock }).$transaction,

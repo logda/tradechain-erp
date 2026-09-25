@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  NotFoundException,
   ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
@@ -24,6 +25,9 @@ import { SalesOrderService, type SalesOrderLineItem } from './sales-order.servic
 import { readOptionalFormalSession } from '../auth/formal-session';
 import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
 import { ProductService } from '../product/product.service';
+import { QuoteService } from '../quote/quote.service';
+import { InquiryService } from '../inquiry/inquiry.service';
+import { BadRequestException } from '@nestjs/common';
 
 function normalizePositiveInteger(value: string | undefined, fallback: number) {
   const parsed = value ? Number(value) : NaN;
@@ -101,6 +105,7 @@ export class SalesOrderController {
     private readonly purchaseOrderService?: Pick<
       PurchaseOrderService,
       'createFromSalesOrder' | 'listActiveLinkedPurchaseOrders'
+      | 'listAssignablePurchaseOwners'
     >,
     @Optional()
     @Inject(ProductService)
@@ -108,6 +113,12 @@ export class SalesOrderController {
       ProductService,
       'resolvePurchaseSupplierForLine' | 'getCurrentPurchasePriceForSalesLine'
     >,
+    @Optional()
+    @Inject(QuoteService)
+    private readonly quoteService?: Pick<QuoteService, 'getDetail'>,
+    @Optional()
+    @Inject(InquiryService)
+    private readonly inquiryService?: Pick<InquiryService, 'getPurchaseSource'>,
   ) {}
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
@@ -272,12 +283,40 @@ export class SalesOrderController {
     id: number,
     body: { currentStatus: string; createdBy?: number },
   ) {
+    const beforeApproval = await this.salesOrderService.getDetail(id);
+    let sourceInquiryId: number | undefined;
+    let purchaseOwnerName: string | undefined;
+    if (beforeApproval.sourceMode === 'from_quote' && this.quoteService && this.inquiryService) {
+      try {
+        const quote = await this.quoteService.getDetail(beforeApproval.sourceQuoteOrderId);
+        sourceInquiryId = quote.linkedInquiryId ??
+          quote.versionHistory?.find((entry) => entry.versionNo === beforeApproval.sourceQuoteVersionNo)?.sourceInquiryId ??
+          quote.sourceDemandSnapshot?.linkedInquiryId;
+        if (sourceInquiryId) {
+          const inquiry = await this.inquiryService.getPurchaseSource(sourceInquiryId);
+          purchaseOwnerName = inquiry.comparisonSubmittedBy?.trim() || undefined;
+          if (purchaseOwnerName && this.purchaseOrderService) {
+            const assignable = await this.purchaseOrderService.listAssignablePurchaseOwners();
+            if (!assignable.some((owner) => owner.id > 0 && owner.realName === purchaseOwnerName)) {
+              purchaseOwnerName = undefined;
+            }
+          }
+        }
+      } catch (error) {
+        if (!(error instanceof NotFoundException)) throw error;
+        sourceInquiryId = undefined;
+        purchaseOwnerName = undefined;
+      }
+    }
     const result = await this.salesOrderService.approve({
       salesOrderId: id,
       currentStatus: body.currentStatus,
+      sourceInquiryId,
+      purchaseOwnerName,
+      deferPurchaseTransfer: Boolean(purchaseOwnerName && this.purchaseOrderService),
     });
 
-    if (!this.purchaseOrderService || result.status !== 'purchasing') {
+    if (!this.purchaseOrderService || !purchaseOwnerName) {
       return result;
     }
 
@@ -288,9 +327,10 @@ export class SalesOrderController {
       salesItems,
       this.productService,
     );
-    const purchaseResult =
-      items.length > 0
-        ? await this.purchaseOrderService.createFromSalesOrder({
+    if (items.length === 0) {
+      throw new BadRequestException('销售单没有可转采购的商品');
+    }
+    const purchaseResult = await this.purchaseOrderService.createFromSalesOrder({
             salesOrderId: id,
             items,
             createdBy: body.createdBy ?? salesOrder.createdBy,
@@ -302,13 +342,76 @@ export class SalesOrderController {
             factoryEstimatedDeliveryDate: salesOrder.estimatedDeliveryDate,
             shipTo: salesOrder.shipTo,
             purchaseOrderAttachments: salesOrder.salesOrderAttachments,
-          })
-        : { purchaseOrders: [] };
+            ownerName: purchaseOwnerName,
+            allowPendingAssignment: true,
+          });
+    await this.salesOrderService.completePurchaseAssignment(id, purchaseOwnerName);
 
     return {
       ...result,
+      status: 'purchasing',
       purchaseOrders: purchaseResult.purchaseOrders,
     };
+  }
+
+  @FormalRoles('admin', 'boss', 'purchase_manager')
+  @FormalModules('purchase')
+  @FormalActions('purchase.order.approve')
+  @Get('purchase-assignments/pending')
+  listPurchaseAssignments() {
+    return this.salesOrderService.listPendingPurchaseAssignments();
+  }
+
+  @FormalRoles('admin', 'boss', 'purchase_manager')
+  @FormalModules('purchase')
+  @FormalActions('purchase.order.approve')
+  @Post(':id/assign-purchaser')
+  async assignPurchaser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { ownerName?: string },
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    if (!this.purchaseOrderService) {
+      throw new ServiceUnavailableException('采购单服务暂不可用');
+    }
+    const session = readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user });
+    const ownerName = body.ownerName?.trim();
+    const owners = await this.purchaseOrderService.listAssignablePurchaseOwners(session);
+    if (!ownerName || !owners.some((owner) => owner.id > 0 && owner.realName === ownerName)) {
+      throw new BadRequestException('请选择有效的采购负责人');
+    }
+    const salesOrder = await this.salesOrderService.getDetail(id);
+    if (salesOrder.status !== 'pending_purchase_assignment') {
+      throw new BadRequestException('当前销售单无需分配采购负责人');
+    }
+    if (salesOrder.purchaseOwnerName && salesOrder.purchaseOwnerName !== ownerName) {
+      throw new BadRequestException('采购负责人必须与来源销售单一致');
+    }
+    const items = await buildPurchaseItemsFromSalesOrderItems(
+      await this.salesOrderService.hydratePurchaseFieldsFromSourceQuote(salesOrder),
+      this.productService,
+    );
+    if (items.length === 0) {
+      throw new BadRequestException('销售单没有可转采购的商品');
+    }
+    const result = await this.purchaseOrderService.createFromSalesOrder({
+      salesOrderId: id,
+      items,
+      createdBy: salesOrder.createdBy,
+      initialStatus: 'pending_purchase_claim',
+      ownerName,
+      allowPendingAssignment: true,
+      salesOrderNo: salesOrder.salesNo,
+      customerOrderNo: salesOrder.customerOrderNo,
+      storeName: salesOrder.storeName,
+      orderDate: salesOrder.orderDate,
+      factoryEstimatedDeliveryDate: salesOrder.estimatedDeliveryDate,
+      shipTo: salesOrder.shipTo,
+      purchaseOrderAttachments: salesOrder.salesOrderAttachments,
+    });
+    await this.salesOrderService.completePurchaseAssignment(id, ownerName);
+    return { status: 'purchasing', purchaseOwnerName: ownerName, ...result };
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager')

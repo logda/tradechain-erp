@@ -747,6 +747,14 @@ export class InquiryService {
     return inquiry ? normalizeInquiryListItemSummary(inquiry) : undefined;
   }
 
+  async getPurchaseSource(inquiryId: number) {
+    const inquiry = await this.loadExistingInquiry(inquiryId);
+    if (!inquiry) {
+      throw new NotFoundException('来源询价单不存在');
+    }
+    return inquiry;
+  }
+
   private async loadEnrichedInquiryItems() {
     const sourceItems = this.shouldUsePrisma()
       ? (
@@ -1027,6 +1035,7 @@ export class InquiryService {
         operationType: 'submit_inquiry_for_comparison',
         items: payload.items,
         operatorName,
+        comparisonSubmittedBy: session?.user?.trim(),
       });
     } else {
       const existing = this.store.getInquiry(payload.inquiryId);
@@ -1035,6 +1044,7 @@ export class InquiryService {
         'pending_boss_review',
         payload.items,
         operatorName,
+        session?.user?.trim(),
       );
       if (existing) {
         this.store.recordAuditLog({
@@ -1241,6 +1251,7 @@ export class InquiryService {
     operationType: string;
     items?: InquiryItemMutationPayload[];
     operatorName?: string;
+    comparisonSubmittedBy?: string;
   }, prismaDb = this.prismaDb) {
     const existing = (await prismaDb!.businessDocument.findUnique({
       where: { id: BigInt(payload.inquiryId) },
@@ -1256,6 +1267,9 @@ export class InquiryService {
       : existingPayload.items;
     const nextPayloadBase: InquiryListItem = {
       ...existingPayload,
+      comparisonSubmittedBy: payload.operationType === 'submit_inquiry_for_comparison'
+        ? payload.comparisonSubmittedBy
+        : existingPayload.comparisonSubmittedBy,
       status: payload.status,
       supplierCount: countInquirySupplierQuotes(nextItems),
       comparisonSummary:
@@ -1295,6 +1309,7 @@ export class InquiryService {
     status: InquiryStatus,
     items?: InquiryItemMutationPayload[],
     operatorName = 'system',
+    comparisonSubmittedBy?: string,
   ) {
     this.ensureRuntimeSeeded();
 
@@ -1306,6 +1321,9 @@ export class InquiryService {
     const nextItems = items ? mergeInquiryItems(existing.items, items) : existing.items;
     const nextPayloadBase: InquiryListItem = {
       ...existing,
+      comparisonSubmittedBy: status === 'pending_boss_review'
+        ? comparisonSubmittedBy
+        : existing.comparisonSubmittedBy,
       status,
       supplierCount: countInquirySupplierQuotes(nextItems),
       comparisonSummary:

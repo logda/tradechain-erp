@@ -18,6 +18,8 @@ import { ListPurchaseOrdersQueryDto } from './dto/list-purchase-orders-query.dto
 import { ResubmitPurchaseOrderDto } from './dto/resubmit-purchase-order.dto';
 import { PurchaseOrderService } from './purchase-order.service';
 import { readOptionalFormalSession } from '../auth/formal-session';
+import { InquiryService } from '../inquiry/inquiry.service';
+import { NotFoundException, Optional } from '@nestjs/common';
 
 function normalizePositiveInteger(value: string | undefined, fallback: number) {
   const parsed = value ? Number(value) : NaN;
@@ -55,6 +57,9 @@ export class PurchaseOrderController {
   constructor(
     @Inject(PurchaseOrderService)
     private readonly purchaseOrderService: PurchaseOrderService,
+    @Optional()
+    @Inject(InquiryService)
+    private readonly inquiryService?: Pick<InquiryService, 'getPurchaseSource'>,
   ) {}
 
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
@@ -151,6 +156,43 @@ export class PurchaseOrderController {
     );
   }
 
+  @FormalRoles('admin', 'boss', 'purchase_manager')
+  @FormalActions('purchase.order.approve')
+  @Get(':id/source-inquiry')
+  async getSourceInquiryForApproval(
+    @Param('id', ParseIntPipe) id: number,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    const order = await this.purchaseOrderService.getDetail(
+      id,
+      readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user }),
+    );
+    if (order.status !== 'pending_purchase_manager_approval' ||
+        !order.sourceInquiryId || !this.inquiryService) {
+      throw new NotFoundException('当前审批节点没有来源询价');
+    }
+    const inquiry = await this.inquiryService.getPurchaseSource(order.sourceInquiryId);
+    return {
+      inquiryNo: inquiry.inquiryNo,
+      quoteOrderNo: inquiry.quoteOrderNo,
+      customerName: inquiry.customerName,
+      comparisonSubmittedBy: inquiry.comparisonSubmittedBy,
+      items: inquiry.items.map((item) => ({
+        lineNo: item.lineNo,
+        sku: item.sku,
+        productName: item.productName,
+        supplierQuotes: item.supplierQuotes.map((quote) => ({
+          supplierName: quote.supplierName,
+          purchasePrice: quote.purchasePrice,
+          remark: quote.remark,
+        })),
+        confirmedSupplierName: item.confirmedSupplierName,
+        confirmedPurchasePrice: item.confirmedPurchasePrice,
+      })),
+    };
+  }
+
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
   @FormalActions('purchase.order.submit')
   @Post(':id/draft')
@@ -186,10 +228,13 @@ export class PurchaseOrderController {
   submit(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string },
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
   ) {
     return this.purchaseOrderService.submit({
       purchaseOrderId: id,
       currentStatus: body.currentStatus,
+      session: readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user }),
     });
   }
 

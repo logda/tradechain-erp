@@ -823,7 +823,7 @@ describe('SalesOrderService', () => {
     expect(result.status).toBe('pending_sales_manager_approval');
   });
 
-  it('approves a pending sales order into purchasing', async () => {
+  it('routes an approved sales order without a purchaser to purchase assignment', async () => {
     const service = new SalesOrderService();
 
     const result = await service.approve({
@@ -831,7 +831,7 @@ describe('SalesOrderService', () => {
       currentStatus: 'pending_sales_manager_approval',
     });
 
-    expect(result.status).toBe('purchasing');
+    expect(result.status).toBe('pending_purchase_assignment');
   });
 
   it('rejects a pending sales order into a rejected editable state', async () => {
@@ -938,6 +938,7 @@ describe('SalesOrderService', () => {
     await service.approve({
       salesOrderId: created.id,
       currentStatus: 'pending_sales_manager_approval',
+      purchaseOwnerName: 'Leo',
     });
     const resubmitted = await service.resubmit({
       salesOrderId: created.id,
@@ -1142,6 +1143,7 @@ describe('SalesOrderService', () => {
     await service.approve({
       salesOrderId: created.id,
       currentStatus: 'pending_sales_manager_approval',
+      purchaseOwnerName: 'Leo',
     });
 
     const result = await service.syncOperationalAggregates({

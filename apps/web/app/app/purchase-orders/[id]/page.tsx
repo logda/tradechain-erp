@@ -47,6 +47,8 @@ type PurchaseOrderDetail = {
   supplierId?: number;
   supplierName?: string;
   ownerName?: string;
+  sourceInquiryId?: number;
+  lockedPurchaseOwner?: boolean;
   createdBy?: number;
   customerOrderNo?: string;
   storeName?: string;
@@ -99,6 +101,21 @@ type PurchaseOwnerOption = {
 };
 
 type LinkedShipmentBatch = ShipmentBatchListResponse['items'][number];
+
+type PurchaseSourceInquiry = {
+  inquiryNo: string;
+  quoteOrderNo: string;
+  customerName: string;
+  comparisonSubmittedBy?: string;
+  items: Array<{
+    lineNo: number;
+    sku: string;
+    productName: string;
+    supplierQuotes: Array<{ supplierName: string; purchasePrice: number; remark?: string }>;
+    confirmedSupplierName?: string;
+    confirmedPurchasePrice?: number;
+  }>;
+};
 
 function getPurchaseOrderApiBaseUrl() {
   return process.env.ERP_API_BASE_URL ?? 'http://127.0.0.1:3001/api';
@@ -187,6 +204,28 @@ async function loadPurchaseOrderDetail(id: string, session: { role: string; user
 
     const result = (await response.json().catch(() => null)) as unknown;
     return normalizePurchaseOrderDetail(result);
+  } catch {
+    return null;
+  }
+}
+
+async function loadSourceInquiryForApproval(
+  id: number,
+  session: { role: string; user: string },
+): Promise<PurchaseSourceInquiry | null> {
+  try {
+    const response = await fetch(`${getPurchaseOrderApiBaseUrl()}/purchase-orders/${id}/source-inquiry`, {
+      cache: 'no-store',
+      headers: {
+        ...buildFormalRequestHeaders(session),
+        ...buildSignedFormalRequestHeaders(session),
+      },
+    });
+    if (!response.ok) return null;
+    const result = await response.json();
+    return result && typeof result.inquiryNo === 'string' && Array.isArray(result.items)
+      ? result as PurchaseSourceInquiry
+      : null;
   } catch {
     return null;
   }
@@ -773,6 +812,11 @@ export default async function AppPurchaseOrderDetailPage({
     currentBatchCount: effectiveCurrentBatchCount,
   };
   const canApprovePurchaseOrder = canApproveFormalPurchaseOrder(session);
+  const sourceInquiry = canApprovePurchaseOrder &&
+    purchaseOrder.status === 'pending_purchase_manager_approval' &&
+    purchaseOrder.sourceInquiryId
+    ? await loadSourceInquiryForApproval(purchaseOrder.id, session)
+    : null;
   const canSubmitPurchaseOrder = canSubmitFormalPurchaseOrder(session);
   const canUpdateShipment = canUseFormalShipmentUpdateActions(session);
   const canOpenSourceSalesOrder =
@@ -795,6 +839,7 @@ export default async function AppPurchaseOrderDetailPage({
     remainingShipmentQty > 0;
   const canShowPurchaseSubmitAction =
     canSubmitPurchaseOrder &&
+    (!purchaseOrder.lockedPurchaseOwner || purchaseOrder.ownerName === session.user) &&
     (purchaseOrder.status === 'draft' ||
       purchaseOrder.status === 'pending_purchase_claim');
   const canSavePurchaseDraft = canShowPurchaseSubmitAction;
@@ -864,6 +909,7 @@ export default async function AppPurchaseOrderDetailPage({
           ) : null}
         </article>
 
+        <h3 style={{ marginBottom: 0 }}>采购单信息</h3>
         <div style={gridStyle}>
           <article style={infoCardStyle}>
             <p style={labelStyle}>供应商 Supplier</p>
@@ -929,6 +975,28 @@ export default async function AppPurchaseOrderDetailPage({
             </article>
           ) : null}
         </div>
+
+        {sourceInquiry ? (
+          <article style={infoCardStyle}>
+            <h3 style={{ marginTop: 0 }}>来源询价</h3>
+            <p style={heroSubStyle}>
+              {sourceInquiry.inquiryNo} · 客户 {sourceInquiry.customerName} · 来源报价 {sourceInquiry.quoteOrderNo} · 比价提交人 {sourceInquiry.comparisonSubmittedBy ?? '未记录'}
+            </p>
+            <div style={tableWrapStyle}>
+              <table style={tableStyle}>
+                <thead><tr><th style={headCellStyle}>行号</th><th style={headCellStyle}>SKU / 产品</th><th style={headCellStyle}>供应商报价</th><th style={headCellStyle}>确认采购价</th></tr></thead>
+                <tbody>{sourceInquiry.items.map((item) => (
+                  <tr key={item.lineNo}>
+                    <td style={cellStyle}>{item.lineNo}</td>
+                    <td style={cellStyle}>{item.sku ? `${item.sku} / ` : ''}{item.productName}</td>
+                    <td style={cellStyle}>{item.supplierQuotes.map((quote) => `${quote.supplierName}：${quote.purchasePrice}${quote.remark ? `（${quote.remark}）` : ''}`).join('；')}</td>
+                    <td style={cellStyle}>{item.confirmedSupplierName ?? '-'} / {item.confirmedPurchasePrice ?? '-'}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </article>
+        ) : null}
 
         <article style={infoCardStyle}>
           <h3 style={{ marginTop: 0 }}>来源追溯</h3>
@@ -1090,6 +1158,7 @@ export default async function AppPurchaseOrderDetailPage({
                 currentStatus={purchaseOrder.status}
                 currentOwnerName={purchaseOrder.ownerName ?? purchaseOwnerOptions[0]?.realName ?? session.user}
                 ownerOptions={purchaseOwnerOptions}
+                lockedOwner={purchaseOrder.lockedPurchaseOwner}
                 supplierOptions={supplierPickerOptions}
                 currentSupplierId={purchaseOrder.supplierId ?? 0}
                 currentSupplierName={purchaseOrder.supplierName ?? ''}

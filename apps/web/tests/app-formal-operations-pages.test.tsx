@@ -64,8 +64,8 @@ describe('formal operations pages', () => {
       '/app',
     );
     expect(
-      screen.getByRole('link', { name: '采购转单页' }),
-    ).toHaveAttribute('href', '/app/purchase-orders/new');
+      screen.getByRole('link', { name: '分配采购负责人' }),
+    ).toHaveAttribute('href', '/app/purchase-orders/assignments');
     expect(screen.getByText('当前筛选')).toBeInTheDocument();
     expect(screen.getByText('查询结果')).toBeInTheDocument();
     expect(screen.getByText('P202607110100')).toBeInTheDocument();

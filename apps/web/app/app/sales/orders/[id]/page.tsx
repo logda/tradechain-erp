@@ -414,6 +414,7 @@ const salesOrderStatusLabels: Record<string, string> = {
   draft: '草稿',
   rejected: '已驳回',
   pending_sales_manager_approval: '待销售主管审批',
+  pending_purchase_assignment: '待分配采购负责人',
   purchasing: '采购中',
   partial_purchasing: '部分采购中',
   partial_shipped: '部分已发货',
@@ -1050,7 +1051,7 @@ export default async function AppSalesOrderDetailPage({
                 <MutationActionForm
                   endpoint={`${getSalesOrderApiBaseUrl()}/sales-orders/${salesOrder.id}/approve`}
                   label="审批通过"
-                  successLabel="销售单已进入采购中，并已按商品自动生成采购单"
+                  successLabel="销售单审批通过，采购负责人归属与建单状态已更新"
                   requiredAction="sales.order.write"
                   requiredActionLabel="销售单操作"
                   requestHeaders={actionRequestHeaders}

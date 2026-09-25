@@ -43,6 +43,7 @@ type PurchaseOrderDraftFormProps = {
   items: PurchaseDraftLineItem[];
   requestHeaders: Record<string, string>;
   isPurchaseUser: boolean;
+  lockedOwner?: boolean;
 };
 
 const fieldGridStyle = {
@@ -131,6 +132,7 @@ export function PurchaseOrderDraftForm({
   items,
   requestHeaders,
   isPurchaseUser,
+  lockedOwner,
 }: PurchaseOrderDraftFormProps) {
   let router: { refresh?: () => void } = {};
   try {
@@ -228,7 +230,7 @@ export function PurchaseOrderDraftForm({
       <div style={fieldGridStyle}>
         <label style={fieldLabelStyle}>
           采购负责人 Purchase Owner *
-          <select
+          {lockedOwner ? <strong>{ownerName}</strong> : <select
             name="ownerName"
             value={ownerName}
             required
@@ -240,9 +242,9 @@ export function PurchaseOrderDraftForm({
                 {owner.realName} / {owner.roleCode}
               </option>
             ))}
-          </select>
+          </select>}
           <span style={helpTextStyle}>
-            {isPurchaseUser ? '普通采购只能选择自己' : '可选范围按当前角色权限控制'}
+            {lockedOwner ? '由来源销售单的采购归属确定，不可更改' : isPurchaseUser ? '普通采购只能选择自己' : '可选范围按当前角色权限控制'}
           </span>
         </label>
 

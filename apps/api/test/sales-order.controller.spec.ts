@@ -314,15 +314,15 @@ describe('SalesOrder controllers', () => {
     expect(result.status).toBe('pending_sales_manager_approval');
   });
 
-  it('SalesOrderController.approve creates purchase orders from approved sales items', async () => {
+  it('SalesOrderController.assignPurchaser creates purchase orders from approved sales items', async () => {
     const approve = jest.fn().mockResolvedValue({
       id: 9,
-      status: 'purchasing',
+      status: 'pending_purchase_assignment',
     });
     const getDetail = jest.fn().mockResolvedValue({
       id: 9,
       salesNo: 'S202607080009',
-      status: 'purchasing',
+      status: 'pending_purchase_assignment',
       createdBy: 2001,
       customerOrderNo: 'PO-ACME-20260708',
       storeName: '02 Libuys',
@@ -380,6 +380,7 @@ describe('SalesOrder controllers', () => {
             hydratePurchaseFieldsFromSourceQuote,
             submit: jest.fn(),
             approve,
+            completePurchaseAssignment: jest.fn(),
             reject: jest.fn(),
             resubmit: jest.fn(),
             cancel: jest.fn(),
@@ -389,6 +390,7 @@ describe('SalesOrder controllers', () => {
           provide: PurchaseOrderService,
           useValue: {
             createFromSalesOrder,
+            listAssignablePurchaseOwners: jest.fn().mockResolvedValue([{ id: 2002, realName: 'Leo', status: 'active' }]),
           },
         },
         ProductService,
@@ -396,14 +398,8 @@ describe('SalesOrder controllers', () => {
     }).compile();
 
     const controller = moduleRef.get(SalesOrderController);
-    const result = await controller.approve(9 as never, {
-      currentStatus: 'pending_sales_manager_approval',
-    });
-
-    expect(approve).toHaveBeenCalledWith({
-      salesOrderId: 9,
-      currentStatus: 'pending_sales_manager_approval',
-    });
+    const result = await controller.assignPurchaser(9, { ownerName: 'Leo' });
+    expect(approve).not.toHaveBeenCalled();
     expect(hydratePurchaseFieldsFromSourceQuote).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 9,
@@ -414,6 +410,8 @@ describe('SalesOrder controllers', () => {
       salesOrderId: 9,
       createdBy: 2001,
       initialStatus: 'pending_purchase_claim',
+      ownerName: 'Leo',
+      allowPendingAssignment: true,
       items: [
         {
           salesItemId: 1,
@@ -452,7 +450,7 @@ describe('SalesOrder controllers', () => {
     expect((result as { purchaseOrders: unknown[] }).purchaseOrders).toHaveLength(1);
   });
 
-  it('SalesOrderController.approve prefers boss confirmed quote supplier and purchase price', async () => {
+  it('SalesOrderController.assignPurchaser prefers boss confirmed quote supplier and purchase price', async () => {
     const approve = jest.fn().mockResolvedValue({
       id: 11,
       status: 'purchasing',
@@ -460,7 +458,7 @@ describe('SalesOrder controllers', () => {
     const getDetail = jest.fn().mockResolvedValue({
       id: 11,
       salesNo: 'S202607080011',
-      status: 'purchasing',
+      status: 'pending_purchase_assignment',
       createdBy: 2001,
       items: [
         {
@@ -525,6 +523,7 @@ describe('SalesOrder controllers', () => {
             hydratePurchaseFieldsFromSourceQuote,
             submit: jest.fn(),
             approve,
+            completePurchaseAssignment: jest.fn(),
             reject: jest.fn(),
             resubmit: jest.fn(),
             cancel: jest.fn(),
@@ -534,6 +533,7 @@ describe('SalesOrder controllers', () => {
           provide: PurchaseOrderService,
           useValue: {
             createFromSalesOrder,
+            listAssignablePurchaseOwners: jest.fn().mockResolvedValue([{ id: 2002, realName: 'Leo', status: 'active' }]),
           },
         },
         {
@@ -546,9 +546,7 @@ describe('SalesOrder controllers', () => {
     }).compile();
 
     const controller = moduleRef.get(SalesOrderController);
-    await controller.approve(11 as never, {
-      currentStatus: 'pending_sales_manager_approval',
-    });
+    await controller.assignPurchaser(11, { ownerName: 'Leo' });
 
     expect(hydratePurchaseFieldsFromSourceQuote).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -579,7 +577,7 @@ describe('SalesOrder controllers', () => {
     );
   });
 
-  it('SalesOrderController.approve keeps supplier and purchase price empty when product master data is unavailable', async () => {
+  it('SalesOrderController.assignPurchaser keeps supplier and purchase price empty when product master data is unavailable', async () => {
     const approve = jest.fn().mockResolvedValue({
       id: 10,
       status: 'purchasing',
@@ -587,7 +585,7 @@ describe('SalesOrder controllers', () => {
     const getDetail = jest.fn().mockResolvedValue({
       id: 10,
       salesNo: 'S202607080010',
-      status: 'purchasing',
+      status: 'pending_purchase_assignment',
       createdBy: 2001,
       items: [
         {
@@ -627,6 +625,7 @@ describe('SalesOrder controllers', () => {
             hydratePurchaseFieldsFromSourceQuote,
             submit: jest.fn(),
             approve,
+            completePurchaseAssignment: jest.fn(),
             reject: jest.fn(),
             resubmit: jest.fn(),
             cancel: jest.fn(),
@@ -636,15 +635,14 @@ describe('SalesOrder controllers', () => {
           provide: PurchaseOrderService,
           useValue: {
             createFromSalesOrder,
+            listAssignablePurchaseOwners: jest.fn().mockResolvedValue([{ id: 2002, realName: 'Leo', status: 'active' }]),
           },
         },
       ],
     }).compile();
 
     const controller = moduleRef.get(SalesOrderController);
-    await controller.approve(10 as never, {
-      currentStatus: 'pending_sales_manager_approval',
-    });
+    await controller.assignPurchaser(10, { ownerName: 'Leo' });
 
     expect(createFromSalesOrder).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -181,6 +181,8 @@ export type BaseSalesOrderRecord = {
   autoVoidedPurchaseOrderIds?: number[];
   versionHistory: SalesOrderVersionHistoryEntry[];
   items?: SalesOrderLineItem[];
+  purchaseOwnerName?: string;
+  sourceInquiryId?: number;
 };
 
 export type CreatedSalesOrderRecord = BaseSalesOrderRecord & {
@@ -2072,7 +2074,11 @@ export class SalesOrderService {
     };
   }
 
-  async approve(payload: SalesOrderTransitionPayload) {
+  async approve(payload: SalesOrderTransitionPayload & {
+    purchaseOwnerName?: string;
+    sourceInquiryId?: number;
+    deferPurchaseTransfer?: boolean;
+  }) {
     if (payload.currentStatus !== 'pending_sales_manager_approval') {
       throw new BadRequestException(
         'Only pending sales manager approval orders can be approved',
@@ -2089,11 +2095,17 @@ export class SalesOrderService {
       }
 
       const beforeData = toSalesOrderDocumentPayload(existing);
+      if (beforeData.status !== 'pending_sales_manager_approval') {
+        throw new BadRequestException('销售单状态已变更，请刷新页面');
+      }
+      const nextStatus = payload.purchaseOwnerName && !payload.deferPurchaseTransfer ? 'purchasing' : 'pending_purchase_assignment';
       const nextPayload: SalesOrderRecord = {
         ...beforeData,
-        status: 'purchasing',
-        purchaseAggregateStatus: 'purchasing',
+        status: nextStatus,
+        purchaseAggregateStatus: nextStatus,
         shipmentAggregateStatus: 'purchasing',
+        purchaseOwnerName: payload.purchaseOwnerName,
+        sourceInquiryId: payload.sourceInquiryId,
       };
       const updated = (await this.prismaDb!.businessDocument.update({
         where: { id: existing.id },
@@ -2116,16 +2128,21 @@ export class SalesOrderService {
 
       return {
         id: payload.salesOrderId,
-        status: 'purchasing',
+        status: nextStatus,
       };
     }
 
     const existing = this.store.getSalesOrder(payload.salesOrderId);
     if (existing) {
+      if (existing.status !== 'pending_sales_manager_approval') {
+        throw new BadRequestException('销售单状态已变更，请刷新页面');
+      }
       const beforeData = snapshotAuditData(existing);
-      existing.status = 'purchasing';
-      existing.purchaseAggregateStatus = 'purchasing';
+      existing.status = payload.purchaseOwnerName && !payload.deferPurchaseTransfer ? 'purchasing' : 'pending_purchase_assignment';
+      existing.purchaseAggregateStatus = existing.status;
       existing.shipmentAggregateStatus = 'purchasing';
+      existing.purchaseOwnerName = payload.purchaseOwnerName;
+      existing.sourceInquiryId = payload.sourceInquiryId;
       this.store.upsertSalesOrder(existing);
       this.store.recordAuditLog({
         bizType: 'sales_order',
@@ -2139,8 +2156,91 @@ export class SalesOrderService {
 
     return {
       id: payload.salesOrderId,
-      status: 'purchasing',
+      status: payload.purchaseOwnerName && !payload.deferPurchaseTransfer ? 'purchasing' : 'pending_purchase_assignment',
     };
+  }
+
+  async listPendingPurchaseAssignments() {
+    const orders = this.shouldUsePrisma()
+      ? ((await this.prismaDb!.businessDocument.findMany({
+          where: { bizType: 'sales_order', status: 'pending_purchase_assignment' },
+        })) as PrismaBusinessDocumentRecord[]).map(toSalesOrderDocumentPayload)
+      : this.store.listSalesOrders().filter((item) => item.status === 'pending_purchase_assignment');
+    return orders.map((item) => ({
+      id: item.id,
+      salesNo: item.salesNo,
+      title: item.title,
+      customerName: item.customerName,
+      status: item.status,
+      purchaseOwnerName: item.purchaseOwnerName,
+    }));
+  }
+
+  async completePurchaseAssignment(id: number, purchaseOwnerName: string) {
+    const ownerName = purchaseOwnerName.trim();
+    if (!ownerName) {
+      throw new BadRequestException('请选择采购负责人');
+    }
+    if (this.shouldUsePrisma()) {
+      const existing = (await this.prismaDb!.businessDocument.findUnique({
+        where: { id: BigInt(id) },
+      })) as PrismaBusinessDocumentRecord | null;
+      if (!existing || existing.bizType !== 'sales_order') {
+        throw new NotFoundException('销售单不存在');
+      }
+      const beforeData = toSalesOrderDocumentPayload(existing);
+      if (beforeData.status !== 'pending_purchase_assignment') {
+        throw new BadRequestException('采购负责人已分配，请刷新页面');
+      }
+      if (beforeData.purchaseOwnerName && beforeData.purchaseOwnerName !== ownerName) {
+        throw new BadRequestException('采购负责人必须与来源销售单一致');
+      }
+      const nextPayload = {
+        ...beforeData,
+        purchaseOwnerName: ownerName,
+        status: 'purchasing',
+        purchaseAggregateStatus: 'purchasing',
+      };
+      await this.prismaDb!.businessDocument.update({
+        where: { id: existing.id },
+        data: { status: nextPayload.status, payload: nextPayload },
+      });
+      await this.prismaDb!.operationLog.create({
+        data: {
+          bizType: 'sales_order',
+          bizId: existing.id,
+          operationType: 'assign_purchase_owner',
+          operatorId: BigInt(beforeData.createdBy),
+          beforeData,
+          afterData: nextPayload,
+        },
+      });
+      return { id, status: nextPayload.status, purchaseOwnerName: ownerName };
+    }
+    const existing = this.store.getSalesOrder(id);
+    if (!existing) {
+      throw new NotFoundException('销售单不存在');
+    }
+    if (existing.status !== 'pending_purchase_assignment') {
+      throw new BadRequestException('采购负责人已分配，请刷新页面');
+    }
+    if (existing.purchaseOwnerName && existing.purchaseOwnerName !== ownerName) {
+      throw new BadRequestException('采购负责人必须与来源销售单一致');
+    }
+    const beforeData = snapshotAuditData(existing);
+    existing.purchaseOwnerName = ownerName;
+    existing.status = 'purchasing';
+    existing.purchaseAggregateStatus = 'purchasing';
+    this.store.upsertSalesOrder(existing);
+    this.store.recordAuditLog({
+      bizType: 'sales_order',
+      bizId: existing.id,
+      operationType: 'assign_purchase_owner',
+      operatorId: existing.createdBy,
+      beforeData,
+      afterData: existing,
+    });
+    return { id, status: existing.status, purchaseOwnerName: ownerName };
   }
 
   async reject(payload: SalesOrderTransitionPayload) {

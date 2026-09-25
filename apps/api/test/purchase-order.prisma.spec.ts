@@ -78,7 +78,7 @@ describe('PurchaseOrderService prisma document storage', () => {
         bizType: 'purchase_order',
         docNo: expect.stringMatching(/^PENDING-PURCHASE-/),
         status: 'draft',
-        ownerUserId: 2001n,
+        ownerUserId: 2002n,
         counterpartyId: 3001n,
         createdBy: 2001n,
       }),

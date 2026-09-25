@@ -219,11 +219,10 @@ describe('FormalTodoService', () => {
       service.listFormalTodos({ role: 'purchase', user: 'Leo' }),
     ).resolves.toMatchObject({
       items: [
-        expect.objectContaining({ docNo: 'P-LEO-001' }),
         expect.objectContaining({ docNo: 'SH-LEO-001' }),
         expect.objectContaining({ docNo: 'AS-LEO-001' }),
       ],
-      total: 3,
+      total: 2,
     });
   });
 
