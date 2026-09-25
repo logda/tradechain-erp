@@ -151,7 +151,9 @@ export function buildCounterpartyOwnerOptions(
 export function filterCounterpartyOwnerOptions(
   options: CounterpartyOwnerOption[],
   type: CounterpartyType | '' | null | undefined,
+  actorRole?: string,
 ) {
+  if (actorRole === 'boss' || actorRole === 'admin') return options;
   if (!type) {
     return options.filter(
       (item) => item.supportsCustomer || item.supportsSupplier,

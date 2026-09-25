@@ -172,6 +172,7 @@ export function CreateCounterpartyForm({
   const availableOwnerOptions = filterCounterpartyOwnerOptions(
     buildCounterpartyOwnerOptions(ownerOptions),
     selectedType,
+    actorRole,
   );
   const [selectedOwner, setSelectedOwner] = useState(
     availableOwnerOptions[0]?.value ?? '',
@@ -182,6 +183,7 @@ export function CreateCounterpartyForm({
     const nextOwners = filterCounterpartyOwnerOptions(
       buildCounterpartyOwnerOptions(ownerOptions),
       nextType,
+      actorRole,
     );
     if (!nextOwners.some((item) => item.value === selectedOwner)) {
       setSelectedOwner(nextOwners[0]?.value ?? '');
@@ -290,6 +292,7 @@ export function CreateCounterpartyForm({
       const resetOwners = filterCounterpartyOwnerOptions(
         buildCounterpartyOwnerOptions(ownerOptions),
         resetType,
+        actorRole,
       );
       setSelectedType(resetType);
       setSelectedOwner(resetOwners[0]?.value ?? '');

@@ -51,11 +51,12 @@ export function CounterpartyFilterForm({
   const filteredOwnerOptions = filterCounterpartyOwnerOptions(
     ownerOptions,
     selectedType || null,
+    role,
   );
 
   function handleTypeChange(nextType: CounterpartyType | '') {
     setSelectedType(nextType);
-    const nextOwners = filterCounterpartyOwnerOptions(ownerOptions, nextType || null);
+    const nextOwners = filterCounterpartyOwnerOptions(ownerOptions, nextType || null, role);
     if (!nextOwners.some((item) => item.value === selectedOwner)) {
       setSelectedOwner('');
     }

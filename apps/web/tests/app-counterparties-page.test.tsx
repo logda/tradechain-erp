@@ -5,6 +5,8 @@ import { CreateCounterpartyForm } from '../app/app/master-data/counterparties/cr
 import { UpdateCounterpartyForm } from '../app/app/master-data/counterparties/update-counterparty-form';
 import AppCounterpartiesPage from '../app/app/master-data/counterparties/page';
 import { CounterpartyCustomFieldManager } from '../app/app/master-data/counterparties/counterparty-custom-field-manager';
+import { CounterpartyFilterForm } from '../app/app/master-data/counterparties/counterparty-filter-form';
+import { buildCounterpartyOwnerOptions } from '../app/app/master-data/counterparties/owner-options';
 
 const mockAssignableUsers = [
   {
@@ -636,7 +638,7 @@ describe('formal counterparty master data page', () => {
     expect(screen.queryByText('新增成功，请刷新查看最新往来单位。')).not.toBeInTheDocument();
   });
 
-  it('filters owner options by counterparty type in create form', () => {
+  it('lets an administrator assign any active user regardless of customer or supplier type', () => {
     render(
       <CreateCounterpartyForm
         endpoint="http://127.0.0.1:3001/api/counterparties"
@@ -647,14 +649,14 @@ describe('formal counterparty master data page', () => {
     );
 
     expect(screen.getByRole('option', { name: 'Zoe / 销售' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Leo / 采购' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Leo / 采购' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('类型 Type'), {
       target: { value: 'supplier' },
     });
 
     expect(screen.getByRole('option', { name: 'Leo / 采购' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Zoe / 销售' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Zoe / 销售' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('类型 Type'), {
       target: { value: 'both' },
@@ -740,7 +742,25 @@ describe('formal counterparty master data page', () => {
     expect(screen.getByPlaceholderText('请输入地址')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('请输入开户银行')).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Sara / 销售主管' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Leo / 采购' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Leo / 采购' })).toBeInTheDocument();
+  });
+
+  it('lets the boss filter customer records assigned to a purchase user', () => {
+    render(<CounterpartyFilterForm
+      pathname="/app/master-data/counterparties"
+      role="boss"
+      user="Mia"
+      allowedTypes={['customer', 'supplier', 'both']}
+      defaultType={null}
+      initialType="customer"
+      pageSize={20}
+      ownerOptions={buildCounterpartyOwnerOptions(mockAssignableUsers)}
+      labelStyle={{}}
+      inputStyle={{}}
+      filterStyle={{}}
+      filterButtonStyle={{}}
+    />);
+    expect(screen.getByRole('combobox', { name: '筛选归属人 Owner' })).toHaveTextContent('Leo / 采购');
   });
 
   it('keeps update form core required fields and aligned control heights', () => {

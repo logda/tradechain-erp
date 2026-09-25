@@ -164,11 +164,12 @@ export function UpdateCounterpartyForm({
   const availableOwnerOptions = filterCounterpartyOwnerOptions(
     allOwnerOptions,
     selectedType,
+    actorRole,
   );
 
   function handleTypeChange(nextType: CounterpartyType) {
     setSelectedType(nextType);
-    const nextOwners = filterCounterpartyOwnerOptions(allOwnerOptions, nextType);
+    const nextOwners = filterCounterpartyOwnerOptions(allOwnerOptions, nextType, actorRole);
     if (!nextOwners.some((option) => option.value === selectedOwner)) {
       setSelectedOwner(nextOwners[0]?.value ?? '');
     }
