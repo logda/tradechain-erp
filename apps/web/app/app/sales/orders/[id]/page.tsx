@@ -153,6 +153,8 @@ function resolveSalesClosureSnapshot(salesOrder: SalesOrderDetail) {
     salesOrder.shipmentAggregateStatus === 'forwarder_shipped' ||
     salesOrder.shipmentAggregateStatus === 'arrived' ||
     salesOrder.shipmentAggregateStatus === 'closed';
+  const deliveryDone =
+    salesOrder.shipmentAggregateStatus === 'shipped' || shipmentDone;
   const receiptPaid =
     receiptStatus === 'deposit_received' ||
     receiptStatus === 'fully_paid' ||
@@ -169,24 +171,28 @@ function resolveSalesClosureSnapshot(salesOrder: SalesOrderDetail) {
     canClose: shipmentDone,
     checks: [
       {
-        label: '交货代/履约收口',
-        passed: shipmentDone,
+        label: '收款',
+        passed: receiptPaid,
       },
       {
-        label: '回单发送（跟踪）',
-        passed: receiptSent,
-      },
-      {
-        label: '售后状态（跟踪）',
-        passed: afterSalesDone,
-      },
-      {
-        label: '财务确认（保留）',
+        label: '财务',
         passed: financeConfirmed,
       },
       {
-        label: '收款状态（保留）',
-        passed: receiptPaid,
+        label: '交货',
+        passed: deliveryDone,
+      },
+      {
+        label: '回单',
+        passed: receiptSent,
+      },
+      {
+        label: '售后',
+        passed: afterSalesDone,
+      },
+      {
+        label: '交货代',
+        passed: shipmentDone,
       },
     ],
   };
@@ -215,6 +221,27 @@ async function loadSalesOrderDetail(id: string, session: { role: string; user: s
 
     const result = (await response.json().catch(() => null)) as unknown;
     return hasValidSalesOrderDetail(result) ? result : null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadSalesOrderCostWarning(id: number, session: { role: string; user: string }) {
+  try {
+    const response = await fetch(`${getSalesOrderApiBaseUrl()}/sales-orders/${id}/cost-warning`, {
+      cache: 'no-store',
+      headers: {
+        ...buildFormalRequestHeaders(session),
+        ...buildSignedFormalRequestHeaders(session),
+      },
+    });
+    if (!response.ok) return null;
+    const result = (await response.json().catch(() => null)) as unknown;
+    if (!result || typeof result !== 'object' || !Array.isArray((result as { productNames?: unknown }).productNames)) {
+      return null;
+    }
+    const names = (result as { productNames: unknown[] }).productNames;
+    return names.every((name) => typeof name === 'string') ? names as string[] : null;
   } catch {
     return null;
   }
@@ -686,6 +713,9 @@ export default async function AppSalesOrderDetailPage({
     canUseSalesOrderActions &&
     isPendingApprovalStatus &&
     canManageApprovedSalesOrder;
+  const belowCostProductNames = canApproveSalesOrder
+    ? await loadSalesOrderCostWarning(salesOrder.id, session)
+    : [];
   const canSubmitSalesOrder = canUseSalesOrderActions && isDraftStatus;
   const canResubmitSalesOrder = false;
   const canCancelSalesOrder = false;
@@ -727,19 +757,8 @@ export default async function AppSalesOrderDetailPage({
         loadSalesUserOptions(session),
       ])
     : null;
-  const activeLinkedPurchaseOrders = (salesOrder.linkedPurchaseOrders ?? []).filter(
-    (item) => item.status !== 'void',
-  );
-  const canOpenLinkedPurchaseOrders = canViewFormalModule(session, 'purchase');
   const sourceDocumentType = resolveSalesOrderSourceDocumentType(salesOrder);
-  const sourceDocumentLabel = sourceDocumentType === 'demand' ? '需求单' : '报价单';
   const sourceDocumentNoun = sourceDocumentType === 'demand' ? '需求' : '报价';
-  const sourceDocumentHrefLabel =
-    sourceDocumentType === 'demand' ? '查看来源需求' : '查看来源报价';
-  const sourceDocumentRetrospectiveText =
-    sourceDocumentType === 'demand'
-      ? '来源需求信息会保留在系统追溯字段中，销售明细仅展示业务识别字段。'
-      : '来源报价信息会保留在系统追溯字段中，销售明细仅展示业务识别字段。';
   const sourceDocumentNo = salesOrder.sourceQuoteNo ?? String(salesOrder.sourceQuoteOrderId ?? '');
   const sourceDocumentVersion = `V${salesOrder.sourceQuoteVersionNo ?? '-'}`;
 
@@ -776,35 +795,30 @@ export default async function AppSalesOrderDetailPage({
           </p>
         </article>
 
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>来源追溯</h3>
-          {salesOrder.sourceQuoteOrderId ? (
-            <>
-              <p style={valueStyle}>
-                {`来源${sourceDocumentNoun}：${sourceDocumentNo} / ${sourceDocumentVersion}`}
-              </p>
-              <Link
-                href={`/app/sales/quotes/${salesOrder.sourceQuoteOrderId}`}
-                style={{ ...backLinkStyle, display: 'inline-flex', marginTop: '10px' }}
-              >
-                {sourceDocumentHrefLabel} {sourceDocumentNo}
-              </Link>
-              <p style={valueStyle}>
-                {`来源类型：${sourceDocumentLabel}`}
-              </p>
-            </>
-          ) : (
-            <p style={valueStyle}>来源类型：直建销售单</p>
-          )}
-          {salesOrder.sourceQuoteOrderId ? (
-            <p style={valueStyle}>{`来源${sourceDocumentNoun}版本：${sourceDocumentVersion}`}</p>
-          ) : null}
-          <p style={heroSubStyle}>
-            {salesOrder.sourceQuoteOrderId
-              ? sourceDocumentRetrospectiveText
-              : '该销售单由销售直接创建，未关联需求单或报价单。'}
-          </p>
+        <article style={{ ...infoCardStyle, borderLeft: '4px solid #2563eb' }}>
+          <p style={labelStyle}>状态 Status</p>
+          <p style={valueStyle}>{formatSalesOrderStatus(salesOrder.status)}</p>
         </article>
+
+        {canApproveSalesOrder && belowCostProductNames === null ? (
+          <div role="alert" style={{ ...infoCardStyle, borderColor: '#fbbf24', background: '#fffbeb' }}>
+            成本核对暂不可用，请稍后刷新页面重试。
+          </div>
+        ) : null}
+        {belowCostProductNames?.length ? (
+          <div
+            role="alert"
+            aria-label="销售价低于产品库成本提醒"
+            style={{ ...infoCardStyle, borderColor: '#fca5a5', background: '#fef2f2', color: '#991b1b' }}
+          >
+            <strong>销售单价低于产品库成本</strong>
+            <ul style={{ margin: '8px 0 0', paddingLeft: '22px' }}>
+              {belowCostProductNames.map((name, index) => (
+                <li key={`${name}-${index}`}>{`${name}销售单价低于成本`}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <article style={infoCardStyle}>
           <h3 style={{ marginTop: 0 }}>销售明细</h3>
@@ -851,12 +865,25 @@ export default async function AppSalesOrderDetailPage({
         </article>
 
         <article style={infoCardStyle}>
+          <h3 style={{ marginTop: 0 }}>销售收口检查</h3>
+          <p style={heroSubStyle}>
+            交货代即完成内部主流程收口；回单、售后、财务和收款保留为跟踪项，不阻塞销售收口。
+          </p>
+          <div style={{ ...gridStyle, marginTop: '16px' }}>
+            {closureSnapshot.checks.map((check) => (
+              <p key={check.label} style={valueStyle}>
+                {`${check.label}：${check.passed ? '通过' : '未通过'}`}
+              </p>
+            ))}
+          </div>
+        </article>
+
+        <article style={infoCardStyle}>
           <h3 style={{ marginTop: 0 }}>订单字段</h3>
           <div style={tableWrapStyle}>
             <table style={tableStyle}>
               <thead>
                 <tr>
-                  <th style={headCellStyle}>Current Status 当前进度</th>
                   <th style={headCellStyle}>Order No 订单编码</th>
                   <th style={headCellStyle}>Title 订单标题</th>
                   <th style={headCellStyle}>Ordering 订货单位</th>
@@ -872,7 +899,6 @@ export default async function AppSalesOrderDetailPage({
               </thead>
               <tbody>
                 <tr>
-                  <td style={cellStyle}>{formatSalesOrderStatus(salesOrder.status)}</td>
                   <td style={cellStyle}>{formatSalesValue(salesOrder.salesNo)}</td>
                   <td style={cellStyle}>{formatSalesValue(salesOrder.title)}</td>
                   <td style={cellStyle}>
@@ -907,10 +933,6 @@ export default async function AppSalesOrderDetailPage({
         </article>
 
         <div style={gridStyle}>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>状态 Status</p>
-            <p style={valueStyle}>{formatSalesOrderStatus(salesOrder.status)}</p>
-          </article>
           <article style={infoCardStyle}>
             <p style={labelStyle}>版本 Version</p>
             <p style={valueStyle}>V{salesOrder.currentVersionNo}</p>
@@ -958,47 +980,6 @@ export default async function AppSalesOrderDetailPage({
         </div>
 
         <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>关联采购单</h3>
-          {activeLinkedPurchaseOrders.length ? (
-            <div style={tableWrapStyle}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={headCellStyle}>采购单号 Purchase No</th>
-                    <th style={headCellStyle}>采购状态 Purchase Status</th>
-                    {canOpenLinkedPurchaseOrders ? (
-                      <th style={headCellStyle}>操作 Action</th>
-                    ) : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeLinkedPurchaseOrders.map((purchaseOrder) => (
-                    <tr key={`${purchaseOrder.id}-${purchaseOrder.purchaseNo}`}>
-                      <td style={cellStyle}>{purchaseOrder.purchaseNo}</td>
-                      <td style={cellStyle}>
-                        {formatPurchaseAggregateStatus(purchaseOrder.status)}
-                      </td>
-                      {canOpenLinkedPurchaseOrders ? (
-                        <td style={cellStyle}>
-                          <Link
-                            href={`/app/purchase-orders/${purchaseOrder.id}`}
-                            style={backLinkStyle}
-                          >
-                            查看采购单
-                          </Link>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p style={valueStyle}>暂无有效关联采购单</p>
-          )}
-        </article>
-
-        <article style={infoCardStyle}>
           <h3 style={{ marginTop: 0 }}>售后状态摘要</h3>
           <div style={gridStyle}>
             <p style={valueStyle}>
@@ -1040,20 +1021,6 @@ export default async function AppSalesOrderDetailPage({
             </div>
           </article>
         ) : null}
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>销售收口检查</h3>
-          <p style={heroSubStyle}>
-            交货代即完成内部主流程收口；回单、售后、财务和收款保留为跟踪项，不阻塞销售收口。
-          </p>
-          <div style={{ ...gridStyle, marginTop: '16px' }}>
-            {closureSnapshot.checks.map((check) => (
-              <p key={check.label} style={valueStyle}>
-                {`${check.label}：${check.passed ? '通过' : '未通过'}`}
-              </p>
-            ))}
-          </div>
-        </article>
 
         <article style={actionPanelStyle}>
           <ActionPermissionNote>
@@ -1225,6 +1192,28 @@ export default async function AppSalesOrderDetailPage({
             </div>
           ) : (
             <p style={valueStyle}>当前状态下暂无可操作按钮。</p>
+          )}
+        </article>
+
+        <article style={infoCardStyle}>
+          <h3 style={{ marginTop: 0 }}>来源追溯</h3>
+          {salesOrder.sourceQuoteOrderId ? (
+            <Link
+              href={`/app/sales/quotes/${salesOrder.sourceQuoteOrderId}`}
+              style={{
+                ...backLinkStyle,
+                display: 'inline-flex',
+                padding: '12px 16px',
+                border: '1px solid #bfdbfe',
+                borderRadius: '10px',
+                background: '#eff6ff',
+                color: '#1d4ed8',
+              }}
+            >
+              {`来源${sourceDocumentNoun} ${sourceDocumentNo} / ${sourceDocumentVersion}`}
+            </Link>
+          ) : (
+            <p style={valueStyle}>来源类型：直建销售单</p>
           )}
         </article>
 

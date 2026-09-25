@@ -240,6 +240,7 @@ describe('formal sales order create page', () => {
     expect(screen.getByLabelText('货品编码/名称 Product')).toBeInTheDocument();
     expect(screen.getByLabelText('货品编码 Product No')).toBeInTheDocument();
     expect(screen.getByLabelText('货品名称 Product Name')).toBeInTheDocument();
+    expect(screen.getByLabelText('单位 Unit')).toHaveValue('个/pc');
     fireEvent.click(screen.getByRole('button', { name: '选择货品' }));
     expect(screen.getByRole('dialog', { name: '选择货品' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('搜索货品 Search Product'), {
@@ -252,7 +253,7 @@ describe('formal sales order create page', () => {
     expect(screen.getByLabelText('货品名称 Product Name')).toHaveValue('USB-C 线缆');
     expect(screen.getByLabelText('货品编码 Product No')).toBeDisabled();
     expect(screen.getByLabelText('货品名称 Product Name')).toBeDisabled();
-    expect(screen.getByLabelText('单位 Unit')).toHaveValue('pcs');
+    expect(screen.getByLabelText('单位 Unit')).toHaveValue('个/pc');
     expect(screen.getByLabelText('单价 Unit P')).toHaveValue(4.8);
     expect(screen.getByLabelText('单价 Unit P')).toBeDisabled();
     expect(
@@ -266,7 +267,7 @@ describe('formal sales order create page', () => {
       productId: 2,
       sku: 'SKU-CBL-002',
       productName: 'USB-C 线缆',
-      unit: 'pcs',
+      unit: '个/pc',
       salePrice: 4.8,
     });
     fireEvent.click(screen.getByRole('button', { name: '手动录入货品' }));
@@ -280,7 +281,9 @@ describe('formal sales order create page', () => {
     expect(screen.getByLabelText('数量/件 Quantity')).toBeInTheDocument();
     expect(screen.getByLabelText('每件数量 Quan')).toBeInTheDocument();
     expect(screen.getByLabelText('总数量 Total Q')).toHaveValue('1');
-    expect(screen.getByLabelText('单位 Unit')).toHaveValue('pcs');
+    expect(screen.getByLabelText('单位 Unit')).toHaveValue('个/pc');
+    fireEvent.change(screen.getByLabelText('单位 Unit'), { target: { value: '箱' } });
+    expect(screen.getByLabelText('单位 Unit')).toHaveValue('箱');
     expect(screen.getByLabelText('单价 Unit P')).toHaveValue(4.8);
     expect(screen.getByLabelText('合计 Total')).toHaveValue('4.8');
     expect(screen.getByRole('button', { name: '新增产品行' })).toBeInTheDocument();

@@ -410,7 +410,7 @@ function normalizeDirectSalesOrderItems(
     .map((item, index): SalesOrderLineItem | null => {
       const sku = item.sku?.trim() ?? '';
       const productName = item.productName?.trim() ?? '';
-      const unit = item.unit?.trim() || 'pcs';
+      const unit = item.unit?.trim() || '个/pc';
       const packageQuantity = Number(item.packageQuantity ?? item.quantity ?? 0);
       const unitsPerPackage = Number(item.unitsPerPackage ?? 1);
       const providedTotalQuantity = Number(item.totalQuantity ?? item.quantity ?? 0);

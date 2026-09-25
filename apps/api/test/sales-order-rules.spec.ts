@@ -153,6 +153,19 @@ describe('SalesOrderService', () => {
     ]);
   });
 
+  it('defaults an omitted direct sales line unit to 个/pc', async () => {
+    const service = new SalesOrderService();
+    const result = await service.create({
+      customerName: '单位默认值测试客户',
+      title: '单位默认值测试',
+      salesUserId: 2001,
+      createdBy: 2001,
+      items: [{ sku: 'SKU-UNIT-DEFAULT', productName: '手填产品', quantity: 2, salePrice: 3 }],
+    });
+
+    expect(result.items?.[0].unit).toBe('个/pc');
+  });
+
   it('maps formal sales user ids to the correct sales order owner name', async () => {
     const service = new SalesOrderService();
 

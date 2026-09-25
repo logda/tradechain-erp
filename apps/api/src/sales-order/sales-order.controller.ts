@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import { salesOrderListSortFields } from '@erp/shared';
@@ -105,7 +106,7 @@ export class SalesOrderController {
     @Inject(ProductService)
     private readonly productService?: Pick<
       ProductService,
-      'resolvePurchaseSupplierForLine'
+      'resolvePurchaseSupplierForLine' | 'getCurrentPurchasePriceForSalesLine'
     >,
   ) {}
 
@@ -161,6 +162,37 @@ export class SalesOrderController {
   @Get('audit-logs')
   listAuditLogs() {
     return this.salesOrderService.listAuditLogs();
+  }
+
+  @FormalRoles('admin', 'boss', 'sales_manager')
+  @FormalActions('sales.order.write')
+  @Get(':id/cost-warning')
+  async getCostWarning(
+    @Param('id', ParseIntPipe) id: number,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    const detail = await this.salesOrderService.getDetail(id, readOptionalFormalSession({
+      'x-erp-role': role,
+      'x-erp-user': user,
+    }));
+    if (detail.status !== 'pending_sales_manager_approval') {
+      return { productNames: [] };
+    }
+    if (!this.productService) {
+      throw new ServiceUnavailableException('成本核对暂不可用');
+    }
+
+    const flagged = await Promise.all((detail.items ?? []).map(async (item) => {
+      const purchasePrice = await this.productService!.getCurrentPurchasePriceForSalesLine({
+        productId: resolveSalesItemProductId(item),
+        sku: item.sku,
+      });
+      return purchasePrice !== null && Number.isFinite(item.salePrice) && item.salePrice < purchasePrice
+        ? item.productName.trim() || item.sku
+        : null;
+    }));
+    return { productNames: flagged.filter((name): name is string => name !== null) };
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')

@@ -437,7 +437,7 @@ function createEmptySalesOrderItemDraft(id: number): SalesOrderItemDraft {
     cartonQuantity: '',
     outerCartonSizeCm: '',
     outerCartonGrossWeightKg: '',
-    unit: 'pcs',
+    unit: '个/pc',
     salePrice: '0',
   };
 }
@@ -1441,7 +1441,7 @@ export function CreateSalesOrderForm({
                               : 0,
                             sku: product.sku,
                             productName: product.productName,
-                            unit: product.unit || current.unit,
+                            unit: current.unit || product.unit || '个/pc',
                           };
                           const matchedPrice = resolveProductSalePrice(
                             productOption,

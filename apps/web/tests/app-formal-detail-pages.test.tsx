@@ -751,27 +751,32 @@ describe('formal detail pages', () => {
       screen.queryByRole('button', { name: '作废销售单' }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '来源追溯' })).toBeInTheDocument();
-    expect(screen.getByText('来源报价：Q202607080088 / V4')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '来源报价 Q202607080088 / V4' })).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: '查看来源报价 Q202607080088' }),
+      screen.getByRole('link', { name: '来源报价 Q202607080088 / V4' }),
     ).toHaveAttribute('href', '/app/sales/quotes/88');
-    expect(screen.getByText('来源类型：报价单')).toBeInTheDocument();
-    expect(screen.getByText('来源报价版本：V4')).toBeInTheDocument();
-    expect(
-      screen.getByText('来源报价信息会保留在系统追溯字段中，销售明细仅展示业务识别字段。'),
-    ).toBeInTheDocument();
     expect(screen.queryByText('来源行 Source Line')).not.toBeInTheDocument();
     const salesItemsHeading = screen.getByRole('heading', { name: '销售明细' });
+    const closureHeading = screen.getByRole('heading', { name: '销售收口检查' });
     const orderFieldsHeading = screen.getByRole('heading', { name: '订单字段' });
+    const sourceHeading = screen.getByRole('heading', { name: '来源追溯' });
+    const statusLabel = screen.getByText('状态 Status');
+    expect(statusLabel.compareDocumentPosition(salesItemsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('columnheader', { name: 'Current Status 当前进度' })).not.toBeInTheDocument();
     expect(salesItemsHeading).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: '装箱数' })).toBeInTheDocument();
     expect(screen.getByText('50×40×30')).toBeInTheDocument();
     expect(screen.getByText('12.5')).toBeInTheDocument();
     expect(orderFieldsHeading).toBeInTheDocument();
     expect(
-      salesItemsHeading.compareDocumentPosition(orderFieldsHeading) &
+      salesItemsHeading.compareDocumentPosition(closureHeading) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+    expect(
+      closureHeading.compareDocumentPosition(orderFieldsHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(orderFieldsHeading.compareDocumentPosition(sourceHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText('Acme 秋季促销补货')).toBeInTheDocument();
     expect(screen.getByText('1234-1')).toBeInTheDocument();
     expect(screen.getByText('星河贸易 / Acme Trading')).toBeInTheDocument();
@@ -808,18 +813,15 @@ describe('formal detail pages', () => {
     expect(screen.queryByText('收款状态：fully_paid / 已全款')).not.toBeInTheDocument();
     expect(screen.queryByText('财务确认：confirmed / 已确认')).not.toBeInTheDocument();
     expect(screen.getByText('售后阶段：closed / 已闭环')).toBeInTheDocument();
-    expect(screen.getByText('交货代/履约收口：通过')).toBeInTheDocument();
-    expect(screen.getByText('回单发送（跟踪）：通过')).toBeInTheDocument();
-    expect(screen.getByText('售后状态（跟踪）：通过')).toBeInTheDocument();
-    expect(screen.getByText('财务确认（保留）：通过')).toBeInTheDocument();
-    expect(screen.getByText('收款状态（保留）：通过')).toBeInTheDocument();
+    expect(screen.getByText('收款：通过')).toBeInTheDocument();
+    expect(screen.getByText('财务：通过')).toBeInTheDocument();
+    expect(screen.getByText('交货：通过')).toBeInTheDocument();
+    expect(screen.getByText('回单：通过')).toBeInTheDocument();
+    expect(screen.getByText('售后：通过')).toBeInTheDocument();
+    expect(screen.getByText('交货代：通过')).toBeInTheDocument();
     expect(screen.getByText('客户取消订单')).toBeInTheDocument();
     expect(screen.getByText('3001, 3002')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '关联采购单' })).toBeInTheDocument();
-    expect(screen.getByText('P202607110301')).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '查看采购单' }),
-    ).toHaveAttribute('href', '/app/purchase-orders/301');
+    expect(screen.queryByRole('heading', { name: '关联采购单' })).not.toBeInTheDocument();
     expect(screen.queryByText('P202607110302')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '更新收款状态' }),
@@ -906,19 +908,15 @@ describe('formal detail pages', () => {
     );
 
     expect(screen.getByRole('heading', { name: '来源追溯' })).toBeInTheDocument();
-    expect(screen.getByText('来源需求：XQ202607080088 / V1')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: '来源需求 XQ202607080088 / V1' })).toHaveLength(1);
     expect(
-      screen.getByRole('link', { name: '查看来源需求 XQ202607080088' }),
+      screen.getByRole('link', { name: '来源需求 XQ202607080088 / V1' }),
     ).toHaveAttribute('href', '/app/sales/quotes/88');
-    expect(screen.getByText('来源类型：需求单')).toBeInTheDocument();
-    expect(screen.getByText('来源需求版本：V1')).toBeInTheDocument();
-    expect(
-      screen.getByText('来源需求信息会保留在系统追溯字段中，销售明细仅展示业务识别字段。'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText('来源类型：需求单')).not.toBeInTheDocument();
     expect(screen.queryByText('报价来源版本：V-')).not.toBeInTheDocument();
   });
 
-  it('shows linked purchase numbers without purchase detail links for sales users', async () => {
+  it('omits the linked purchase section for sales users', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -965,10 +963,7 @@ describe('formal detail pages', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '关联采购单' })).toBeInTheDocument();
-    expect(screen.getByText('P202607110301')).toBeInTheDocument();
-    expect(screen.getByText('draft / 草稿')).toBeInTheDocument();
-    expect(screen.queryByText('操作 Action')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '关联采购单' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: '查看采购单' }),
     ).not.toBeInTheDocument();
@@ -1465,6 +1460,56 @@ describe('formal detail pages', () => {
     expect(
       screen.queryByRole('button', { name: '财务确认' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows persistent product-name-only cost warnings above approval actions', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => ({
+      ok: true,
+      json: async () => url.endsWith('/cost-warning')
+        ? { productNames: ['风扇', '台灯'] }
+        : {
+            id: 101, salesNo: 'S2609250101', status: 'pending_sales_manager_approval',
+            currentVersionNo: 1, purchaseAggregateStatus: 'not_started',
+            shipmentAggregateStatus: 'not_started', receiptSendStatus: 'pending',
+            afterSalesEndStatus: 'not_started', receiptStatus: 'unpaid',
+            financeStatus: 'pending', createdBy: 2001, salesUserId: 2001,
+            items: [{ lineNo: 1, productId: 1, sku: 'SKU-FAN', productName: '风扇',
+              unit: '个/pc', quantity: 1, salePrice: 10, amount: 10 }],
+          },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { default: AppSalesOrderDetailPage } = await import('../app/app/sales/orders/[id]/page');
+
+    render(<>{await AppSalesOrderDetailPage({
+      params: Promise.resolve({ id: '101' }),
+      searchParams: Promise.resolve({ role: 'sales_manager', user: 'Mia' }),
+    })}</>);
+
+    const warning = screen.getByRole('alert', { name: '销售价低于产品库成本提醒' });
+    expect(warning).toHaveTextContent('风扇销售单价低于成本');
+    expect(warning).toHaveTextContent('台灯销售单价低于成本');
+    expect(warning).not.toHaveTextContent(/采购价|成本金额|18/);
+    expect(screen.getByRole('button', { name: '审批通过' })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/cost-warning'))).toBe(true);
+  });
+
+  it('does not request product cost warnings for sales staff without approval access', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      id: 101, salesNo: 'S2609250101', status: 'pending_sales_manager_approval',
+      currentVersionNo: 1, purchaseAggregateStatus: 'not_started',
+      shipmentAggregateStatus: 'not_started', createdBy: 2001, salesUserId: 2001,
+      items: [],
+    }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const { default: AppSalesOrderDetailPage } = await import('../app/app/sales/orders/[id]/page');
+
+    render(<>{await AppSalesOrderDetailPage({
+      params: Promise.resolve({ id: '101' }),
+      searchParams: Promise.resolve({ role: 'sales', user: 'Zoe' }),
+    })}</>);
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/cost-warning'))).toBe(false);
+    expect(screen.queryByRole('alert', { name: '销售价低于产品库成本提醒' })).not.toBeInTheDocument();
   });
 
   it('allows admin users with module-only access params to approve pending sales orders', async () => {

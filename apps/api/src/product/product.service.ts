@@ -796,6 +796,21 @@ export class ProductService {
     }), query.page ?? 1, query.pageSize ?? 20);
   }
 
+  async getCurrentPurchasePriceForSalesLine(input: {
+    productId?: number;
+    sku?: string;
+  }): Promise<number | null> {
+    let product = await this.findProductByIdOrSku(input);
+    if (product && input.sku && product.sku !== normalizeSku(input.sku)) {
+      product = await this.findProductByIdOrSku({ sku: input.sku });
+    }
+
+    const price = product?.defaultPurchasePrice;
+    return typeof price === 'number' && Number.isFinite(price) && price > 0
+      ? price
+      : null;
+  }
+
   async resolvePurchaseSupplierForLine(input: {
     productId?: number;
     sku?: string;
