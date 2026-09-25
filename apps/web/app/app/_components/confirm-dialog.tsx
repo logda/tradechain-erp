@@ -51,7 +51,7 @@ export function ConfirmDialog({ message, confirmLabel = '确认', busy = false, 
         aria-labelledby={`${dialogId}-title`}
         aria-describedby={`${dialogId}-message`}
         className="erp-dialog"
-        style={{ width: 'min(440px, 100%)', padding: '24px' }}
+        style={{ width: 'min(440px, 100%)', padding: '24px', border: '1px solid #d8e1ea', borderRadius: '20px', background: '#fff' }}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && !busy) {
             event.preventDefault();
