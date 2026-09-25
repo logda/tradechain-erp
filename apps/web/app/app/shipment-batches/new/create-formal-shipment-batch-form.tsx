@@ -18,14 +18,21 @@ const formStyle = {
 
 const gridStyle = {
   display: 'grid',
-  gap: '16px',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  gap: 0,
+  gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+  border: '1px solid #d8e1ea',
+  borderRadius: '12px',
+  overflow: 'hidden',
 } satisfies React.CSSProperties;
 
 const labelStyle = {
   display: 'grid',
-  gap: '8px',
-  fontSize: '14px',
+  gap: '6px',
+  padding: '10px',
+  borderRight: '1px solid #d8e1ea',
+  borderBottom: '1px solid #d8e1ea',
+  background: '#f8fbff',
+  fontSize: '13px',
   fontWeight: 600,
   color: '#0f172a',
 } satisfies React.CSSProperties;
@@ -33,7 +40,7 @@ const labelStyle = {
 const inputStyle = {
   border: '1px solid #cbd5e1',
   borderRadius: '12px',
-  padding: '12px 14px',
+  padding: '8px 10px',
   fontSize: '14px',
   color: '#0f172a',
   background: '#ffffff',
@@ -224,7 +231,7 @@ export function CreateFormalShipmentBatchForm({
             name="shippingCode"
             placeholder="一行一个发货编码，支持多条"
             required
-            rows={4}
+            rows={2}
             style={{ ...inputStyle, resize: 'vertical' }}
           />
         </label>

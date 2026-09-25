@@ -173,6 +173,19 @@ describe('CounterpartyController', () => {
     expect(result.name).toBe('Gamma Components Ltd.');
   });
 
+  it('only lets boss or admin manually change supplier cooperation classification', async () => {
+    const update = jest.fn().mockResolvedValue({ cooperationStatus: 'uncooperated' });
+    const moduleRef = await Test.createTestingModule({
+      controllers: [CounterpartyController],
+      providers: [ownersProvider, { provide: CounterpartyService, useValue: { update, findById: jest.fn().mockResolvedValue({ type: 'supplier', ownerName: 'Leo' }) } }],
+    }).compile();
+    const controller = moduleRef.get(CounterpartyController);
+    await expect(controller.update(2, { cooperationStatus: 'uncooperated', updatedBy: 'Leo' }, { headers: { 'x-erp-role': 'purchase', 'x-erp-user': 'Leo' } })).rejects.toThrow('只有老板或管理员');
+    expect(update).not.toHaveBeenCalled();
+    await controller.update(2, { cooperationStatus: 'uncooperated', updatedBy: 'Boss' }, { headers: { 'x-erp-role': 'boss', 'x-erp-user': 'Boss' } });
+    expect(update).toHaveBeenCalledWith(2, { cooperationStatus: 'uncooperated', updatedBy: 'Boss' });
+  });
+
   it('deactivates a counterparty by id', async () => {
     const deactivate = jest.fn().mockResolvedValue({
       id: 9,

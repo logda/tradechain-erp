@@ -1160,6 +1160,8 @@ describe('formal operations detail pages', () => {
       screen.getByText('售后入口会自动携带 salesOrderId、purchaseOrderId、shipmentBatchId，避免断链录入。'),
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '发货台账字段' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '批次概览' })).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: '货运站 Freight Station' })).toBeInTheDocument();
     expect(screen.getByText('SHIP-TEST-001')).toBeInTheDocument();
     expect(screen.getByText('上海目的仓')).toBeInTheDocument();
     expect(screen.getByText('星河供应')).toBeInTheDocument();

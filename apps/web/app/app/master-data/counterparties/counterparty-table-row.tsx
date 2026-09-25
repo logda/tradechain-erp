@@ -22,6 +22,7 @@ type CounterpartyTableRowItem = CounterpartyExtraValues & {
   bankAccount: string;
   remark: string;
   status: 'active' | 'inactive';
+  cooperationStatus?: 'uncooperated' | 'cooperated';
   createdAt: string;
   createdBy: string;
   updatedBy?: string;
@@ -70,6 +71,7 @@ export function CounterpartyTableRow({ item, canManageMasterData, canChangeStatu
         <td style={cellStyle}>{currentItem.code}</td>
         <td style={cellStyle}><strong>{currentItem.name}</strong><br /><span style={{ color: '#64748b' }}>{value(currentItem.shortName)}</span></td>
         <td style={cellStyle}>{value(currentItem.ownerName)}</td>
+        <td style={cellStyle}>{currentItem.type === 'customer' ? '—' : currentItem.cooperationStatus === 'cooperated' ? '已合作供应商' : '未合作供应商'}</td>
         <td style={cellStyle}>{currentItem.status === 'active' ? '启用' : '停用'}</td>
         <td style={cellStyle}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -94,7 +96,7 @@ export function CounterpartyTableRow({ item, canManageMasterData, canChangeStatu
         </td>
       </tr>
       {showDetails ? (
-        <tr><td colSpan={6} style={detailsStyle}>
+        <tr><td colSpan={7} style={detailsStyle}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '8px 16px' }}>
             <span>所属地区：{value(currentItem.region)}</span>
             <span>联系人：{value(currentItem.contactName)}</span>
@@ -116,7 +118,7 @@ export function CounterpartyTableRow({ item, canManageMasterData, canChangeStatu
         </td></tr>
       ) : null}
       {isEditing ? (
-        <tr><td colSpan={6} style={detailsStyle}>
+        <tr><td colSpan={7} style={detailsStyle}>
           <UpdateCounterpartyForm
             endpoint={`${apiBaseUrl}/counterparties/${currentItem.id}`}
             item={currentItem}

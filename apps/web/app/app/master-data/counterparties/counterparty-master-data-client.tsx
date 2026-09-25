@@ -25,6 +25,7 @@ type CounterpartyListItem = CounterpartyExtraValues & {
   bankAccount: string;
   remark: string;
   status: 'active' | 'inactive';
+  cooperationStatus?: 'uncooperated' | 'cooperated';
   createdAt: string;
   createdBy: string;
   updatedBy?: string;
@@ -256,6 +257,7 @@ export function CounterpartyMasterDataClient({
                 <th style={headCellStyle}>编码 Code</th>
                 <th style={headCellStyle}>单位简称 / 单位全称</th>
                 <th style={headCellStyle}>所属人员</th>
+                <th style={headCellStyle}>供应商合作分类</th>
                 <th style={headCellStyle}>状态</th>
                 <th style={headCellStyle}>操作</th>
               </tr>

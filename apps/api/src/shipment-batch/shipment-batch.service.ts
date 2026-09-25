@@ -17,6 +17,7 @@ import { type FormalSession } from '../auth/formal-session';
 import { shipmentBatchListData } from './shipment-batch-list.data';
 import { resolveShipmentBatchStore } from './shipment-batch.store';
 import { PrismaService } from '../storage/prisma.service';
+import { CounterpartyService } from '../counterparty/counterparty.service';
 import { resolveStorageMode } from '../storage/storage-mode';
 import { SalesOrderService } from '../sales-order/sales-order.service';
 import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
@@ -562,6 +563,9 @@ export class ShipmentBatchService {
       | 'listActiveLinkedPurchaseOrders'
       | 'syncShipmentFulfillmentStatus'
     >,
+    @Optional()
+    @Inject(CounterpartyService)
+    private readonly counterpartyService?: Pick<CounterpartyService, 'markSupplierCooperated'>,
   ) {}
 
   private shouldUsePrisma() {
@@ -1068,6 +1072,9 @@ export class ShipmentBatchService {
         record: finalPayload,
         operatorId: finalPayload.createdBy,
       });
+      if (linkedPurchaseOrder) {
+        await this.counterpartyService?.markSupplierCooperated({ supplierId: linkedPurchaseOrder.supplierId, supplierName, ownerName: linkedPurchaseOrder.ownerName, shipmentId: finalPayload.id });
+      }
 
       return {
         id: finalPayload.id,
@@ -1124,6 +1131,9 @@ export class ShipmentBatchService {
       record: created,
       operatorId: created.createdBy,
     });
+    if (linkedPurchaseOrder) {
+      await this.counterpartyService?.markSupplierCooperated({ supplierId: linkedPurchaseOrder.supplierId, supplierName, ownerName: linkedPurchaseOrder.ownerName, shipmentId: created.id });
+    }
 
     return {
       id: created.id,

@@ -12,7 +12,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { FormalActions, FormalAnyModules, FormalRoles, type FormalRole } from '../auth/formal-role.decorator';
 import { FormalRoleGuard } from '../auth/formal-role.guard';
 import { normalizePaginationQuery } from '../common/pagination';
@@ -86,6 +86,9 @@ export class CounterpartyController {
   @FormalActions('counterparty.write')
   async create(@Body() body: CreateCounterpartyPayload, @Req() request: { headers: Record<string, string | string[] | undefined> }) {
     const actor = this.actor(request);
+    if (body.cooperationStatus !== undefined && actor.role !== 'boss' && actor.role !== 'admin') {
+      throw new ForbiddenException('只有老板或管理员可以修改供应商合作分类');
+    }
     const users = await this.userManagementService.listActiveCounterpartyOwners();
     assertCounterpartyCreateAccess(actor, body.type, body.ownerName, users);
     return this.counterpartyService.create({ ...body, createdBy: actor.user });
@@ -101,6 +104,9 @@ export class CounterpartyController {
     const existing = await this.counterpartyService.findById(id);
     if (!existing) throw new NotFoundException('往来单位不存在');
     const actor = this.actor(request);
+    if (body.cooperationStatus !== undefined && actor.role !== 'boss' && actor.role !== 'admin') {
+      throw new ForbiddenException('只有老板或管理员可以修改供应商合作分类');
+    }
     const users = await this.userManagementService.listActiveCounterpartyOwners();
     assertCounterpartyUpdateAccess(actor, existing, body.type ?? existing.type, body.ownerName ?? existing.ownerName, users);
     return this.counterpartyService.update(id, { ...body, updatedBy: actor.user });

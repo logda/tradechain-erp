@@ -33,6 +33,7 @@ type CounterpartyEditableItem = CounterpartyExtraValues & {
   bankName: string;
   bankAccount: string;
   remark: string;
+  cooperationStatus?: 'uncooperated' | 'cooperated';
 };
 
 type UpdateCounterpartyFormProps = {
@@ -223,6 +224,7 @@ export function UpdateCounterpartyForm({
           bankName: String(formData.get('bankName') ?? ''),
           bankAccount: String(formData.get('bankAccount') ?? ''),
           remark: String(formData.get('remark') ?? ''),
+          ...((actorRole === 'boss' || actorRole === 'admin') && selectedType !== 'customer' ? { cooperationStatus: String(formData.get('cooperationStatus') ?? 'uncooperated') } : {}),
           ...readCounterpartyExtraFields(formData, customFields),
           updatedBy,
         },
@@ -250,6 +252,7 @@ export function UpdateCounterpartyForm({
         bankName: String(formData.get('bankName') ?? '').trim(),
         bankAccount: String(formData.get('bankAccount') ?? '').trim(),
         remark: String(formData.get('remark') ?? '').trim(),
+        cooperationStatus: (formData.get('cooperationStatus') as CounterpartyEditableItem['cooperationStatus']) ?? item.cooperationStatus,
         ...readCounterpartyExtraFields(formData, customFields),
       };
       const responseItem =
@@ -354,6 +357,15 @@ export function UpdateCounterpartyForm({
           </select>
         </label>
       </div>
+      {(actorRole === 'boss' || actorRole === 'admin') && selectedType !== 'customer' ? (
+        <label style={fieldStyle}>
+          <span style={labelRowStyle}>供应商合作分类</span>
+          <select name="cooperationStatus" defaultValue={item.cooperationStatus ?? 'uncooperated'} style={inputStyle}>
+            <option value="uncooperated">未合作供应商</option>
+            <option value="cooperated">已合作供应商</option>
+          </select>
+        </label>
+      ) : null}
       <details>
         <summary style={{ cursor: 'pointer', color: '#334155', fontWeight: 700 }}>更多资料与自定义字段</summary>
         <div style={gridStyle}>

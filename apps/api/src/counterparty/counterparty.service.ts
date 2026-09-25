@@ -13,9 +13,11 @@ import { resolveCounterpartyStore, type CounterpartyCustomFieldRecord } from './
 
 const counterpartyTypes = ['customer', 'supplier', 'both'] as const;
 const counterpartyStatuses = ['active', 'inactive'] as const;
+const cooperationStatuses = ['uncooperated', 'cooperated'] as const;
 
 type CounterpartyType = (typeof counterpartyTypes)[number];
 type CounterpartyStatus = (typeof counterpartyStatuses)[number];
+type CooperationStatus = (typeof cooperationStatuses)[number];
 
 export type CounterpartyRecord = {
   id: number;
@@ -41,6 +43,7 @@ export type CounterpartyRecord = {
   moldFee?: string | null;
   customValues?: Record<string, string>;
   status: CounterpartyStatus;
+  cooperationStatus?: CooperationStatus;
   createdAt: string;
   createdBy: string;
   updatedAt?: string;
@@ -61,6 +64,7 @@ export type ListCounterpartiesQuery = {
 
 export type CreateCounterpartyPayload = {
   type: string;
+  cooperationStatus?: CooperationStatus;
   code: string;
   name: string;
   shortName: string;
@@ -108,6 +112,7 @@ export type UpdateCounterpartyPayload = Partial<
     | 'payableReceivable'
     | 'moldFee'
     | 'customValues'
+    | 'cooperationStatus'
   >
 > & {
   updatedBy: string;
@@ -137,6 +142,7 @@ type PrismaCounterpartyRecord = {
   moldFee?: { toString(): string } | null;
   customValues?: unknown;
   status: string;
+  cooperationStatus?: string;
   createdBy: string;
   createdAt: Date;
   updatedBy: string | null;
@@ -217,7 +223,7 @@ function readCustomValues(value: unknown): Record<string, string> {
 
 function publicRecord(record: CounterpartyRecord, fields: CounterpartyCustomFieldRecord[]) {
   const ids = new Set(fields.map((field) => String(field.id)));
-  return { ...record, customValues: Object.fromEntries(Object.entries(record.customValues ?? {}).filter(([id]) => ids.has(id))) };
+  return { ...record, cooperationStatus: record.cooperationStatus ?? 'uncooperated', customValues: Object.fromEntries(Object.entries(record.customValues ?? {}).filter(([id]) => ids.has(id))) };
 }
 
 const defaultChineseNamesByCode: Record<string, string> = {
@@ -304,6 +310,7 @@ function toCounterpartyRecord(record: PrismaCounterpartyRecord): CounterpartyRec
     moldFee: record.moldFee?.toString() ?? null,
     customValues: readCustomValues(record.customValues),
     status: record.status === 'inactive' ? 'inactive' : 'active',
+    cooperationStatus: record.cooperationStatus === 'cooperated' ? 'cooperated' : 'uncooperated',
     createdAt: record.createdAt.toISOString(),
     createdBy: record.createdBy,
     ...(record.updatedAt ? { updatedAt: record.updatedAt.toISOString() } : {}),
@@ -510,6 +517,8 @@ export class CounterpartyService {
   async create(payload: CreateCounterpartyPayload) {
     const type = normalizeText(payload.type);
     assertCounterpartyType(type);
+    const cooperationStatus = payload.cooperationStatus ?? 'uncooperated';
+    if (!cooperationStatuses.includes(cooperationStatus) || (type === 'customer' && cooperationStatus !== 'uncooperated')) throw new BadRequestException('供应商合作分类不合法');
 
     const formalFields = buildRequiredFormalCounterpartyFields(payload);
     const optionalFields = {
@@ -545,6 +554,7 @@ export class CounterpartyService {
           email: normalizeOptionalText(payload.email),
           paymentTerms: normalizeOptionalText(payload.paymentTerms),
           status: 'active',
+          cooperationStatus,
           createdBy: normalizeText(payload.createdBy) || 'system',
         },
       })) as PrismaCounterpartyRecord;
@@ -569,6 +579,7 @@ export class CounterpartyService {
             bankAccount: record.bankAccount,
             remark: record.remark,
             status: record.status,
+            cooperationStatus: record.cooperationStatus,
           },
         },
       });
@@ -585,6 +596,7 @@ export class CounterpartyService {
       email: normalizeText(payload.email),
       paymentTerms: normalizeText(payload.paymentTerms),
       status: 'active',
+      cooperationStatus,
       createdAt: new Date().toISOString(),
       createdBy: normalizeText(payload.createdBy) || 'system',
     };
@@ -610,6 +622,7 @@ export class CounterpartyService {
         bankAccount: record.bankAccount,
         remark: record.remark,
         status: record.status,
+        cooperationStatus: record.cooperationStatus,
       },
     });
     return publicRecord(record, customFields);
@@ -695,6 +708,10 @@ export class CounterpartyService {
       }
       if (payload.customValues !== undefined) {
         data.customValues = { ...readCustomValues(existing.customValues), ...normalizeCustomValues(payload.customValues, customFields) };
+      }
+      if (payload.cooperationStatus !== undefined) {
+        if (existing.type === 'customer' || !cooperationStatuses.includes(payload.cooperationStatus)) throw new BadRequestException('供应商合作分类不合法');
+        data.cooperationStatus = payload.cooperationStatus;
       }
 
       const updated = (await this.prisma!.counterparty.update({
@@ -796,6 +813,10 @@ export class CounterpartyService {
       if (payload[field] !== undefined) record[field] = normalizeAmount(payload[field], field === 'moldFee' ? '模具费用' : field === 'openingReceivable' ? '期初应收款' : '应付应收款');
     }
     if (payload.customValues !== undefined) record.customValues = { ...record.customValues, ...normalizeCustomValues(payload.customValues, customFields) };
+    if (payload.cooperationStatus !== undefined) {
+      if (record.type === 'customer' || !cooperationStatuses.includes(payload.cooperationStatus)) throw new BadRequestException('供应商合作分类不合法');
+      record.cooperationStatus = payload.cooperationStatus;
+    }
 
     record.updatedAt = new Date().toISOString();
     record.updatedBy = normalizeText(payload.updatedBy) || 'system';
@@ -814,6 +835,27 @@ export class CounterpartyService {
     });
 
     return publicRecord(record, customFields);
+  }
+
+  async markSupplierCooperated(payload: { supplierId: number; supplierName: string; ownerName: string; shipmentId: number }) {
+    const name = payload.supplierName.trim();
+    if (!name) throw new BadRequestException('采购单供应商名称不能为空');
+    let supplier: CounterpartyRecord | null = payload.supplierId > 0 ? await this.findById(payload.supplierId) : null;
+    if (supplier && supplier.type === 'customer') supplier = null;
+    if (!supplier) {
+      if (this.shouldUsePrisma()) {
+        const matched = await this.prisma!.counterparty.findFirst({ where: { name, type: { in: ['supplier', 'both'] } }, orderBy: { id: 'asc' } });
+        supplier = matched ? toCounterpartyRecord(matched as PrismaCounterpartyRecord) : null;
+      } else {
+        supplier = this.store.listCounterparties().find((item) => item.name === name && (item.type === 'supplier' || item.type === 'both')) ?? null;
+      }
+    }
+    if (supplier) {
+      if (supplier.cooperationStatus !== 'cooperated') await this.update(supplier.id, { cooperationStatus: 'cooperated', updatedBy: 'system' });
+      return supplier.id;
+    }
+    const created = await this.create({ type: 'supplier', code: `SUP-SH-${payload.shipmentId}`, name, shortName: '', region: '', ownerName: payload.ownerName.trim(), contactName: '', phone: '', address: '', bankName: '', bankAccount: '', remark: '', cooperationStatus: 'cooperated', createdBy: 'system' });
+    return created.id;
   }
 
   async deactivate(

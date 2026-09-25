@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Fragment, type ReactNode } from 'react';
 import { AuditLogTable } from '../../_components/audit-log-table';
 import { AppShell } from '../../_components/app-shell';
 import { MutationActionForm } from '../../_components/mutation-action-form';
@@ -286,26 +287,12 @@ const heroActionLinkStyle = {
   fontWeight: 700,
 } satisfies React.CSSProperties;
 
-const gridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-  gap: '16px',
-} satisfies React.CSSProperties;
-
 const infoCardStyle = {
   border: '1px solid #d8e1ea',
   borderRadius: '18px',
   padding: '18px',
   background: 'rgba(255,255,255,0.92)',
   boxShadow: '0 12px 36px rgba(15, 23, 42, 0.05)',
-} satisfies React.CSSProperties;
-
-const labelStyle = {
-  margin: 0,
-  fontSize: '12px',
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase' as const,
-  color: '#64748b',
 } satisfies React.CSSProperties;
 
 const valueStyle = {
@@ -361,6 +348,25 @@ const cellStyle = {
   fontSize: '13px',
   color: '#0f172a',
 } satisfies React.CSSProperties;
+
+function ShipmentFieldTable({ fields }: { fields: Array<[string, ReactNode]> }) {
+  return (
+    <div style={tableWrapStyle}>
+      <table style={{ ...tableStyle, minWidth: '680px' }}><tbody>
+        {Array.from({ length: Math.ceil(fields.length / 2) }, (_, index) => (
+          <tr key={index}>
+            {[fields[index * 2], fields[index * 2 + 1]].map((field, fieldIndex) => field ? (
+              <Fragment key={field[0]}>
+                <th scope="row" style={{ ...headCellStyle, width: '17%' }}>{field[0]}</th>
+                <td style={{ ...cellStyle, width: '33%', whiteSpace: 'pre-line' }}>{field[1]}</td>
+              </Fragment>
+            ) : <td key={fieldIndex} colSpan={2} style={cellStyle} />)}
+          </tr>
+        ))}
+      </tbody></table>
+    </div>
+  );
+}
 
 const subtleLinkStyle = {
   color: '#0f172a',
@@ -540,147 +546,39 @@ export default async function AppShipmentBatchDetailPage({
           </div>
         </article>
 
-        <div style={gridStyle}>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>状态 Status</p>
-            <p style={valueStyle}>{formatShipmentStageLabel(shipmentBatch.status)}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>回单发送 Receipt</p>
-            <p style={valueStyle}>{formatReceiptLabel(shipmentBatch.receiptSendStatus)}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>批次编号 Batch No</p>
-            <p style={valueStyle}>{shipmentBatch.batchNo}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>销售单 Sales Order</p>
-            <p style={valueStyle}>#{shipmentBatch.salesOrderId}</p>
-            {canOpenSalesOrder ? (
-              <Link href={`/app/sales/orders/${shipmentBatch.salesOrderId}`} style={subtleLinkStyle}>
-                查看销售单追溯
-              </Link>
-            ) : null}
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>采购单 Purchase Order</p>
-            <p style={valueStyle}>#{shipmentBatch.purchaseOrderId}</p>
-            {canOpenPurchaseOrder ? (
-              <Link
-                href={`/app/purchase-orders/${shipmentBatch.purchaseOrderId}`}
-                style={subtleLinkStyle}
-              >
-                查看采购单追溯
-              </Link>
-            ) : null}
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>回单地址 Receipt URL</p>
-            <p style={valueStyle}>{shipmentBatch.receiptDocUrl ?? '未上传'}</p>
-            {shipmentBatch.receiptDocUrl ? (
-              <Link href={shipmentBatch.receiptDocUrl} style={subtleLinkStyle}>
-                打开回单文件
-              </Link>
-            ) : null}
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>异常原因 Exception</p>
-            <p style={valueStyle}>{shipmentBatch.exceptionReason ?? '正常'}</p>
-            <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: '13px' }}>
-              {shipmentBatch.hasException ? '已标记异常' : '暂无异常标记'}
-            </p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>回单发送人 Receipt Sender</p>
-            <p style={valueStyle}>{formatUserDisplay(shipmentBatch.receiptSentBy)}</p>
-          </article>
-        </div>
+        <article style={infoCardStyle}>
+          <h3 style={{ marginTop: 0 }}>批次概览</h3>
+          <ShipmentFieldTable fields={[
+            ['状态 Status', formatShipmentStageLabel(shipmentBatch.status)],
+            ['回单发送 Receipt', formatReceiptLabel(shipmentBatch.receiptSendStatus)],
+            ['批次编号 Batch No', shipmentBatch.batchNo],
+            ['销售单 Sales Order', canOpenSalesOrder ? <Link href={`/app/sales/orders/${shipmentBatch.salesOrderId}`} style={subtleLinkStyle}>#{shipmentBatch.salesOrderId}</Link> : `#${shipmentBatch.salesOrderId}`],
+            ['采购单 Purchase Order', canOpenPurchaseOrder ? <Link href={`/app/purchase-orders/${shipmentBatch.purchaseOrderId}`} style={subtleLinkStyle}>#{shipmentBatch.purchaseOrderId}</Link> : `#${shipmentBatch.purchaseOrderId}`],
+            ['回单地址 Receipt URL', shipmentBatch.receiptDocUrl ? <Link href={shipmentBatch.receiptDocUrl} style={subtleLinkStyle}>{shipmentBatch.receiptDocUrl}</Link> : '未上传'],
+            ['异常原因 Exception', shipmentBatch.hasException ? formatShipmentValue(shipmentBatch.exceptionReason) : '暂无异常标记'],
+            ['回单发送人 Receipt Sender', formatUserDisplay(shipmentBatch.receiptSentBy)],
+          ]} />
+        </article>
 
         <article style={infoCardStyle}>
           <h3 style={{ marginTop: 0 }}>发货台账字段</h3>
-          <div style={gridStyle}>
-            <div>
-              <p style={labelStyle}>工厂发货日期 Factory Ship Date</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.factoryShipDate)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>发货编码 Shipping Code</p>
-              {shipmentBatch.shippingCodeItems?.length ? (
-                <div style={tableWrapStyle}>
-                  <table style={{ ...tableStyle, minWidth: '320px' }}>
-                    <thead>
-                      <tr>
-                        <th style={headCellStyle}>发货编码 Code</th>
-                        <th style={headCellStyle}>数量 Qty</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {shipmentBatch.shippingCodeItems.map((item) => (
-                        <tr key={`${item.code}-${item.quantity}`}>
-                          <td style={cellStyle}>{item.code}</td>
-                          <td style={cellStyle}>{item.quantity}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p style={valueStyle}>{formatShipmentValue(shipmentBatch.shippingCode)}</p>
-              )}
-            </div>
-            <div>
-              <p style={labelStyle}>到货目的地 Destination</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.destination)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>订单号 Order No</p>
-              <p style={valueStyle}>{`#${shipmentBatch.salesOrderId}`}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>唛头 Mark</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.shippingMark)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>客户 Customer</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.customerName)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>货物名称 Goods Name</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.goodsName)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>总件数 Total Packages</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.totalPackages)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>采购单位 Purchasing Unit</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.purchasingUnit)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>货运站 Freight Station</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.freightStation)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>入仓单 Warehouse Entry No</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.warehouseEntryNo)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>到货情况 Arrival Status</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.arrivalStatus)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>货代发货日期 Forwarder Ship Date</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.forwarderShipDate)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>预计到货时间 Estimated Arrival</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.estimatedArrivalDate)}</p>
-            </div>
-            <div>
-              <p style={labelStyle}>备注 Remark</p>
-              <p style={valueStyle}>{formatShipmentValue(shipmentBatch.remark)}</p>
-            </div>
-          </div>
+          <ShipmentFieldTable fields={[
+            ['工厂发货日期 Factory Ship Date', formatShipmentValue(shipmentBatch.factoryShipDate)],
+            ['发货编码 Shipping Code', shipmentBatch.shippingCodeItems?.length ? <div>{shipmentBatch.shippingCodeItems.map((item) => <div key={`${item.code}-${item.quantity}`}>{item.code} · {item.quantity}</div>)}</div> : formatShipmentValue(shipmentBatch.shippingCode)],
+            ['到货目的地 Destination', formatShipmentValue(shipmentBatch.destination)],
+            ['订单号 Order No', `#${shipmentBatch.salesOrderId}`],
+            ['唛头 Mark', formatShipmentValue(shipmentBatch.shippingMark)],
+            ['客户 Customer', formatShipmentValue(shipmentBatch.customerName)],
+            ['货物名称 Goods Name', formatShipmentValue(shipmentBatch.goodsName)],
+            ['总件数 Total Packages', formatShipmentValue(shipmentBatch.totalPackages)],
+            ['采购单位 Purchasing Unit', formatShipmentValue(shipmentBatch.purchasingUnit)],
+            ['货运站 Freight Station', formatShipmentValue(shipmentBatch.freightStation)],
+            ['入仓单 Warehouse Entry No', formatShipmentValue(shipmentBatch.warehouseEntryNo)],
+            ['到货情况 Arrival Status', formatShipmentValue(shipmentBatch.arrivalStatus)],
+            ['货代发货日期 Forwarder Ship Date', formatShipmentValue(shipmentBatch.forwarderShipDate)],
+            ['预计到货时间 Estimated Arrival', formatShipmentValue(shipmentBatch.estimatedArrivalDate)],
+            ['备注 Remark', formatShipmentValue(shipmentBatch.remark)],
+          ]} />
         </article>
 
         <article style={infoCardStyle}>

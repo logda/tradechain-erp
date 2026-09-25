@@ -69,6 +69,7 @@ model Counterparty {
   customValues       Json?
   ownerName         String    @db.VarChar(64)
   status            String    @db.VarChar(16)
+  cooperationStatus String    @default("uncooperated") @db.VarChar(16)
   createdBy         String    @db.VarChar(64)
   createdAt         DateTime  @default(now())
   updatedBy         String?   @db.VarChar(64)
