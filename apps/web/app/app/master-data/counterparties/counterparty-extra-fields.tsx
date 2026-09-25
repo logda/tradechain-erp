@@ -40,9 +40,12 @@ export function CounterpartyExtraFields({ type, item, fields }: {
 }) {
   return (
     <div style={gridStyle}>
-      <label style={fieldStyle}>入库时间
-        <input aria-label="入库时间" value={item?.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '建档后自动生成'} readOnly style={inputStyle} />
-      </label>
+      <div style={fieldStyle}>
+        <span>入库时间</span>
+        {item?.createdAt ? (
+          <time dateTime={item.createdAt} style={{ color: '#0f172a', fontSize: '14px', fontWeight: 500 }}>{new Date(item.createdAt).toLocaleString('zh-CN')}</time>
+        ) : <span style={{ color: '#64748b', fontSize: '14px', fontWeight: 400 }}>建档后自动生成</span>}
+      </div>
       <label style={fieldStyle}>付款方式
         <input name="paymentMethod" defaultValue={item?.paymentMethod ?? ''} style={inputStyle} />
       </label>

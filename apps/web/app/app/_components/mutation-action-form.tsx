@@ -10,6 +10,7 @@ import {
 import { submitFormalMutationAction } from '../_actions/formal-mutation-action';
 import type { MutationField } from '../_lib/mutation-action';
 import { createMutationRequestKey } from '../_lib/mutation-request-key';
+import { ConfirmDialog } from './confirm-dialog';
 import {
   formalActionButtonDisabledStyle,
   formalActionButtonStyle,
@@ -257,29 +258,20 @@ export function MutationActionForm({
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
   const submissionLocked = useRef(false);
+  const confirmationLocked = useRef(false);
+  const pendingForm = useRef<HTMLFormElement | null>(null);
   const requestKey = useRef<string | null>(null);
   const canSubmit = hasRequiredAction(requiredAction, requestHeaders);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (submissionLocked.current || isComplete || !canSubmit) {
-      return;
-    }
-
-    if (confirmMessage && typeof window !== 'undefined') {
-      const confirmed = window.confirm(confirmMessage);
-      if (!confirmed) {
-        return;
-      }
-    }
-
+  async function submitMutation(form: HTMLFormElement) {
     setState(initialState);
     submissionLocked.current = true;
     setIsSubmitting(true);
     requestKey.current ??= createMutationRequestKey();
 
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     const formalHeaders = resolveFormalRequestHeaders(requestHeaders);
 
     try {
@@ -331,6 +323,33 @@ export function MutationActionForm({
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submissionLocked.current || confirmationLocked.current || isComplete || !canSubmit) return;
+    if (confirmMessage) {
+      confirmationLocked.current = true;
+      pendingForm.current = event.currentTarget;
+      setConfirmationOpen(true);
+      return;
+    }
+    void submitMutation(event.currentTarget);
+  }
+
+  function cancelConfirmation() {
+    confirmationLocked.current = false;
+    pendingForm.current = null;
+    setConfirmationOpen(false);
+  }
+
+  function confirmSubmission() {
+    const form = pendingForm.current;
+    if (!form || submissionLocked.current) return;
+    confirmationLocked.current = false;
+    pendingForm.current = null;
+    setConfirmationOpen(false);
+    void submitMutation(form);
   }
 
   return (
@@ -412,6 +431,9 @@ export function MutationActionForm({
       >
         {isSubmitting ? '提交中...' : label}
       </button>
+      {confirmationOpen && confirmMessage ? (
+        <ConfirmDialog message={confirmMessage} onConfirm={confirmSubmission} onCancel={cancelConfirmation} />
+      ) : null}
     </form>
   );
 }

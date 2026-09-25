@@ -733,6 +733,7 @@ describe('formal counterparty master data page', () => {
           bankName: '',
           bankAccount: '',
           remark: '',
+          createdAt: '2026-09-24T09:00:00.000Z',
         }}
       />,
     );
@@ -743,6 +744,9 @@ describe('formal counterparty master data page', () => {
     expect(screen.getByPlaceholderText('请输入开户银行')).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Sara / 销售主管' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Leo / 采购' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('更多资料与自定义字段'));
+    expect(screen.getByText('入库时间').parentElement?.querySelector('time')).toHaveAttribute('dateTime', '2026-09-24T09:00:00.000Z');
+    expect(screen.queryByRole('textbox', { name: '入库时间' })).not.toBeInTheDocument();
   });
 
   it('lets the boss filter customer records assigned to a purchase user', () => {
@@ -922,6 +926,9 @@ describe('formal counterparty master data page', () => {
     fireEvent.change(screen.getByLabelText('编码 Code'), { target: { value: 'CUST-NEW' } });
     fireEvent.change(screen.getByLabelText('单位简称 Name'), { target: { value: '新客户' } });
     fireEvent.click(screen.getByText('更多资料与自定义字段'));
+    expect(screen.getByText('入库时间')).toBeInTheDocument();
+    expect(screen.getByText('建档后自动生成')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: '入库时间' })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('单位标签（逗号分隔）'), { target: { value: '重点，长期' } });
     fireEvent.change(screen.getByLabelText('期初应收款'), { target: { value: '125.50' } });
     fireEvent.change(screen.getByLabelText('模具费用'), { target: { value: '20' } });
@@ -936,8 +943,6 @@ describe('formal counterparty master data page', () => {
   it('requires confirmation before deleting a custom field and frees the visible slot', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 3, deleted: true }) });
     vi.stubGlobal('fetch', fetchMock);
-    const confirm = vi.fn().mockReturnValue(false);
-    vi.stubGlobal('confirm', confirm);
     const onChange = vi.fn();
     render(<CounterpartyCustomFieldManager
       fields={[{ id: 3, name: '旧字段', type: 'text' }]}
@@ -945,11 +950,16 @@ describe('formal counterparty master data page', () => {
       endpoint="http://127.0.0.1:3001/api/counterparties/custom-fields"
       requestHeaders={{ 'x-erp-role': 'boss', 'x-erp-user': 'Mia' }}
     />);
+    const details = screen.getByText('自定义字段管理').closest('details');
+    expect(details).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('自定义字段管理'));
     fireEvent.click(screen.getByRole('button', { name: '删除' }));
-    expect(confirm).toHaveBeenCalledOnce();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('确定删除自定义字段“旧字段”？');
     expect(fetchMock).not.toHaveBeenCalled();
-    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '删除' }));
+    fireEvent.click(screen.getByRole('button', { name: '确认删除' }));
     await waitFor(() => expect(onChange).toHaveBeenCalledWith([]));
   });
 });

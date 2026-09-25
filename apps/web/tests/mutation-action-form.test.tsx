@@ -251,9 +251,7 @@ describe('MutationActionForm', () => {
         currentStatus: 'draft',
       }),
     });
-    const confirmMock = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
     vi.stubGlobal('fetch', fetchMock);
-    vi.stubGlobal('confirm', confirmMock);
 
     render(
       <MutationActionForm
@@ -269,14 +267,14 @@ describe('MutationActionForm', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: '创建样品单' }));
-    await waitFor(() => {
-      expect(confirmMock).toHaveBeenCalledWith(
-        '该报价单已存在 2 张样品单，确认继续创建新的样品单？',
-      );
-      expect(fetchMock).not.toHaveBeenCalled();
-    });
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('该报价单已存在 2 张样品单，确认继续创建新的样品单？');
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: '创建样品单' }));
+    fireEvent.click(screen.getByRole('button', { name: '确认' }));
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(pushMock).toHaveBeenCalledWith('/app/sales/samples/601');
