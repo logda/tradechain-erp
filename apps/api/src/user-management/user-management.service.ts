@@ -72,6 +72,23 @@ type UserListItem = Omit<UserRecord, 'passwordHash'> & {
 };
 
 type RolePermissionListItem = RolePermissionRecord;
+function withDefaultPurchaseInquiryPermission(record: RolePermissionListItem) {
+  if (
+    record.updatedBy !== 'system' ||
+    (record.roleCode !== 'purchase' && record.roleCode !== 'purchase_manager')
+  ) {
+    return record;
+  }
+
+  return {
+    ...record,
+    accessScopes: {
+      ...record.accessScopes,
+      actions: [...new Set([...record.accessScopes.actions, 'sales.inquiry.submit'])],
+    },
+  };
+}
+
 type AssignableSalesUserItem = Pick<
   UserRecord,
   'id' | 'username' | 'realName' | 'roleCode' | 'status'
@@ -434,7 +451,7 @@ export class UserManagementService {
       return roleCodes.map((roleCode) => {
         const persisted = recordMap.get(roleCode);
         if (persisted) {
-          return persisted;
+          return withDefaultPurchaseInquiryPermission(persisted);
         }
 
         return {
@@ -464,7 +481,7 @@ export class UserManagementService {
             ...persisted.accessScopes,
             actions: [...new Set([...(persisted.accessScopes.actions ?? []), 'audit.view'])],
           } }
-          : persisted;
+          : withDefaultPurchaseInquiryPermission(persisted);
       }
 
       return {

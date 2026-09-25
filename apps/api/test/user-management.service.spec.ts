@@ -235,6 +235,7 @@ describe('UserManagementService', () => {
             dataScope: 'purchase_team',
             actions: [
               'counterparty.write',
+              'sales.inquiry.submit',
               'purchase.order.create',
               'purchase.order.submit',
               'purchase.order.approve',
@@ -246,6 +247,34 @@ describe('UserManagementService', () => {
         }),
       ]),
     );
+  });
+
+  it('grants inquiry submission to existing system-managed purchase roles without overriding custom permissions', async () => {
+    const service = new UserManagementService();
+    const purchase = (await service.listRolePermissions()).items.find((item) => item.roleCode === 'purchase')!;
+    const serviceWithStore = service as unknown as { store: {
+      listRolePermissions: () => typeof purchase[];
+    } };
+    const original = serviceWithStore.store.listRolePermissions();
+    const listRolePermissions = jest.spyOn(serviceWithStore.store, 'listRolePermissions');
+    listRolePermissions.mockImplementation(() => original.map((item) => item.roleCode === 'purchase'
+        ? { ...item, accessScopes: {
+          ...item.accessScopes,
+          actions: item.accessScopes.actions.filter((action) => action !== 'sales.inquiry.submit'),
+        } }
+        : item));
+
+    expect((await service.authenticate({ username: 'leo', password: 'Leo123456' }))?.accessScopes.actions)
+      .toContain('sales.inquiry.submit');
+
+    listRolePermissions.mockImplementation(() => original.map((item) => item.roleCode === 'purchase'
+        ? { ...item, updatedBy: 'admin', accessScopes: {
+          ...item.accessScopes,
+          actions: item.accessScopes.actions.filter((action) => action !== 'sales.inquiry.submit'),
+        } }
+        : item));
+    expect((await service.authenticate({ username: 'leo', password: 'Leo123456' }))?.accessScopes.actions)
+      .not.toContain('sales.inquiry.submit');
   });
 
   it('shows the admin audit grant when runtime permissions were saved before audit.view existed', async () => {

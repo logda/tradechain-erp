@@ -150,6 +150,7 @@ async function seedRolePermissions() {
       actions: [
         'purchase.order.create',
         'counterparty.write',
+        'sales.inquiry.submit',
         'purchase.order.submit',
         'purchase.order.approve',
         'shipment.update',
@@ -163,6 +164,7 @@ async function seedRolePermissions() {
       actions: [
         'purchase.order.create',
         'counterparty.write',
+        'sales.inquiry.submit',
         'purchase.order.submit',
         'shipment.update',
         'after_sales.process',

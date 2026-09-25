@@ -45,6 +45,32 @@ describe('UserManagementService prisma storage', () => {
     expect(rolePermission.findMany).toHaveBeenCalledTimes(1);
   });
 
+  it('grants legacy system-managed purchase roles inquiry access in Prisma without changing custom roles', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const rolePermission = {
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 2n, roleCode: 'purchase', modules: ['purchase'],
+          actions: ['purchase.order.submit'], dataScope: 'own_purchase',
+          updatedBy: 'system', createdAt: new Date('2026-07-11'), updatedAt: new Date('2026-07-11'),
+        },
+      ]),
+    };
+    const service = new UserManagementService({ rolePermission } as unknown as PrismaService);
+
+    expect((await service.listRolePermissions()).items.find((item) => item.roleCode === 'purchase')?.accessScopes.actions)
+      .toContain('sales.inquiry.submit');
+    rolePermission.findMany.mockResolvedValue([
+      {
+        id: 2n, roleCode: 'purchase', modules: ['purchase'],
+        actions: ['purchase.order.submit'], dataScope: 'own_purchase',
+        updatedBy: 'admin', createdAt: new Date('2026-07-11'), updatedAt: new Date('2026-07-11'),
+      },
+    ]);
+    expect((await service.listRolePermissions()).items.find((item) => item.roleCode === 'purchase')?.accessScopes.actions)
+      .not.toContain('sales.inquiry.submit');
+  });
+
   it('does not write fixed admin role permissions in Prisma mode', async () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const upsert = jest.fn();

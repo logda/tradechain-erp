@@ -709,7 +709,13 @@ export default async function AppFormalInquiryDetailPage({
               /></>
             ) : null}
             {!hasAvailableActions ? (
-              <p style={detailTextStyle}>当前询价单已归档，无需继续提交比价或老板确认。</p>
+              <p style={detailTextStyle}>
+                {inquiry.status === 'pending_inquiry'
+                  ? '当前角色无询价提交权限。'
+                  : inquiry.status === 'pending_boss_review'
+                    ? '等待老板确认价格，当前角色不能执行此操作。'
+                    : '当前询价单已归档，无需继续提交比价或老板确认。'}
+              </p>
             ) : null}
           </div>
         </section>

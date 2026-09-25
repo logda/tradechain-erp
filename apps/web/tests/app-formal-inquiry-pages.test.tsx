@@ -875,4 +875,38 @@ describe('formal inquiry pages', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('does not describe a pending inquiry as archived when purchase submission is disabled', async () => {
+    stubInquiryDetailFetch({
+      id: 100,
+      inquiryNo: 'IQ202607080100',
+      status: 'pending_inquiry',
+      quoteOrderId: 100,
+      quoteOrderNo: 'Q202607080100',
+      quoteVersionNo: 1,
+      customerName: '测试客户',
+      createdBy: 'Zoe',
+      supplierCount: 0,
+      comparisonSummary: '等待采购询价。',
+      createdAt: '2026-07-21T08:00:00.000Z',
+      detailHref: '/app/sales/inquiries/100',
+      items: [],
+    });
+    const { default: AppFormalInquiryDetailPage } = await import(
+      '../app/app/sales/inquiries/[id]/page'
+    );
+
+    render(<>{await AppFormalInquiryDetailPage({
+      params: Promise.resolve({ id: '100' }),
+      searchParams: Promise.resolve({
+        role: 'purchase',
+        user: 'Leo',
+        access: JSON.stringify({ modules: ['purchase'], dataScope: 'own_purchase', actions: [] }),
+      }),
+    })}</>);
+
+    expect(screen.getByText('当前角色无询价提交权限。')).toBeInTheDocument();
+    expect(screen.queryByText('当前询价单已归档，无需继续提交比价或老板确认。')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '提交比价' })).not.toBeInTheDocument();
+  });
+
 });

@@ -135,6 +135,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
     dataScope: 'purchase_team',
     actions: [
       'counterparty.write',
+      'sales.inquiry.submit',
       'purchase.order.create',
       'purchase.order.submit',
       'purchase.order.approve',
@@ -148,6 +149,7 @@ export const defaultRolePermissions: Record<RoleCode, AccessScopes> = {
     dataScope: 'own_purchase',
     actions: [
       'counterparty.write',
+      'sales.inquiry.submit',
       'purchase.order.create',
       'purchase.order.submit',
       'purchase.sample.execute',
