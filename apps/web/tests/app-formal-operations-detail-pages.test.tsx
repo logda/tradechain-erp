@@ -75,6 +75,8 @@ describe('formal operations detail pages', () => {
                   hasException: false,
                   createdAt: '2026-07-11T12:00:00.000Z',
                   detailHref: '/shipment-batches/301',
+                  freightStation: '上海货运站',
+                  warehouseEntryNo: 'WH-IN-001',
                 },
               ],
               total: 1,
@@ -173,10 +175,12 @@ describe('formal operations detail pages', () => {
     expect(
       screen.getByRole('heading', { name: '采购单 P202607080101' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('供应商：星河供应')).toBeInTheDocument();
+    expect(screen.getByText('星河供应')).toBeInTheDocument();
     expect(screen.getByText('采购负责人：Zoe')).toBeInTheDocument();
-    expect(screen.getByText('PO-ACME-20260708')).toBeInTheDocument();
-    expect(screen.getByText('02 Libuys')).toBeInTheDocument();
+    expect(screen.queryByText('PO-ACME-20260708')).not.toBeInTheDocument();
+    expect(screen.queryByText('02 Libuys')).not.toBeInTheDocument();
+    expect(screen.getByText('上海货运站')).toBeInTheDocument();
+    expect(screen.getByText('WH-IN-001')).toBeInTheDocument();
     expect(screen.getAllByText('2026-07-08').length).toBeGreaterThan(0);
     expect(screen.getAllByText('2026-08-08').length).toBeGreaterThan(0);
     expect(screen.getAllByText('SH Boninoe').length).toBeGreaterThan(0);
@@ -230,6 +234,32 @@ describe('formal operations detail pages', () => {
       'input[name="items"]',
     );
     expect(shipmentItemsInput).toBeNull();
+  });
+
+  it('lets the assigned buyer adjust factory ETA after approval before shipment', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input).includes('/shipment-batches?')) {
+        return Promise.resolve({ ok: true, json: async () => ({ items: [], total: 0 }) });
+      }
+      if (String(input).includes('/owner-options')) {
+        return Promise.resolve({ ok: true, json: async () => [] });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({
+        id: 111, purchaseNo: 'C-111', status: 'purchasing', currentVersionNo: 1,
+        sourceSalesOrderId: 88, salesOrderNo: 'S-88', supplierName: '星河供应',
+        ownerName: 'Leo', currentBatchCount: 0,
+        factoryEstimatedDeliveryDate: '2026-09-30', items: [],
+      }) });
+    }));
+    const { default: AppPurchaseOrderDetailPage } = await import(
+      '../app/app/purchase-orders/[id]/page'
+    );
+    render(await AppPurchaseOrderDetailPage({
+      params: Promise.resolve({ id: '111' }),
+      searchParams: Promise.resolve({ role: 'purchase', user: 'Leo' }),
+    }));
+    expect(screen.getByLabelText(/调整后工厂预计交货时间/)).toHaveValue('2026-09-30');
+    expect(screen.getByRole('button', { name: '保存交期调整' })).toBeInTheDocument();
   });
 
   it('renders purchase order detail pages that only expose sourceSalesNo', async () => {
@@ -571,7 +601,7 @@ describe('formal operations detail pages', () => {
       screen.getByRole('button', { name: '保存草稿' }),
     ).toBeInTheDocument();
     expect(screen.getByText(/采购负责人 Purchase Owner \*/)).toHaveTextContent('Leo');
-    expect(screen.getByText('供应商：待补供应商')).toBeInTheDocument();
+    expect(screen.getAllByText('待补供应商').length).toBeGreaterThan(0);
     expect(screen.getByRole('group', { name: '供应商录入方式 Supplier Mode' })).toBeInTheDocument();
     expect(screen.getByLabelText(/供应商 Supplier/)).toHaveValue('');
     expect(screen.queryByLabelText(/手动供应商名称 Manual Supplier/)).not.toBeInTheDocument();
@@ -612,6 +642,7 @@ describe('formal operations detail pages', () => {
         json: async () => ({
           id: 101,
           purchaseNo: 'P202607080101',
+          title: 'S202607080001-智能 LED 灯带-Acme Supply',
           status: 'draft',
           currentVersionNo: 1,
           sourceSalesOrderId: 88,

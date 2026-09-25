@@ -460,7 +460,9 @@ export default async function AppPurchaseOrdersPage({
                 <td style={tableCellStyle}>
                   <strong>{item.docNo}</strong>
                   <br />
-                  {item.title}
+                  <span title={item.title} style={{ display: 'block', maxWidth: '28ch', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.title}
+                  </span>
                 </td>
                 <td style={tableCellStyle}>
                   {formatCounterpartyChineseDisplay(item.supplierName)}

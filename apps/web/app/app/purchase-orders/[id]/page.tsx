@@ -39,6 +39,7 @@ type AppPurchaseOrderDetailPageProps = {
 type PurchaseOrderDetail = {
   id: number;
   purchaseNo: string;
+  title?: string;
   status: string;
   currentVersionNo: number;
   sourceSalesOrderId: number;
@@ -799,6 +800,8 @@ export default async function AppPurchaseOrderDetailPage({
     purchaseOrder.purchaseNo,
     session,
   );
+  const freightStations = [...new Set(linkedShipmentBatches.map((item) => item.freightStation?.trim()).filter(Boolean))].join('、');
+  const warehouseEntryNos = [...new Set(linkedShipmentBatches.map((item) => item.warehouseEntryNo?.trim()).filter(Boolean))].join('、');
   const effectiveCurrentBatchCount = Math.max(
     purchaseOrder.currentBatchCount,
     linkedShipmentBatches.length,
@@ -846,6 +849,9 @@ export default async function AppPurchaseOrderDetailPage({
     (purchaseOrder.status === 'draft' ||
       purchaseOrder.status === 'pending_purchase_claim');
   const canSavePurchaseDraft = canShowPurchaseSubmitAction;
+  const canAdjustFactoryEta = canSubmitPurchaseOrder &&
+    purchaseOrder.ownerName === session.user &&
+    purchaseOrder.status === 'purchasing' && effectiveCurrentBatchCount === 0;
   const submitPurchaseOrderLabel =
     purchaseOrder.status === 'pending_purchase_claim'
       ? '认领并提交采购审批'
@@ -914,15 +920,32 @@ export default async function AppPurchaseOrderDetailPage({
 
         <h3 style={{ marginBottom: 0 }}>采购单信息</h3>
         <div style={gridStyle}>
+          {purchaseOrder.title ? (
+            <article style={infoCardStyle}>
+              <p style={labelStyle}>采购单标题 Title</p>
+              <p style={valueStyle}>{purchaseOrder.title}</p>
+            </article>
+          ) : null}
           <article style={infoCardStyle}>
             <p style={labelStyle}>供应商 Supplier</p>
             <p style={valueStyle}>
-              供应商：
               {formatCounterpartyChineseDisplay(purchaseOrder.supplierName, {
                 fallback: '未提供',
               })}
             </p>
           </article>
+          {freightStations ? (
+            <article style={infoCardStyle}>
+              <p style={labelStyle}>货代 Forwarder</p>
+              <p style={valueStyle}>{freightStations}</p>
+            </article>
+          ) : null}
+          {warehouseEntryNos ? (
+            <article style={infoCardStyle}>
+              <p style={labelStyle}>入仓号 Warehouse Entry No</p>
+              <p style={valueStyle}>{warehouseEntryNos}</p>
+            </article>
+          ) : null}
           <article style={infoCardStyle}>
             <p style={labelStyle}>采购负责人 Purchase Owner</p>
             <p style={valueStyle}>{`采购负责人：${purchaseOrder.ownerName ?? '未提供'}`}</p>
@@ -942,14 +965,6 @@ export default async function AppPurchaseOrderDetailPage({
           <article style={infoCardStyle}>
             <p style={labelStyle}>订单编码 Sales Order No</p>
             <p style={valueStyle}>{formatPurchaseValue(purchaseOrder.salesOrderNo)}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>编码 Customer PO No</p>
-            <p style={valueStyle}>{formatPurchaseValue(purchaseOrder.customerOrderNo)}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>门店 Store</p>
-            <p style={valueStyle}>{formatPurchaseValue(purchaseOrder.storeName)}</p>
           </article>
           <article style={infoCardStyle}>
             <p style={labelStyle}>订货日期 Order Date</p>
@@ -1211,10 +1226,35 @@ export default async function AppPurchaseOrderDetailPage({
                       requiredAction="purchase.order.submit"
                       requiredActionLabel="采购单提交"
                       requestHeaders={actionRequestHeaders}
-                      fields={[{ name: 'currentStatus', value: purchaseOrder.status }]}
+                      fields={[
+                        { name: 'currentStatus', value: purchaseOrder.status },
+                        {
+                          name: 'title', value: purchaseOrder.title ?? '', display: 'input',
+                          label: '采购单标题', required: true,
+                        },
+                      ]}
                     />
                   </div>
                 ) : null}
+              />
+            ) : null}
+            {canAdjustFactoryEta ? (
+              <MutationActionForm
+                endpoint={`${getPurchaseOrderApiBaseUrl()}/purchase-orders/${purchaseOrder.id}/factory-eta`}
+                label="保存交期调整"
+                successLabel="工厂预计交货时间已更新"
+                requiredAction="purchase.order.submit"
+                requiredActionLabel="采购单提交"
+                requestHeaders={actionRequestHeaders}
+                fields={[
+                  { name: 'currentStatus', value: purchaseOrder.status },
+                  {
+                    name: 'factoryEstimatedDeliveryDate',
+                    value: purchaseOrder.factoryEstimatedDeliveryDate ?? '',
+                    display: 'input', inputType: 'date',
+                    label: '调整后工厂预计交货时间', required: true,
+                  },
+                ]}
               />
             ) : null}
             {canApprovePurchaseOrder &&

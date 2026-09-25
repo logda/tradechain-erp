@@ -185,6 +185,7 @@ export class FormalTodoService {
           ownerName?: string;
           createdBy: string;
           detailHref: string;
+          factoryEstimatedDeliveryDate?: string;
           lifecycleStatus?: 'open' | 'auto_closed' | 'voided';
           closeReason?: string;
         }>,
@@ -422,6 +423,30 @@ export class FormalTodoService {
           href: formalDetailHref(item.detailHref, '/app/purchase-orders'),
           priority: 'high',
           description: `${item.title} 需要采购主管审批后进入采购执行。`,
+        });
+      });
+
+    const today = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const reminderEnd = new Date(today);
+    reminderEnd.setUTCDate(reminderEnd.getUTCDate() + 3);
+    const reminderEndDate = reminderEnd.toISOString().slice(0, 10);
+    purchaseOrders.items
+      .filter((item) => !isClosedLifecycleStatus(item.lifecycleStatus))
+      .filter((item) => item.status === 'purchasing' || item.status.startsWith('partial_'))
+      .filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.factoryEstimatedDeliveryDate ?? ''))
+      .filter((item) => item.factoryEstimatedDeliveryDate! <= reminderEndDate)
+      .forEach((item) => {
+        items.push({
+          id: `purchase-eta-${item.docNo}`,
+          docNo: item.docNo,
+          title: '工厂交期提醒',
+          domain: 'purchase',
+          moduleLabel: '采购单',
+          statusLabel: '临近交期',
+          ownerName: item.ownerName ?? '',
+          href: formalDetailHref(item.detailHref, '/app/purchase-orders'),
+          priority: 'medium',
+          description: `${item.title} 工厂预计交期为 ${item.factoryEstimatedDeliveryDate}，请跟进供应商交付。`,
         });
       });
 

@@ -12,6 +12,48 @@ describe('PurchaseOrderService prisma document storage', () => {
     }
   });
 
+  it('persists factory ETA changes in both purchase header and lines in Prisma', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const payload = {
+      id: 304, purchaseNo: 'C202607080304', status: 'purchasing',
+      sourceSalesOrderId: 88, salesOrderNo: 'S202607080088',
+      supplierId: 3002, supplierName: 'Bravo Industrial', ownerName: 'Leo',
+      currentVersionNo: 1, itemCount: 1, createdBy: 2002,
+      createdAt: '2026-07-13T14:30:00.000Z', currentBatchCount: 0,
+      factoryEstimatedDeliveryDate: '2026-09-30', versionHistory: [],
+      items: [{ lineNo: 1, factoryEstimatedDeliveryDate: '2026-09-30' }],
+    };
+    const documentRecord = {
+      id: 304n, bizType: 'purchase_order', docNo: payload.purchaseNo,
+      status: 'purchasing', ownerUserId: 2002n, counterpartyId: 3002n,
+      payload, createdBy: 2002n,
+      createdAt: new Date(payload.createdAt), updatedAt: new Date(payload.createdAt),
+    };
+    const prismaMock = {
+      businessDocument: {
+        findUnique: jest.fn().mockResolvedValue(documentRecord),
+        update: jest.fn().mockResolvedValue(documentRecord),
+      },
+      operationLog: { create: jest.fn().mockResolvedValue({ id: 4n }) },
+    };
+    const service = new PurchaseOrderService(prismaMock as unknown as PrismaService);
+    await service.updateFactoryEstimatedDeliveryDate({
+      purchaseOrderId: 304, currentStatus: 'purchasing',
+      factoryEstimatedDeliveryDate: '2026-10-03',
+      session: { role: 'purchase', user: 'Leo' },
+    });
+    expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
+      where: { id: 304n, status: 'purchasing' },
+      data: { payload: expect.objectContaining({
+        factoryEstimatedDeliveryDate: '2026-10-03',
+        items: [expect.objectContaining({ factoryEstimatedDeliveryDate: '2026-10-03' })],
+      }) },
+    });
+    expect(prismaMock.operationLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ operationType: 'update_factory_eta', bizId: 304n }),
+    });
+  });
+
   it('creates purchase order snapshots from sales order splitting', async () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const createdAt = new Date('2026-07-13T14:00:00.000Z');

@@ -101,6 +101,7 @@ export type PurchaseOrderVersionHistoryEntry = {
 export type CreatedPurchaseOrderRecord = {
   id: number;
   purchaseNo: string;
+  title?: string;
   sourceSalesOrderId: number;
   supplierId: number;
   supplierName: string;
@@ -133,6 +134,8 @@ export type PurchaseOrderTransitionPayload = {
   currentStatus: string;
   session?: FormalSession;
 };
+
+type SubmitPurchaseOrderPayload = PurchaseOrderTransitionPayload & { title?: string };
 
 export type PurchaseOrderRecord = CreatedPurchaseOrderRecord;
 
@@ -401,6 +404,18 @@ function normalizeOwnerName(value: string | undefined) {
   return value?.trim() ?? '';
 }
 
+function normalizeFactoryEta(value: string) {
+  const date = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new BadRequestException('工厂预计交货日期无效');
+  }
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+    throw new BadRequestException('工厂预计交货日期无效');
+  }
+  return date;
+}
+
 function normalizeProductCodeSegment(value: string) {
   return value
     .trim()
@@ -440,6 +455,29 @@ function buildPurchaseProductName(input: {
   );
 }
 
+function buildPurchaseOrderTitle(
+  salesOrderNo: string,
+  items: PurchaseOrderLineItem[],
+  supplierName: string,
+) {
+  const names = items.map((item) => item.productName.trim()).filter(Boolean).join('、') || '产品';
+  const maxProductChars = 24;
+  const productPart = Array.from(names).length > maxProductChars
+    ? `${Array.from(names).slice(0, maxProductChars - 1).join('')}等`
+    : names;
+  return `${salesOrderNo}-${productPart}-${supplierName}`;
+}
+
+function refreshGeneratedPurchaseTitle(
+  previous: CreatedPurchaseOrderRecord,
+  next: CreatedPurchaseOrderRecord,
+) {
+  if (previous.title === buildPurchaseOrderTitle(previous.salesOrderNo, previous.items, previous.supplierName)) {
+    next.title = buildPurchaseOrderTitle(next.salesOrderNo, next.items, next.supplierName);
+  }
+  return next;
+}
+
 function toSyntheticPurchaseUser(name: string): AssignablePurchaseUserItem {
   return {
     id: 0,
@@ -458,13 +496,14 @@ function toCreatedPurchaseOrderListItem(
   return {
     moduleLabel: '采购单',
     docNo: item.purchaseNo,
-    title: firstProductName
+    title: item.title?.trim() || (firstProductName
       ? `${firstProductName} 销售拆单采购`
-      : `${item.supplierName} 销售拆单采购`,
+      : `${item.supplierName} 销售拆单采购`),
     status: item.status,
     secondaryStatus: item.status,
     supplierName: item.supplierName,
     ownerName: item.ownerName,
+    factoryEstimatedDeliveryDate: item.factoryEstimatedDeliveryDate,
     createdAt: item.createdAt,
     detailHref: `/purchase-orders/${item.id}`,
     createdBy: resolveUserName(item.createdBy),
@@ -673,6 +712,7 @@ export class PurchaseOrderService {
   private readonly store = resolvePurchaseOrderStore();
   private readonly activeSalesTransfers = new Map<number, Promise<{ purchaseOrders: CreatedPurchaseOrderRecord[] }>>();
   private readonly activeOwnerAssignments = new Map<number, Promise<{ ownerName: string; lockedPurchaseOwner: boolean }>>();
+  private readonly activeEtaUpdates = new Set<number>();
 
   constructor(
     @Optional()
@@ -1400,6 +1440,7 @@ export class PurchaseOrderService {
           ...basePayload,
           id: Number(created.id),
           purchaseNo: nextPurchaseNo(),
+          title: buildPurchaseOrderTitle(salesOrderNo, basePayload.items, supplierName),
         };
         const updated = (await this.prismaDb!.businessDocument.update({
           where: { id: created.id },
@@ -1480,6 +1521,8 @@ export class PurchaseOrderService {
           ],
           items: normalizePurchaseOrderItems(items),
         };
+
+      createdRecord.title = buildPurchaseOrderTitle(salesOrderNo, createdRecord.items, supplierName);
 
       this.store.upsertPurchaseOrder(createdRecord);
       this.store.recordAuditLog({
@@ -1643,7 +1686,77 @@ export class PurchaseOrderService {
     }
   }
 
-  async submit(payload: PurchaseOrderTransitionPayload) {
+  async updateFactoryEstimatedDeliveryDate(payload: {
+    purchaseOrderId: number;
+    currentStatus: string;
+    factoryEstimatedDeliveryDate: string;
+    session?: FormalSession;
+  }) {
+    if (this.activeEtaUpdates.has(payload.purchaseOrderId)) {
+      throw new BadRequestException('交期正在更新，请刷新页面');
+    }
+    this.activeEtaUpdates.add(payload.purchaseOrderId);
+    try {
+      return await this.updateFactoryEstimatedDeliveryDateOnce(payload);
+    } finally {
+      this.activeEtaUpdates.delete(payload.purchaseOrderId);
+    }
+  }
+
+  private async updateFactoryEstimatedDeliveryDateOnce(payload: {
+    purchaseOrderId: number;
+    currentStatus: string;
+    factoryEstimatedDeliveryDate: string;
+    session?: FormalSession;
+  }) {
+    const date = normalizeFactoryEta(payload.factoryEstimatedDeliveryDate);
+    const existing = this.shouldUsePrisma()
+      ? (await this.prismaDb!.businessDocument.findUnique({ where: { id: BigInt(payload.purchaseOrderId) } })) as PrismaBusinessDocumentRecord | null
+      : null;
+    const record = existing?.bizType === 'purchase_order'
+      ? toPurchaseDocumentPayload(existing)
+      : this.shouldUsePrisma() ? undefined : this.store.getPurchaseOrder(payload.purchaseOrderId);
+    if (!record) throw new NotFoundException('采购单不存在');
+    this.assertPurchaseOwnerForMutation(record, payload.session);
+    if (record.status !== payload.currentStatus) {
+      throw new BadRequestException('采购单状态已变更，请刷新页面');
+    }
+    if (record.status !== 'purchasing' || record.currentBatchCount > 0) {
+      throw new BadRequestException('仅审批通过后、发货前可修改交期');
+    }
+    if (record.factoryEstimatedDeliveryDate === date &&
+        record.items.every((item) => item.factoryEstimatedDeliveryDate === date)) {
+      throw new BadRequestException('交期与当前日期相同');
+    }
+    const nextRecord = {
+      ...record,
+      factoryEstimatedDeliveryDate: date,
+      items: record.items.map((item) => ({ ...item, factoryEstimatedDeliveryDate: date })),
+    };
+    if (existing) {
+      await this.prismaDb!.businessDocument.update({
+        where: { id: existing.id, status: record.status },
+        data: { payload: nextRecord },
+      });
+      await this.prismaDb!.operationLog.create({
+        data: {
+          bizType: 'purchase_order', bizId: existing.id,
+          operationType: 'update_factory_eta', operatorId: existing.createdBy ?? 0n,
+          beforeData: record, afterData: nextRecord,
+        },
+      });
+    } else {
+      this.store.upsertPurchaseOrder(nextRecord);
+      this.store.recordAuditLog({
+        bizType: 'purchase_order', bizId: record.id,
+        operationType: 'update_factory_eta', operatorId: record.createdBy,
+        beforeData: record, afterData: nextRecord,
+      });
+    }
+    return { id: record.id, factoryEstimatedDeliveryDate: date, status: record.status };
+  }
+
+  async submit(payload: SubmitPurchaseOrderPayload) {
     if (
       payload.currentStatus !== 'draft' &&
       payload.currentStatus !== 'pending_purchase_claim'
@@ -1672,6 +1785,9 @@ export class PurchaseOrderService {
         if (!hasCompletedPurchasePrices(detail)) {
           throw new BadRequestException('请先补充采购价后再提交采购审批');
         }
+        if (payload.title !== undefined && !payload.title.trim()) {
+          throw new BadRequestException('请填写采购单标题');
+        }
       }
 
       if (existing?.bizType === 'purchase_order') {
@@ -1684,6 +1800,7 @@ export class PurchaseOrderService {
           operationType: 'submit_purchase_order',
           mutate: () => ({
             ...submittedPayload,
+            title: payload.title?.trim() || submittedPayload.title,
             status: 'pending_purchase_manager_approval',
           }),
         });
@@ -1716,10 +1833,14 @@ export class PurchaseOrderService {
       if (!hasCompletedPurchasePrices(created)) {
         throw new BadRequestException('请先补充采购价后再提交采购审批');
       }
+      if (payload.title !== undefined && !payload.title.trim()) {
+        throw new BadRequestException('请填写采购单标题');
+      }
 
       const beforeData = snapshotAuditData(created);
       const submittedPayload = await this.ensureSubmittedPurchaseProducts(created);
       updateCreatedPurchaseOrder(submittedPayload, {
+        title: payload.title?.trim() || submittedPayload.title,
         status: 'pending_purchase_manager_approval',
       });
       updateCreatedPurchaseOrder(created, submittedPayload);
@@ -1789,13 +1910,13 @@ export class PurchaseOrderService {
         payload.supplierId === undefined && payload.supplierName === undefined
           ? beforeData.supplierName
           : payload.supplierName;
-      const nextPayload = applyPurchaseItemPricePatches(
+      const nextPayload = refreshGeneratedPurchaseTitle(beforeData, applyPurchaseItemPricePatches(
         applyPurchaseSupplierPatch({
           ...beforeData,
           ownerName,
         }, supplierId, supplierName),
         payload.itemPricePatches,
-      );
+      ));
       const updated = (await this.prismaDb!.businessDocument.update({
         where: { id: existing.id },
         data: {
@@ -1862,7 +1983,7 @@ export class PurchaseOrderService {
           : payload.supplierName;
       updateCreatedPurchaseOrder(
         created,
-        applyPurchaseItemPricePatches(
+        refreshGeneratedPurchaseTitle(beforeData, applyPurchaseItemPricePatches(
           applyPurchaseSupplierPatch(
             {
               ...created,
@@ -1872,7 +1993,7 @@ export class PurchaseOrderService {
             supplierName,
           ),
           payload.itemPricePatches,
-        ),
+        )),
       );
       this.store.upsertPurchaseOrder(created);
       this.store.recordAuditLog({

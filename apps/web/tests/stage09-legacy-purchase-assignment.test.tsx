@@ -14,7 +14,7 @@ function setupFetch(needsPurchaseAssignment = true) {
       ? {
           id: 502, purchaseNo: 'C502', status: 'pending_purchase_claim',
           currentVersionNo: 1, sourceSalesOrderId: 901, salesOrderNo: 'S901',
-          ownerName: 'Leo', needsPurchaseAssignment, items: [],
+          ownerName: 'Leo', title: 'S901-风扇-星河供应', needsPurchaseAssignment, items: [],
         }
       : url.endsWith('/purchase-orders/owner-options')
         ? [
@@ -63,6 +63,7 @@ it('shows an assigned purchase owner as read-only beside the claim action', asyn
   expect(screen.getByRole('button', { name: '认领并提交采购审批' })).toBeInTheDocument();
   expect(screen.queryByRole('combobox', { name: /采购负责人 Purchase Owner/ })).not.toBeInTheDocument();
   expect(screen.getByText('Leo')).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: /采购单标题/ })).toHaveValue('S901-风扇-星河供应');
   const saveButton = screen.getByRole('button', { name: '保存草稿' });
   const submitButton = screen.getByRole('button', { name: '认领并提交采购审批' });
   expect(saveButton.parentElement).toContainElement(submitButton);

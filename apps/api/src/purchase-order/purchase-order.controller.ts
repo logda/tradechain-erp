@@ -212,6 +212,23 @@ export class PurchaseOrderController {
 
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
   @FormalActions('purchase.order.submit')
+  @Post(':id/factory-eta')
+  updateFactoryEstimatedDeliveryDate(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { currentStatus: string; factoryEstimatedDeliveryDate: string },
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    return this.purchaseOrderService.updateFactoryEstimatedDeliveryDate({
+      purchaseOrderId: id,
+      currentStatus: body.currentStatus,
+      factoryEstimatedDeliveryDate: body.factoryEstimatedDeliveryDate,
+      session: readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user }),
+    });
+  }
+
+  @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
+  @FormalActions('purchase.order.submit')
   @Post(':id/draft')
   saveDraft(
     @Param('id', ParseIntPipe) id: number,
@@ -244,13 +261,14 @@ export class PurchaseOrderController {
   @Post(':id/submit')
   submit(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { currentStatus: string },
+    @Body() body: { currentStatus: string; title?: string },
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
   ) {
     return this.purchaseOrderService.submit({
       purchaseOrderId: id,
       currentStatus: body.currentStatus,
+      title: body.title,
       session: readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user }),
     });
   }

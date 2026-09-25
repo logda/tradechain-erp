@@ -34,6 +34,7 @@ export type PurchaseOrderListItem = {
   secondaryStatus?: string;
   supplierName?: string;
   ownerName?: string;
+  factoryEstimatedDeliveryDate?: string;
   createdAt: string;
   detailHref: string;
   createdBy: string;

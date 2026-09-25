@@ -11,6 +11,39 @@ function createListResponse<T>(items: T[]) {
 }
 
 describe('FormalTodoService', () => {
+  it('shows an ETA reminder to the assigned purchaser from three days before delivery until fully shipped', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-25T12:00:00.000Z'));
+    try {
+      const empty = { list: jest.fn().mockResolvedValue(createListResponse([])) };
+      const purchase = { list: jest.fn().mockResolvedValue(createListResponse([
+        { docNo: 'C-DUE', title: '风扇采购', status: 'purchasing', ownerName: 'Leo',
+          factoryEstimatedDeliveryDate: '2026-09-28', detailHref: '/purchase-orders/101' },
+        { docNo: 'C-LATER', title: '台灯采购', status: 'purchasing', ownerName: 'Leo',
+          factoryEstimatedDeliveryDate: '2026-09-29', detailHref: '/purchase-orders/102' },
+        { docNo: 'C-PARTIAL', title: '部分发货采购', status: 'partial_shipped', ownerName: 'Leo',
+          factoryEstimatedDeliveryDate: '2026-09-24', detailHref: '/purchase-orders/103' },
+        { docNo: 'C-SHIPPED', title: '已发货采购', status: 'shipped', ownerName: 'Leo',
+          factoryEstimatedDeliveryDate: '2026-09-28', detailHref: '/purchase-orders/104' },
+        { docNo: 'C-OTHER', title: '其他人采购', status: 'purchasing', ownerName: 'Nina',
+          factoryEstimatedDeliveryDate: '2026-09-28', detailHref: '/purchase-orders/105' },
+      ])) };
+      const service = new FormalTodoService(empty as never, empty as never, purchase as never,
+        empty as never, empty as never);
+      const result = await service.listFormalTodos({ role: 'purchase', user: 'Leo' });
+      expect(result.items.filter((item) => item.title === '工厂交期提醒').map((item) => item.docNo))
+        .toEqual(['C-DUE', 'C-PARTIAL']);
+
+      purchase.list.mockResolvedValue(createListResponse([{
+        docNo: 'C-DUE', title: '风扇采购', status: 'purchasing', ownerName: 'Leo',
+        factoryEstimatedDeliveryDate: '2026-10-10', detailHref: '/purchase-orders/101',
+      }]));
+      expect((await service.listFormalTodos({ role: 'purchase', user: 'Leo' })).items)
+        .not.toEqual(expect.arrayContaining([expect.objectContaining({ title: '工厂交期提醒' })]));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('routes an existing direct purchase claim awaiting assignment to the manager', async () => {
     const empty = { list: jest.fn().mockResolvedValue(createListResponse([])) };
     const purchase = {
