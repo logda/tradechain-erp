@@ -83,6 +83,9 @@ export class ProductController {
   @FormalRoles('admin')
   @FormalActions('master_data.write')
   create(@Body() body: CreateProductPayload) {
+    if (body.productStage !== 'quote_candidate' && body.productStage !== 'formal') {
+      throw new BadRequestException('请选择产品阶段');
+    }
     return this.productService.create(body);
   }
 

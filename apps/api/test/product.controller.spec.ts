@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import { FormalRoleGuard } from '../src/auth/formal-role.guard';
 import { FORMAL_ACTIONS_KEY, FORMAL_ROLES_KEY } from '../src/auth/formal-role.decorator';
 import { ProductController } from '../src/product/product.controller';
-import { ProductService } from '../src/product/product.service';
+import { ProductService, type CreateProductPayload } from '../src/product/product.service';
 
 describe('ProductController', () => {
   it('allows sales to read products while restricting mutations to admin', () => {
@@ -120,6 +120,7 @@ describe('ProductController', () => {
       nameCn: '户外摄像头',
       nameEn: 'Outdoor Camera',
       category: 'electronics',
+      productStage: 'formal',
       unit: 'pcs',
       currency: 'USD',
       defaultSalePrice: 39.9,
@@ -133,6 +134,7 @@ describe('ProductController', () => {
       nameCn: '户外摄像头',
       nameEn: 'Outdoor Camera',
       category: 'electronics',
+      productStage: 'formal',
       unit: 'pcs',
       currency: 'USD',
       defaultSalePrice: 39.9,
@@ -141,6 +143,13 @@ describe('ProductController', () => {
       createdBy: 'Admin',
     });
     expect(result.status).toBe('active');
+  });
+
+  it('rejects API product creation without an explicit product stage', async () => {
+    const create = jest.fn();
+    const controller = new ProductController({ create } as unknown as ProductService);
+    expect(() => controller.create({ nameCn: '未选阶段产品' } as CreateProductPayload)).toThrow('请选择产品阶段');
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('reads and updates the product code rule', async () => {

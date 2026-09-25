@@ -829,6 +829,16 @@ describe('formal product master data page', () => {
     );
   });
 
+  it('blocks product creation when the product stage is not selected', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<CreateProductForm endpoint="http://127.0.0.1:3001/api/products" createdBy="Admin" />);
+    fireEvent.change(screen.getByLabelText('产品名称 Product Name'), { target: { value: '未选阶段产品' } });
+    fireEvent.click(screen.getByRole('button', { name: '新增商品' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('请选择产品阶段');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('uses backend generated purchase code when adding the created product locally', async () => {
     const onSuccess = vi.fn();
     const fetchMock = vi.fn().mockResolvedValue({
@@ -1175,6 +1185,21 @@ describe('formal product master data page', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: '新增' }));
+    const closeButton = screen.getByRole('button', { name: '关闭新增产品弹窗' });
+    expect(closeButton).toHaveTextContent('×');
+    fireEvent.change(screen.getByLabelText('产品名称 Product Name'), { target: { value: '暂存草稿' } });
+    fireEvent.change(screen.getByLabelText('产品阶段 Product Stage'), { target: { value: 'formal' } });
+    fireEvent.change(screen.getByLabelText('默认销售价 Sale Price'), { target: { value: '7.5' } });
+    fireEvent.click(closeButton);
+    expect(screen.queryByRole('dialog', { name: '新增产品' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '新增' }));
+    expect(screen.getByLabelText('产品名称 Product Name')).toHaveValue('暂存草稿');
+    expect(screen.getByLabelText('产品阶段 Product Stage')).toHaveValue('formal');
+    expect(screen.getByLabelText('默认销售价 Sale Price')).toHaveValue(7.5);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: '新增产品' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '新增' }));
+    expect(screen.getByLabelText('产品名称 Product Name')).toHaveValue('暂存草稿');
 
     fireEvent.click(
       within(screen.getByRole('group', { name: '采购编码模式 Purchase Code Mode' })).getByRole(
@@ -1217,6 +1242,10 @@ describe('formal product master data page', () => {
     });
     expect(screen.queryByRole('dialog', { name: '新增产品' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('产品“户外摄像头”新增成功');
+    fireEvent.click(screen.getByRole('button', { name: '新增' }));
+    expect(screen.getByLabelText('产品名称 Product Name')).toHaveValue('');
+    expect(screen.getByLabelText('产品阶段 Product Stage')).toHaveValue('');
+    expect(screen.getByLabelText('默认销售价 Sale Price')).toHaveValue(null);
     expect(screen.queryByText('新增成功，请刷新查看最新商品。')).not.toBeInTheDocument();
   });
 

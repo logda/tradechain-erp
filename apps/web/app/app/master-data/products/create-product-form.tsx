@@ -393,6 +393,7 @@ export function CreateProductForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const attempt = useMutationAttempt();
   const generatedSku = useRef<string | null>(null);
+  const productStageRef = useRef<HTMLSelectElement>(null);
   const [salesCodeMode, setSalesCodeMode] = useState<SalesCodeMode>('generated');
   const [purchaseCodeMode, setPurchaseCodeMode] = useState<PurchaseCodeMode>('manual');
   const [factorySourceMode, setFactorySourceMode] = useState<FactorySourceMode>('manual');
@@ -450,6 +451,12 @@ export function CreateProductForm({
 
     const form = event.currentTarget;
     const formData = new FormData(form);
+    const productStage = String(formData.get('productStage') ?? '');
+    if (productStage !== 'quote_candidate' && productStage !== 'formal') {
+      setState({ error: '请选择产品阶段', success: null });
+      productStageRef.current?.focus();
+      return;
+    }
     const salesCode =
       salesCodeMode === 'manual'
         ? String(formData.get('salesCode') ?? '').trim()
@@ -490,7 +497,7 @@ export function CreateProductForm({
       cartonQuantity: readOptionalNumber(formData, 'cartonQuantity'),
       cartonWeight: readOptionalNumber(formData, 'cartonWeight'),
       defaultSupplierCode: resolvedUnitCode,
-      productStage: String(formData.get('productStage') ?? ''),
+      productStage,
       pricingMode,
       nameCn: String(formData.get('nameCn') ?? ''),
       nameEn: String(formData.get('nameEn') ?? ''),
@@ -634,7 +641,7 @@ export function CreateProductForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} onChangeCapture={() => {
+    <form noValidate onSubmit={handleSubmit} onChangeCapture={() => {
       if (!isSubmitting) {
         generatedSku.current = null;
         attempt.resetFailedAfterEdit();
@@ -868,9 +875,13 @@ export function CreateProductForm({
           <label style={labelStyle}>
             {renderRequiredLabel('产品阶段 Product Stage')}
             <select
+              ref={productStageRef}
               aria-label="产品阶段 Product Stage"
+              aria-invalid={state.error === '请选择产品阶段'}
               name="productStage"
               defaultValue=""
+              required
+              onChange={() => { if (state.error === '请选择产品阶段') setState(initialState); }}
               style={inputStyle}
             >
               <option value="">请选择阶段 Select stage</option>
@@ -880,6 +891,7 @@ export function CreateProductForm({
                 </option>
               ))}
             </select>
+            {state.error === '请选择产品阶段' ? <span role="alert" style={{ color: '#b91c1c', fontSize: '13px' }}>{state.error}</span> : null}
           </label>
         </div>
       </section>
@@ -970,7 +982,7 @@ export function CreateProductForm({
         onChange={setSalePriceTiers}
       />
       <ProductCustomValueFields fields={customFields} />
-      {state.error ? (
+      {state.error && state.error !== '请选择产品阶段' ? (
         <p role="alert" style={{ margin: 0, color: '#b91c1c', fontSize: '13px' }}>
           {state.error}
         </p>

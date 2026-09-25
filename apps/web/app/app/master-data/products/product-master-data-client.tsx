@@ -356,7 +356,9 @@ export function ProductMasterDataClient({
   const [items, setItems] = useState(initialItems);
   const [customFields, setCustomFields] = useState(initialCustomFields);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [hasOpenedCreate, setHasOpenedCreate] = useState(false);
   const [createNotice, setCreateNotice] = useState<string | null>(null);
+  const openCreateRef = useRef<HTMLButtonElement>(null);
   const closeCreateRef = useRef<HTMLButtonElement>(null);
   const [total, setTotal] = useState(initialTotal);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
@@ -373,7 +375,10 @@ export function ProductMasterDataClient({
     if (!isCreateOpen) return;
     closeCreateRef.current?.focus();
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsCreateOpen(false);
+      if (event.key === 'Escape') {
+        setIsCreateOpen(false);
+        openCreateRef.current?.focus();
+      }
     };
     document.addEventListener('keydown', onEscape);
     return () => document.removeEventListener('keydown', onEscape);
@@ -504,7 +509,7 @@ export function ProductMasterDataClient({
 
       {canManageMasterData ? <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         {createNotice ? <p role="status" style={{ margin: 0, padding: '10px 14px', border: '1px solid #bbf7d0', borderRadius: '12px', color: '#166534', background: '#f0fdf4' }}>{createNotice}</p> : null}
-        <button type="button" className="erp-button erp-button--primary" onClick={() => { setCreateNotice(null); setIsCreateOpen(true); }}>新增</button>
+        <button ref={openCreateRef} type="button" className="erp-button erp-button--primary" onClick={() => { setCreateNotice(null); setHasOpenedCreate(true); setIsCreateOpen(true); }}>新增</button>
       </div> : null}
 
       <section style={sectionStyle}>
@@ -673,12 +678,14 @@ export function ProductMasterDataClient({
           </div>
         </nav>
       </section>
-      {isCreateOpen ? <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.58)', display: 'grid', placeItems: 'center', padding: '20px' }}>
-        <section role="dialog" aria-modal="true" aria-label="新增产品" style={{ width: 'min(1100px, 100%)', maxHeight: '90vh', overflowY: 'auto', background: '#fff', color: '#0f172a', borderRadius: '20px', padding: '24px', boxShadow: '0 24px 80px rgba(15, 23, 42, 0.28)' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', alignItems: 'center' }}>
-            <button ref={closeCreateRef} type="button" className="erp-button" onClick={() => setIsCreateOpen(false)}>关闭</button>
+      {hasOpenedCreate ? <div aria-hidden={!isCreateOpen} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.58)', display: isCreateOpen ? 'grid' : 'none', placeItems: 'center', padding: '20px' }}>
+        <section role="dialog" aria-modal="true" aria-label="新增产品" style={{ width: 'min(1100px, 100%)', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff', color: '#0f172a', borderRadius: '20px', boxShadow: '0 24px 80px rgba(15, 23, 42, 0.28)' }}>
+          <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', padding: '10px 16px', borderBottom: '1px solid #e2e8f0', background: '#fff' }}>
+            <button ref={closeCreateRef} type="button" aria-label="关闭新增产品弹窗" title="关闭" className="erp-button" style={{ width: '36px', minHeight: '36px', padding: 0, fontSize: '26px', lineHeight: 1 }} onClick={() => { setIsCreateOpen(false); openCreateRef.current?.focus(); }}>×</button>
           </div>
-          <CreateProductForm endpoint={`${mutationApiBaseUrl}/products`} createdBy={updatedBy} codeRule={codeRule} salesCodeRule={salesCodeRule} supplierOptions={supplierOptions} actorAccessScopes={actorAccessScopes} customFields={customFields} onSuccess={(item) => { handleCreated(item); setIsCreateOpen(false); }} />
+          <div style={{ minHeight: 0, overflowY: 'auto', padding: '24px' }}>
+            <CreateProductForm endpoint={`${mutationApiBaseUrl}/products`} createdBy={updatedBy} codeRule={codeRule} salesCodeRule={salesCodeRule} supplierOptions={supplierOptions} actorAccessScopes={actorAccessScopes} customFields={customFields} onSuccess={(item) => { handleCreated(item); setIsCreateOpen(false); setHasOpenedCreate(false); openCreateRef.current?.focus(); }} />
+          </div>
         </section>
       </div> : null}
     </>
