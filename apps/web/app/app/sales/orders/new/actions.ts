@@ -19,6 +19,7 @@ export type SalesOrderFormState = {
 export type SalesOrderAutosaveState = {
   error: string | null;
   salesOrderId?: number;
+  title?: string;
   savedAt?: string;
   skipped?: boolean;
 };
@@ -623,10 +624,12 @@ export async function autosaveSalesOrderDraftAction(
     if (!hasValidSalesOrderId(result)) {
       return { error: '销售单自动保存失败' };
     }
+    const savedTitle = (result as { title?: unknown }).title;
 
     return {
       error: null,
       salesOrderId: result.id,
+      title: typeof savedTitle === 'string' ? savedTitle : undefined,
       savedAt: new Date().toISOString(),
     };
   } catch {

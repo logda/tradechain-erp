@@ -107,6 +107,37 @@ export type SalesOrderLineItem = {
   confirmedProductId?: number;
 };
 
+function buildDefaultSalesOrderTitle(
+  salesNo: string,
+  items: SalesOrderLineItem[] | undefined,
+  customerName: string,
+): string {
+  const productNames = (items ?? [])
+    .map((item) => item.productName?.trim())
+    .filter((name): name is string => Boolean(name));
+  return [salesNo, ...productNames, customerName.trim()].join('-');
+}
+
+function resolveDraftSalesOrderTitle(
+  existing: SalesOrderRecord,
+  submittedTitle: string | undefined,
+  items: SalesOrderLineItem[] | undefined,
+  customerName: string,
+): string {
+  const previousDefault = buildDefaultSalesOrderTitle(
+    existing.salesNo,
+    existing.items,
+    existing.customerName,
+  );
+  const title = submittedTitle?.trim();
+  if (title && title !== existing.title) {
+    return title;
+  }
+  return !title || existing.title === previousDefault
+    ? buildDefaultSalesOrderTitle(existing.salesNo, items, customerName)
+    : existing.title;
+}
+
 export type SalesOrderAttachmentInfo = {
   key?: string;
   fileName: string;
@@ -813,6 +844,9 @@ export class SalesOrderService {
         id: Number(created.id),
         salesNo: buildSequentialDocumentCode('S', Number(created.id), createdAt),
         customerOrderNo: dto.customerOrderNo?.trim() || buildSequentialDocumentCode('S', Number(created.id), createdAt),
+        title: dto.title?.trim() || buildDefaultSalesOrderTitle(
+          buildSequentialDocumentCode('S', Number(created.id), createdAt), items, customerName,
+        ),
       };
       const updated = (await this.prismaDb!.businessDocument.update({
         where: { id: created.id },
@@ -890,7 +924,7 @@ export class SalesOrderService {
       salesOrderRemark,
       salesOrderAttachments,
       items,
-      title: dto.title,
+      title: dto.title?.trim() || buildDefaultSalesOrderTitle(salesNo, items, customerName),
       salesUserId: dto.salesUserId,
       createdBy: dto.createdBy,
       createdAt,
@@ -1007,6 +1041,7 @@ export class SalesOrderService {
     const customerOrderNo = hasOwnField(dto, 'customerOrderNo')
       ? dto.customerOrderNo?.trim() || existing.salesNo
       : existing.customerOrderNo || existing.salesNo;
+    const title = resolveDraftSalesOrderTitle(existing, dto.title, items, customerName);
 
     if (this.shouldUsePrisma()) {
       const beforeData = existing;
@@ -1037,7 +1072,7 @@ export class SalesOrderService {
         salesOrderRemark,
         salesOrderAttachments,
         items,
-        title: effectiveDto.title?.trim() || beforeData.title,
+        title,
         salesUserId: effectiveDto.salesUserId,
       } as SalesOrderRecord;
       const updated = (await this.prismaDb!.businessDocument.update({
@@ -1112,7 +1147,7 @@ export class SalesOrderService {
       salesOrderRemark,
       salesOrderAttachments,
       items,
-      title: effectiveDto.title?.trim() || existing.title,
+      title,
       salesUserId: effectiveDto.salesUserId,
     } as SalesOrderRecord;
 
@@ -1381,7 +1416,6 @@ export class SalesOrderService {
     const sourceQuoteNo = payload.sourceQuoteNo?.trim() || undefined;
     const sourceDocumentType =
       payload.sourceDocumentType ?? (sourceQuoteNo?.startsWith('XQ') ? 'demand' : 'quote');
-    const sourceDocumentLabel = sourceDocumentType === 'demand' ? '需求单' : '报价单';
 
     if (this.shouldUsePrisma()) {
       const apply = async (db: PrismaSalesDb) => {
@@ -1425,7 +1459,7 @@ export class SalesOrderService {
         salesOrderAttachments: normalizeSalesOrderAttachments(
           (payload.quoteAttachments ?? []) as CreateDirectSalesOrderDto['salesOrderAttachments'],
         ),
-        title: `${sourceDocumentLabel} ${sourceQuoteNo ?? payload.quoteOrderId} 转销售单`,
+        title: '',
         salesUserId: payload.createdBy,
         items: normalizeSalesOrderItems(conversionItems),
       };
@@ -1445,6 +1479,11 @@ export class SalesOrderService {
         id: Number(created.id),
         salesNo: buildSequentialDocumentCode('S', Number(created.id), createdAt),
         customerOrderNo: buildSequentialDocumentCode('S', Number(created.id), createdAt),
+        title: buildDefaultSalesOrderTitle(
+          buildSequentialDocumentCode('S', Number(created.id), createdAt),
+          payloadRecord.items,
+          payloadRecord.customerName,
+        ),
       };
         const updated = (await db.businessDocument.update({
         where: { id: created.id },
@@ -1519,7 +1558,10 @@ export class SalesOrderService {
       salesOrderAttachments: normalizeSalesOrderAttachments(
         (payload.quoteAttachments ?? []) as CreateDirectSalesOrderDto['salesOrderAttachments'],
       ),
-      title: `${sourceDocumentLabel} ${sourceQuoteNo ?? payload.quoteOrderId} 转销售单`,
+      title: buildDefaultSalesOrderTitle(
+        salesNo, normalizeSalesOrderItems(conversionItems),
+        payload.customerName?.trim() || `客户 ${payload.customerId}`,
+      ),
       salesUserId: payload.createdBy,
       items: normalizeSalesOrderItems(conversionItems),
     };

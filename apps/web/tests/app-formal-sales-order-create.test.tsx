@@ -1188,6 +1188,32 @@ describe('formal sales order create page', () => {
     );
   });
 
+  it('returns the saved default title for the new-order form', async () => {
+    const formData = new FormData();
+    formData.set('customerEntryMode', 'existing');
+    formData.set('customerId', '1');
+    formData.set('selectedCustomerName', 'Acme Trading');
+    formData.set('customerName', 'Acme Trading');
+    formData.set('title', '');
+    formData.set('salesUserId', '2001');
+    formData.set('createdBy', '2001');
+    formData.set('salesOrderItems', JSON.stringify([{ lineNo: 1, sku: 'A', productName: '灯带一', unit: 'set', packageQuantity: 1, unitsPerPackage: 1, totalQuantity: 1, quantity: 1, salePrice: 10, amount: 10 }]));
+    formData.set('role', 'sales');
+    formData.set('user', 'Zoe');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(createJsonResponse({
+      id: 112,
+      salesNo: 'S202609250112',
+      title: 'S202609250112-灯带一-Acme Trading',
+      status: 'draft',
+    })));
+
+    await expect(autosaveSalesOrderDraftAction(formData)).resolves.toMatchObject({
+      error: null,
+      salesOrderId: 112,
+      title: 'S202609250112-灯带一-Acme Trading',
+    });
+  });
+
   it('autosaves an existing sales order draft through the draft endpoint', async () => {
     const formData = new FormData();
     formData.set('salesOrderId', '108');

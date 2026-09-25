@@ -109,6 +109,34 @@ describe('SalesOrderService prisma document storage', () => {
     });
   });
 
+  it('persists the generated title in Prisma after the sales number is assigned', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const prismaMock = {
+      businessDocument: {
+        create: jest.fn().mockResolvedValue({ id: 112n }),
+        update: jest.fn().mockResolvedValue({ id: 112n }),
+      },
+      operationLog: { create: jest.fn().mockResolvedValue({ id: 1n }) },
+    };
+    const service = new SalesOrderService(prismaMock as unknown as PrismaService);
+    const created = await service.create({
+      customerName: 'Acme Trading',
+      title: '',
+      salesUserId: 2001,
+      createdBy: 2001,
+      items: [
+        { sku: 'A', productName: '灯带一', quantity: 1, salePrice: 10 },
+        { sku: 'B', productName: '灯带二', quantity: 1, salePrice: 20 },
+      ],
+    });
+
+    expect(created.title).toBe(`${created.salesNo}-灯带一-灯带二-Acme Trading`);
+    expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
+      where: { id: 112n },
+      data: expect.objectContaining({ payload: expect.objectContaining({ title: created.title }) }),
+    });
+  });
+
   it('creates and submits direct sales orders in Prisma when requested', async () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const createdAt = new Date('2026-07-13T12:05:00.000Z');
@@ -435,7 +463,10 @@ describe('SalesOrderService prisma document storage', () => {
       customerName: 'Acme Trading',
       createdBy: 2001,
       quoteConfirmed: true,
-      items: [],
+      items: [
+        { lineNo: 1, productId: 0, sku: 'A', productName: '灯带一', unit: 'set', quantity: 1, salePrice: 10 },
+        { lineNo: 2, productId: 0, sku: 'B', productName: '灯带二', unit: 'set', quantity: 1, salePrice: 20 },
+      ],
     });
 
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
@@ -450,5 +481,10 @@ describe('SalesOrderService prisma document storage', () => {
       sourceQuoteVersionNo: 2,
     });
     expect(converted.customerOrderNo).toBe(converted.salesNo);
+    expect(converted.title).toBe(`${converted.salesNo}-灯带一-灯带二-Acme Trading`);
+    expect(txMock.businessDocument.update).toHaveBeenCalledWith({
+      where: { id: 111n },
+      data: expect.objectContaining({ payload: expect.objectContaining({ title: converted.title }) }),
+    });
   });
 });

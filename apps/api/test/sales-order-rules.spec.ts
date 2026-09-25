@@ -153,6 +153,42 @@ describe('SalesOrderService', () => {
     ]);
   });
 
+  it('defaults new titles from the sales number, ordered product names and customer, then preserves manual edits', async () => {
+    const service = new SalesOrderService();
+    const items = [
+      { sku: 'A', productName: '  灯带一  ', quantity: 1, salePrice: 10 },
+      { sku: 'B', productName: '灯带二', quantity: 2, salePrice: 20 },
+    ];
+    const created = await service.create({
+      customerName: 'Acme Trading',
+      title: '',
+      salesUserId: 2001,
+      createdBy: 2001,
+      items,
+    });
+
+    expect(created.title).toBe(`${created.salesNo}-灯带一-灯带二-Acme Trading`);
+    const updated = await service.updateDraft(created.id, {
+      customerName: 'Beta Trading',
+      title: created.title,
+      salesUserId: 2001,
+      createdBy: 2001,
+      items: [...items, { sku: 'C', productName: '灯带三', quantity: 3, salePrice: 30 }],
+    });
+    expect(updated.title).toBe(`${created.salesNo}-灯带一-灯带二-灯带三-Beta Trading`);
+
+    const manuallyTitled = await service.updateDraft(created.id, {
+      customerName: 'Beta Trading', title: '客户约定标题', salesUserId: 2001, createdBy: 2001,
+    });
+    expect(manuallyTitled.title).toBe('客户约定标题');
+    const afterItemEdit = await service.updateDraft(created.id, {
+      customerName: 'Beta Trading', salesUserId: 2001, createdBy: 2001,
+      title: '客户约定标题',
+      items,
+    });
+    expect(afterItemEdit.title).toBe('客户约定标题');
+  });
+
   it('defaults an omitted direct sales line unit to 个/pc', async () => {
     const service = new SalesOrderService();
     const result = await service.create({
@@ -516,6 +552,7 @@ describe('SalesOrderService', () => {
       sourceQuoteNo: 'XQ202607080088',
       createdBy: 2001,
       quoteConfirmed: true,
+      items: [{ lineNo: 1, productId: 1, sku: 'SKU-LED-001', productName: '智能 LED 灯带', unit: 'set', quantity: 500, salePrice: 15.9 }],
     });
     const sourceDemand = resolveQuoteStore().getQuote(88);
 
@@ -523,6 +560,7 @@ describe('SalesOrderService', () => {
     expect(result.sourceQuoteOrderId).toBe(88);
     expect(result.sourceDocumentType).toBe('demand');
     expect(result.sourceQuoteNo).toBe('XQ202607080088');
+    expect(result.title).toBe(`${result.salesNo}-智能 LED 灯带-Acme Trading`);
     await expect(
       service.list({ docNo: result.salesNo, page: 1, pageSize: 10 }),
     ).resolves.toMatchObject({

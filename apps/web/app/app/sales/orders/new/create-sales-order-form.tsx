@@ -848,6 +848,7 @@ export function CreateSalesOrderForm({
     Record<number, Array<{ name: string; url: string; isImage: boolean }>>
   >({});
   const formRef = useRef<HTMLFormElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSeqRef = useRef(0);
   const autosaveRunningRef = useRef(false);
@@ -945,6 +946,7 @@ export function CreateSalesOrderForm({
           setAutosaveStatus('saving');
           setAutosaveMessage('正在自动保存草稿');
           const formData = new FormData(form);
+          const submittedTitle = String(formData.get('title') ?? '');
           formData.set('submitMode', 'draft');
           formData.set('skipAttachmentUpload', 'true');
           autosaveRequestKeyRef.current ??= createMutationRequestKey();
@@ -973,6 +975,10 @@ export function CreateSalesOrderForm({
             setAutosaveStatus('skipped');
             setAutosaveMessage('完善订货单位和销售明细后会自动保存草稿');
             return;
+          }
+
+          if (result.title && titleInputRef.current?.value === submittedTitle) {
+            titleInputRef.current.value = result.title;
           }
 
           setAutosaveStatus('saved');
@@ -1341,8 +1347,10 @@ export function CreateSalesOrderForm({
       <label style={labelStyle}>
         订单标题 Title
         <input
+          ref={titleInputRef}
           name="title"
           type="text"
+          placeholder="首次保存后生成：销售单号-产品名称-客户名称，可修改"
           defaultValue={initialSalesOrder?.title ?? ''}
           style={inputStyle}
         />

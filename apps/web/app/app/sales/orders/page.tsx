@@ -311,6 +311,10 @@ const docNoStyle = {
 const titleStyle = {
   display: 'block',
   marginTop: '4px',
+  maxWidth: '260px',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
   color: '#334155',
   fontSize: '13px',
   lineHeight: 1.45,
@@ -687,7 +691,7 @@ export default async function AppSalesOrdersPage({
                 <tr key={item.detailHref}>
                   <td style={tableCellStyle}>
                     <strong style={docNoStyle}>{item.docNo}</strong>
-                    <span style={titleStyle}>{item.title}</span>
+                    <span style={titleStyle} title={item.title}>{item.title}</span>
                   </td>
                   <td style={tableCellStyle}>
                     <span
