@@ -336,7 +336,7 @@ describe('MutationActionForm', () => {
     });
   });
 
-  it('alerts generated purchase order numbers after a successful mutation', async () => {
+  it('shows generated purchase order numbers in the project dialog and refreshes after dismissal', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -364,18 +364,19 @@ describe('MutationActionForm', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '审批通过' }));
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(alertMock).toHaveBeenCalledWith(
-        [
-          '已生成 2 张采购单：',
-          '- P202607110301',
-          '- P202607110302',
-          '',
-          '请提醒销售和采购及时跟进。',
-        ].join('\n'),
-      );
-    });
+    const notice = await screen.findByRole('alertdialog');
+    expect(notice).toHaveTextContent('已生成 2 张采购单');
+    expect(notice).toHaveTextContent('P202607110301');
+    expect(notice).toHaveTextContent('P202607110302');
+    expect(notice).toHaveTextContent('请提醒销售和采购及时跟进');
+    expect(alertMock).not.toHaveBeenCalled();
+    expect(refreshMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '知道了' }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '审批通过' })).toBeDisabled();
   });
 
   it('locks a successful action while its old view remains and sends one request key', async () => {

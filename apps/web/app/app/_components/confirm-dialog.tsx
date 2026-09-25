@@ -24,10 +24,12 @@ const buttonStyle = {
   cursor: 'pointer',
 } satisfies React.CSSProperties;
 
-export function ConfirmDialog({ message, confirmLabel = '确认', busy = false, onConfirm, onCancel }: {
+export function ConfirmDialog({ message, title = '请确认操作', confirmLabel = '确认', busy = false, notice = false, onConfirm, onCancel }: {
   message: string;
+  title?: string;
   confirmLabel?: string;
   busy?: boolean;
+  notice?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -37,7 +39,7 @@ export function ConfirmDialog({ message, confirmLabel = '确认', busy = false, 
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    cancelRef.current?.focus();
+    (notice ? confirmRef : cancelRef).current?.focus();
     return () => {
       if (previousFocus?.isConnected) previousFocus.focus();
     };
@@ -58,7 +60,9 @@ export function ConfirmDialog({ message, confirmLabel = '确认', busy = false, 
             onCancel();
           }
           if (event.key === 'Tab') {
-            if (event.shiftKey && document.activeElement === cancelRef.current) {
+            if (notice) {
+              event.preventDefault();
+            } else if (event.shiftKey && document.activeElement === cancelRef.current) {
               event.preventDefault();
               confirmRef.current?.focus();
             } else if (!event.shiftKey && document.activeElement === confirmRef.current) {
@@ -68,10 +72,10 @@ export function ConfirmDialog({ message, confirmLabel = '确认', busy = false, 
           }
         }}
       >
-        <h2 id={`${dialogId}-title`} style={{ margin: '0 0 12px', fontSize: '18px', color: '#0f172a' }}>请确认操作</h2>
+        <h2 id={`${dialogId}-title`} style={{ margin: '0 0 12px', fontSize: '18px', color: '#0f172a' }}>{title}</h2>
         <p id={`${dialogId}-message`} style={{ margin: '0 0 24px', color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{message}</p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
-          <button ref={cancelRef} type="button" disabled={busy} onClick={onCancel} style={buttonStyle}>取消</button>
+          {!notice ? <button ref={cancelRef} type="button" disabled={busy} onClick={onCancel} style={buttonStyle}>取消</button> : null}
           <button ref={confirmRef} type="button" disabled={busy} onClick={onConfirm} style={{ ...buttonStyle, borderColor: '#0f172a', background: '#0f172a', color: '#fff' }}>{busy ? '处理中...' : confirmLabel}</button>
         </div>
       </div>

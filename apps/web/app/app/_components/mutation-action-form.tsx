@@ -95,7 +95,7 @@ function extractGeneratedPurchaseNos(result: unknown) {
     .filter((item): item is string => item !== null);
 }
 
-function buildPurchaseOrderAlertMessage(result: unknown) {
+function buildPurchaseOrderNoticeMessage(result: unknown) {
   const purchaseNos = extractGeneratedPurchaseNos(result);
   if (purchaseNos.length === 0) {
     return null;
@@ -261,10 +261,12 @@ export function MutationActionForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [purchaseOrderNotice, setPurchaseOrderNotice] = useState<string | null>(null);
   const submissionLocked = useRef(false);
   const confirmationLocked = useRef(false);
   const pendingForm = useRef<HTMLFormElement | null>(null);
   const requestKey = useRef<string | null>(null);
+  const pendingSuccessNavigation = useRef<(() => void) | null>(null);
   const canSubmit = hasRequiredAction(requiredAction, requestHeaders);
 
   async function submitMutation(form: HTMLFormElement) {
@@ -299,22 +301,25 @@ export function MutationActionForm({
         success: describeSuccess(result.result, successLabel),
       });
       setIsComplete(true);
-      onSuccess?.(result.result);
-
-      const purchaseOrderAlertMessage = buildPurchaseOrderAlertMessage(result.result);
-      if (purchaseOrderAlertMessage && typeof window !== 'undefined') {
-        window.alert(purchaseOrderAlertMessage);
-      }
-
       const redirectId = successRedirectBasePath
         ? resolveSuccessRedirectId(result.result)
         : null;
-      if (successRedirectBasePath && redirectId !== null) {
-        router.push(
-          `${successRedirectBasePath.replace(/\/$/, '')}/${redirectId}`,
-        );
-      } else if (!onSuccess) {
-        router.refresh?.();
+      const finishSuccess = () => {
+        onSuccess?.(result.result);
+        if (successRedirectBasePath && redirectId !== null) {
+          router.push(
+            `${successRedirectBasePath.replace(/\/$/, '')}/${redirectId}`,
+          );
+        } else if (!onSuccess) {
+          router.refresh?.();
+        }
+      };
+      const noticeMessage = buildPurchaseOrderNoticeMessage(result.result);
+      if (noticeMessage) {
+        pendingSuccessNavigation.current = finishSuccess;
+        setPurchaseOrderNotice(noticeMessage);
+      } else {
+        finishSuccess();
       }
     } catch (error) {
       submissionLocked.current = false;
@@ -352,6 +357,13 @@ export function MutationActionForm({
     pendingForm.current = null;
     setConfirmationOpen(false);
     void submitMutation(form);
+  }
+
+  function dismissPurchaseOrderNotice() {
+    setPurchaseOrderNotice(null);
+    const navigate = pendingSuccessNavigation.current;
+    pendingSuccessNavigation.current = null;
+    navigate?.();
   }
 
   return (
@@ -441,6 +453,16 @@ export function MutationActionForm({
       </button>
       {confirmationOpen && confirmMessage ? (
         <ConfirmDialog message={confirmMessage} onConfirm={confirmSubmission} onCancel={cancelConfirmation} />
+      ) : null}
+      {purchaseOrderNotice ? (
+        <ConfirmDialog
+          title="操作成功"
+          message={purchaseOrderNotice}
+          confirmLabel="知道了"
+          notice
+          onConfirm={dismissPurchaseOrderNotice}
+          onCancel={dismissPurchaseOrderNotice}
+        />
       ) : null}
     </form>
   );
