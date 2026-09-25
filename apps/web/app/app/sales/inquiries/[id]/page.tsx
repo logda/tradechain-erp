@@ -4,7 +4,7 @@ import { AuditLogTable } from '../../../_components/audit-log-table';
 import { ActionPermissionNote } from '../../../_components/action-permission-note';
 import { ImagePreviewGallery } from '../../../_components/image-preview-gallery';
 import { MutationActionForm } from '../../../_components/mutation-action-form';
-import { resolveDemoSession } from '../../../_lib/demo-session';
+import { canViewFormalModule, resolveDemoSession } from '../../../_lib/demo-session';
 import {
   canUseFormalInquiryBossConfirmAction,
   canUseFormalInquirySubmitAction,
@@ -78,6 +78,8 @@ type InquiryDetail = {
 type SourceQuoteDetail = {
   id: number;
   quoteNo: string;
+  documentType?: 'demand' | 'quote';
+  productSource?: 'candidate' | 'existing';
   status: string;
   currentVersionNo: number;
   customerId: number;
@@ -457,19 +459,26 @@ function buildQuoteFromInquiryHref(quoteId: number, inquiryId: number) {
   return `/app/sales/quotes/${quoteId}?fromInquiryId=${inquiryId}`;
 }
 
+function isDemandSource(quoteNo: string, documentType?: SourceQuoteDetail['documentType']) {
+  return documentType === 'demand' || (!documentType && quoteNo.startsWith('XQ'));
+}
+
 function renderSourceQuoteOverview(quote: SourceQuoteDetail, inquiryId: number) {
+  const isDemand = isDemandSource(quote.quoteNo, quote.documentType);
   return (
     <section style={quoteOverviewStyle}>
       <div style={quoteOverviewHeaderStyle}>
         <div>
-          <p style={labelStyle}>来源报价概览 Quote Overview</p>
+          <p style={labelStyle}>{isDemand ? '来源需求概览 Demand Overview' : '来源报价概览 Quote Overview'}</p>
           <h2 style={{ margin: '8px 0 0', color: '#0f172a' }}>
-            报价单 {quote.quoteNo}
+            {isDemand ? '需求单' : '报价单'} {quote.quoteNo}
           </h2>
         </div>
-        <Link href={buildQuoteFromInquiryHref(quote.id, inquiryId)} style={subtleBadgeStyle}>
-          打开完整报价单
-        </Link>
+        {!isDemand ? (
+          <Link href={buildQuoteFromInquiryHref(quote.id, inquiryId)} style={subtleBadgeStyle}>
+            打开完整报价单
+          </Link>
+        ) : null}
       </div>
 
       <div style={quoteOverviewMetaStyle}>
@@ -485,7 +494,7 @@ function renderSourceQuoteOverview(quote: SourceQuoteDetail, inquiryId: number) 
           <p style={detailTextStyle}>客户编码：{quote.customerCode || '-'}</p>
         </article>
         <article style={infoCardStyle}>
-          <p style={labelStyle}>报价版本 Version</p>
+          <p style={labelStyle}>{isDemand ? '需求版本 Version' : '报价版本 Version'}</p>
           <p style={valueStyle}>V{quote.currentVersionNo}</p>
           <p style={detailTextStyle}>来源：{quote.sourceCode || '-'}</p>
         </article>
@@ -510,7 +519,9 @@ function renderSourceQuoteOverview(quote: SourceQuoteDetail, inquiryId: number) 
                 <td style={cellStyle}>{item.lineNo}</td>
                 <td style={cellStyle}>
                   <strong>{item.productName}</strong>
-                  <p style={{ ...detailTextStyle, marginTop: '4px' }}>{item.sku}</p>
+                  {quote.productSource !== 'candidate' && item.sku.trim() ? (
+                    <p style={{ ...detailTextStyle, marginTop: '4px' }}>{item.sku}</p>
+                  ) : null}
                 </td>
                 <td style={cellStyle}>
                   {renderSourceQuoteItemImages(item)}
@@ -613,6 +624,7 @@ export default async function AppFormalInquiryDetailPage({
   const canConfirmFinalPrice =
     canBossConfirmInquiry && inquiry.status === 'pending_boss_review';
   const hasAvailableActions = canSubmitComparison || canConfirmFinalPrice;
+  const sourceIsDemand = isDemandSource(inquiry.quoteOrderNo, sourceQuote?.documentType);
 
   return (
     <AppShell
@@ -628,10 +640,12 @@ export default async function AppFormalInquiryDetailPage({
           <Link href="/app" style={backLinkStyle}>
             返回正式首页
           </Link>
-          <Link href="/app/sales" style={backLinkStyle}>
-            返回销售中心
-          </Link>
-          {canBossConfirmInquiry ? (
+          {canViewFormalModule(session, 'sales') ? (
+            <Link href="/app/sales" style={backLinkStyle}>
+              返回销售中心
+            </Link>
+          ) : null}
+          {canBossConfirmInquiry && !sourceIsDemand ? (
             <Link
               href={buildQuoteFromInquiryHref(inquiry.quoteOrderId, inquiry.id)}
               style={backLinkStyle}
@@ -651,9 +665,9 @@ export default async function AppFormalInquiryDetailPage({
 
         <section style={gridStyle}>
           <article style={infoCardStyle}>
-            <p style={labelStyle}>来源报价 Source Quote</p>
+            <p style={labelStyle}>{sourceIsDemand ? '来源需求 Source Demand' : '来源报价 Source Quote'}</p>
             <p style={valueStyle}>{inquiry.quoteOrderNo}</p>
-            <p style={detailTextStyle}>报价版本：V{inquiry.quoteVersionNo}</p>
+            <p style={detailTextStyle}>{sourceIsDemand ? '需求版本' : '报价版本'}：V{inquiry.quoteVersionNo}</p>
           </article>
           <article style={infoCardStyle}>
             <p style={labelStyle}>当前状态 Status</p>
@@ -664,7 +678,7 @@ export default async function AppFormalInquiryDetailPage({
 
         {sourceQuote ? renderSourceQuoteOverview(sourceQuote, inquiry.id) : null}
 
-        <section style={actionPanelStyle}>
+        {!canConfirmFinalPrice ? <section style={actionPanelStyle}>
           <h2>比价明细</h2>
           <div style={tableWrapStyle}>
             <table style={tableStyle}>
@@ -710,7 +724,7 @@ export default async function AppFormalInquiryDetailPage({
               </tbody>
             </table>
           </div>
-        </section>
+        </section> : null}
 
         <section style={actionPanelStyle}>
           <h2>询价动作</h2>
@@ -737,12 +751,14 @@ export default async function AppFormalInquiryDetailPage({
                 label={getBossConfirmLabel(inquiry.status)}
                 requestHeaders={actionRequestHeaders}
                 quoteNo={inquiry.quoteOrderNo}
+                sourceIsDemand={sourceIsDemand}
                 quoteVersionNo={inquiry.quoteVersionNo}
                 customerName={
                   sourceQuote?.customerName ??
                   inquiry.customerName
                 }
                 customerFullName={sourceQuote?.customerFullName ?? inquiry.customerFullName}
+                showSku={sourceQuote?.productSource !== 'candidate'}
                 items={inquiry.items}
                 rejectAction={
                   <MutationActionForm

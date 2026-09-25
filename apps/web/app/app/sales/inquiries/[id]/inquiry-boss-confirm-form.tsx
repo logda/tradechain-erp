@@ -14,9 +14,11 @@ type InquiryBossConfirmFormProps = {
   label: string;
   requestHeaders?: Record<string, string>;
   quoteNo: string;
+  sourceIsDemand?: boolean;
   quoteVersionNo: number;
   customerName: string;
   customerFullName?: string | null;
+  showSku?: boolean;
   rejectAction?: React.ReactNode;
   items: Array<{
     itemId: number;
@@ -253,6 +255,7 @@ function SupplierQuoteDetails({
         {supplierQuote.outerCartonGrossWeightKg ?? '-'} kg
       </span>
       <span>备注 {supplierQuote.remark || '-'}</span>
+      {supplierQuote.samplingInfo?.trim() ? <span>打样信息 {supplierQuote.samplingInfo}</span> : null}
     </span>
   );
 }
@@ -262,9 +265,11 @@ export function InquiryBossConfirmForm({
   label,
   requestHeaders,
   quoteNo,
+  sourceIsDemand = false,
   quoteVersionNo,
   customerName,
   customerFullName,
+  showSku = true,
   rejectAction,
   items,
 }: InquiryBossConfirmFormProps) {
@@ -378,7 +383,7 @@ export function InquiryBossConfirmForm({
         <span style={badgeStyle}>V{quoteVersionNo}</span>
       </div>
 
-      <p style={summaryStyle}>报价单 {quoteNo}</p>
+      <p style={summaryStyle}>{sourceIsDemand ? '需求单' : '报价单'} {quoteNo}</p>
       <p style={summaryStyle}>
         客户：
         {formatCounterpartyBilingualDisplay(customerName, {
@@ -397,7 +402,7 @@ export function InquiryBossConfirmForm({
                 行 {item.lineNo} / {item.productName}
               </p>
               <p style={metaStyle}>
-                {item.sku} · 已录入 {item.supplierQuotes.length} 条供应商报价 · 最低采购价：
+                {showSku && item.sku.trim() ? `${item.sku} · ` : ''}已录入 {item.supplierQuotes.length} 条供应商报价 · 最低比价供应数：{item.requiredSupplierCount} · 最低采购价：
                 {getLowestPurchasePrice(item)}
               </p>
             </div>

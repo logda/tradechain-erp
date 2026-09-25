@@ -20,6 +20,8 @@ function buildSourceQuoteFixture(detail: unknown) {
   return {
     id: inquiry.quoteOrderId ?? 1,
     quoteNo: inquiry.quoteOrderNo ?? 'Q-RUNTIME-001',
+    documentType: inquiry.quoteOrderNo?.startsWith('XQ') ? 'demand' : 'quote',
+    productSource: inquiry.quoteOrderNo?.startsWith('XQ') ? 'candidate' : 'existing',
     status: 'submitted',
     currentVersionNo: inquiry.quoteVersionNo ?? 1,
     customerId: 1,
@@ -351,6 +353,7 @@ describe('formal inquiry pages', () => {
               supplierCode: 'SUP-BRAVO',
               supplierName: 'Bravo Industrial',
               purchasePrice: 19.6,
+              samplingInfo: '打样需三天',
             },
             {
               supplierSourceMode: 'manual',
@@ -407,18 +410,18 @@ describe('formal inquiry pages', () => {
     expect(screen.getAllByText('客户：博瑞零售 / Bravo Retail')).toHaveLength(2);
     expect(screen.getByText('客户价 / 销售单价')).toBeInTheDocument();
     expect(screen.getByText('来源报价概览 Quote Overview')).toBeInTheDocument();
-    expect(screen.getAllByText('图片').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('图片')).toHaveLength(1);
     expect(screen.getByLabelText('行 1 最终售价')).toHaveValue(19.6);
     expect(screen.getByText(/等待老板确认最终售价/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '再次提交比价' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '老板确认' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '驳回询价' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '比价明细' })).not.toBeInTheDocument();
+    expect(screen.getByText(/最低比价供应数：2/)).toBeInTheDocument();
+    expect(screen.getByText('打样信息 打样需三天')).toBeInTheDocument();
     const bossActions = screen.getByRole('group', { name: '老板询价操作' });
     expect(within(bossActions).getByRole('button', { name: '老板确认' })).toBeInTheDocument();
     expect(within(bossActions).getByRole('button', { name: '驳回询价' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '比价明细' }).compareDocumentPosition(
-      screen.getByRole('heading', { name: '询价动作' }),
-    ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(
       screen.getByText(
         '待老板确认期间，供应商信息已锁定；老板驳回后，采购可继续询价并重新提交。',
@@ -430,7 +433,7 @@ describe('formal inquiry pages', () => {
       'src',
       'http://127.0.0.1:3001/uploads/formal-quotes/2026/07/21/inquiry-plug.png',
     );
-    expect(screen.getAllByAltText('多孔插座 图片 1')).toHaveLength(2);
+    expect(screen.getAllByAltText('多孔插座 图片 1')).toHaveLength(1);
     fireEvent.click(screen.getAllByRole('button', { name: '查看 多孔插座 图片 1' })[0]);
     expect(
       screen.getByRole('dialog', { name: '多孔插座 图片预览' }),
@@ -461,7 +464,51 @@ describe('formal inquiry pages', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText('行 1 供应商 1')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('行 1 采购价 1')).not.toBeInTheDocument();
-    expect(screen.getByText('SUP-BRAVO / 光源制造 - 19.6')).toBeInTheDocument();
+    expect(screen.getByText('SUP-BRAVO / 光源制造 / 采购价 19.6')).toBeInTheDocument();
+  });
+
+  it('shows a new-product demand as the inquiry source without quote links or SKU', async () => {
+    stubInquiryDetailFetch({
+      id: 102,
+      inquiryNo: 'IQ202607080102',
+      status: 'pending_boss_review',
+      quoteOrderId: 812,
+      quoteOrderNo: 'XQ-2026-09-25-0002',
+      quoteVersionNo: 1,
+      customerName: '测试客户',
+      createdBy: 'Zoe',
+      supplierCount: 2,
+      comparisonSummary: '待老板确认',
+      createdAt: '2026-09-25T08:00:00.000Z',
+      detailHref: '/app/sales/inquiries/102',
+      items: [{
+        itemId: 102,
+        lineNo: 1,
+        sku: 'NEW-TEMP-SKU',
+        productName: '新品',
+        requiredSupplierCount: 2,
+        supplierQuotes: [
+          { supplierSourceMode: 'manual', supplierName: '供应商甲', purchasePrice: 9 },
+          { supplierSourceMode: 'manual', supplierName: '供应商乙', purchasePrice: 10 },
+        ],
+        confirmedSalePrice: 0,
+      }],
+    });
+    const { default: AppFormalInquiryDetailPage } = await import(
+      '../app/app/sales/inquiries/[id]/page'
+    );
+
+    render(<>{await AppFormalInquiryDetailPage({
+      params: Promise.resolve({ id: '102' }),
+      searchParams: Promise.resolve({ role: 'boss', user: 'Mia' }),
+    })}</>);
+
+    expect(screen.getByRole('heading', { name: '需求单 XQ-2026-09-25-0002' })).toBeInTheDocument();
+    expect(screen.getAllByText('需求单 XQ-2026-09-25-0002')).toHaveLength(2);
+    expect(screen.queryByRole('link', { name: '打开完整报价单' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '打开源报价详情' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '比价明细' })).not.toBeInTheDocument();
+    expect(screen.queryByText('NEW-TEMP-SKU')).not.toBeInTheDocument();
   });
 
   it('hides inquiry actions once the boss has already confirmed the inquiry', async () => {
@@ -751,6 +798,7 @@ describe('formal inquiry pages', () => {
     expect(screen.queryByText('无权限访问正式询价单')).not.toBeInTheDocument();
     expect(screen.getByText('IQ-PURCHASE-001')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '进入需求/报价模块' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回销售中心' })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('http://127.0.0.1:3001/api/quote-inquiries'),
       expect.objectContaining({
@@ -874,6 +922,11 @@ describe('formal inquiry pages', () => {
     expect(screen.getByRole('heading', { name: '正式询价详情' })).toBeInTheDocument();
     expect(screen.queryByText('无权限访问正式询价单')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '提交比价' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '比价明细' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '比价明细' }).compareDocumentPosition(
+      screen.getByRole('heading', { name: '询价动作' }),
+    ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('link', { name: '返回销售中心' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('columnheader', { name: '老板确认售价' }),
     ).not.toBeInTheDocument();
