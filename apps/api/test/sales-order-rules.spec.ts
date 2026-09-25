@@ -128,7 +128,7 @@ describe('SalesOrderService', () => {
     expect(result.currentVersionNo).toBe(1);
     expect(result.sourceMode).toBe('direct');
     expect(result.customerName).toBe('Acme Trading');
-    expect(result.customerOrderNo).toMatch(/^PO-/);
+    expect(result.customerOrderNo).toBe(result.salesNo);
     expect(result.orderingUnit).toBe('Acme Trading');
     expect(result.storeName).toBe('02 Libuys');
     expect(result.orderDate).toBe('2026-05-30');
@@ -291,6 +291,29 @@ describe('SalesOrderService', () => {
         operatorId: 2001,
       }),
     );
+  });
+
+  it('lets sales replace the default customer PO number when submitting a draft', async () => {
+    const service = new SalesOrderService();
+    const created = await service.create({
+      customerName: 'Acme Trading',
+      title: '客户 PO 调整',
+      salesUserId: 2001,
+      createdBy: 2001,
+    });
+
+    expect(created.customerOrderNo).toBe(created.salesNo);
+    const submitted = await service.updateDraft(created.id, {
+      submitMode: 'submit',
+      customerOrderNo: 'CUSTOMER-PO-2026',
+      customerName: 'Acme Trading',
+      title: '客户 PO 调整',
+      salesUserId: 2001,
+      createdBy: 2001,
+    });
+
+    expect(submitted.customerOrderNo).toBe('CUSTOMER-PO-2026');
+    expect((await service.getDetail(created.id)).customerOrderNo).toBe('CUSTOMER-PO-2026');
   });
 
   it('preserves existing line items when draft autosave sends a partial payload', async () => {
@@ -464,7 +487,7 @@ describe('SalesOrderService', () => {
     expect(result.sourceDocumentType).toBe('quote');
     expect(result.sourceQuoteNo).toBeUndefined();
     expect(result.id).not.toBe(7);
-    expect(result.salesNo).toMatch(/^S20260711\d{4}$/);
+    expect(result.salesNo).toMatch(/^S\d{6}\d{4}$/);
     expect(result.salesNo).not.toBe('S202607080001');
   });
 
@@ -583,7 +606,7 @@ describe('SalesOrderService', () => {
     expect(converted.customerName).toBe('Acme Trading');
     expect(converted.sourceDocumentType).toBe('quote');
     expect(converted.sourceQuoteNo).toBe('Q202607080077');
-    expect(converted.customerOrderNo).toMatch(/^PO-/);
+    expect(converted.customerOrderNo).toBe(converted.salesNo);
     expect(converted.customerOrderNo).not.toBe('Q202607080077');
     expect(converted.storeName).toBe('02 Libuys');
     expect(converted.orderDate).toBe('2026-05-30');

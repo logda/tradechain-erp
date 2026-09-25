@@ -859,7 +859,6 @@ export default async function AppSalesOrderDetailPage({
                   <th style={headCellStyle}>Current Status 当前进度</th>
                   <th style={headCellStyle}>Order No 订单编码</th>
                   <th style={headCellStyle}>Title 订单标题</th>
-                  <th style={headCellStyle}>客户订单号 Customer PO No</th>
                   <th style={headCellStyle}>Ordering 订货单位</th>
                   <th style={headCellStyle}>门店</th>
                   <th style={headCellStyle}>Order Date 订货日期</th>
@@ -868,6 +867,7 @@ export default async function AppSalesOrderDetailPage({
                   <th style={headCellStyle}>Ship to 发货至</th>
                   <th style={headCellStyle}>备注 Remark</th>
                   <th style={headCellStyle}>销售单附件</th>
+                  <th style={headCellStyle}>客户订单号 Customer PO No</th>
                 </tr>
               </thead>
               <tbody>
@@ -875,7 +875,6 @@ export default async function AppSalesOrderDetailPage({
                   <td style={cellStyle}>{formatSalesOrderStatus(salesOrder.status)}</td>
                   <td style={cellStyle}>{formatSalesValue(salesOrder.salesNo)}</td>
                   <td style={cellStyle}>{formatSalesValue(salesOrder.title)}</td>
-                  <td style={cellStyle}>{formatSalesValue(salesOrder.customerOrderNo)}</td>
                   <td style={cellStyle}>
                     {formatSalesValue(
                       formatCounterpartyBilingualDisplay(
@@ -900,6 +899,7 @@ export default async function AppSalesOrderDetailPage({
                   <td style={cellStyle}>
                     {renderSalesOrderAttachments(salesOrder.salesOrderAttachments)}
                   </td>
+                  <td style={cellStyle}>{formatSalesValue(salesOrder.customerOrderNo)}</td>
                 </tr>
               </tbody>
             </table>

@@ -82,9 +82,10 @@ describe('SalesOrderService prisma document storage', () => {
     expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
       where: { id: 108n },
       data: expect.objectContaining({
-        docNo: 'S202607110108',
+        docNo: created.salesNo,
         payload: expect.objectContaining({
-          salesNo: 'S202607110108',
+          salesNo: created.salesNo,
+          customerOrderNo: created.salesNo,
           customerName: 'Acme Trading',
           title: 'Acme 夏季补货',
         }),
@@ -100,7 +101,8 @@ describe('SalesOrderService prisma document storage', () => {
     });
     expect(created).toMatchObject({
       id: 108,
-      salesNo: 'S202607110108',
+      salesNo: expect.stringMatching(/^S\d{10}$/),
+      customerOrderNo: created.salesNo,
       sourceMode: 'direct',
       customerName: 'Acme Trading',
       title: 'Acme 夏季补货',
@@ -423,13 +425,7 @@ describe('SalesOrderService prisma document storage', () => {
         callback(txMock),
       ),
     };
-    const documentCodeRuleService = {
-      generateCustomerOrderNo: jest.fn().mockResolvedValue('CO202607130001'),
-    };
-    const service = new SalesOrderService(
-      prismaMock as unknown as PrismaService,
-      documentCodeRuleService as never,
-    );
+    const service = new SalesOrderService(prismaMock as unknown as PrismaService);
 
     const converted = await service.convertConfirmedQuote({
       quoteOrderId: 77,
@@ -453,5 +449,6 @@ describe('SalesOrderService prisma document storage', () => {
       sourceQuoteOrderId: 77,
       sourceQuoteVersionNo: 2,
     });
+    expect(converted.customerOrderNo).toBe(converted.salesNo);
   });
 });

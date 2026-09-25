@@ -113,7 +113,7 @@ describe('QuoteService prisma document storage', () => {
       ],
     });
 
-    const quoteNoPattern = /^BJ-\d{4}-\d{2}-\d{2}-\d{4}$/;
+    const quoteNoPattern = /^BJ\d{6}\d{4}$/;
     expect(prismaMock.businessDocument.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         bizType: 'quote',

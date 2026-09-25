@@ -17,6 +17,7 @@ describe('PurchaseOrderService prisma document storage', () => {
     const createdAt = new Date('2026-07-13T14:00:00.000Z');
     const prismaMock = {
       businessDocument: {
+        findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockResolvedValue({
           id: 301n,
           docNo: 'PENDING-PURCHASE-301',
@@ -85,9 +86,9 @@ describe('PurchaseOrderService prisma document storage', () => {
     expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
       where: { id: 301n },
       data: expect.objectContaining({
-        docNo: 'P202607110301',
+        docNo: 'C202607080088',
         payload: expect.objectContaining({
-          purchaseNo: 'P202607110301',
+          purchaseNo: 'C202607080088',
           sourceSalesOrderId: 88,
           supplierId: 3001,
           itemCount: 1,
@@ -104,7 +105,7 @@ describe('PurchaseOrderService prisma document storage', () => {
     });
     expect(result.purchaseOrders[0]).toMatchObject({
       id: 301,
-      purchaseNo: 'P202607110301',
+      purchaseNo: 'C202607080088',
       sourceSalesOrderId: 88,
       supplierId: 3001,
     });

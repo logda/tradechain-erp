@@ -2,6 +2,31 @@ import { BadRequestException } from '@nestjs/common';
 import { StockOutService } from '../src/stock-out/stock-out.service';
 
 describe('StockOutService inventory guard', () => {
+  it('persists a compact generated outbound number in Prisma', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const prismaMock = {
+      businessDocument: {
+        create: jest.fn().mockResolvedValue({ id: 701n, docNo: 'PENDING-STOCK-OUT-701' }),
+        update: jest.fn().mockResolvedValue({ id: 701n }),
+      },
+    };
+    const service = new StockOutService(prismaMock as any);
+    const created = await service.create({
+      sourceBizType: 'sales_order',
+      sourceBizId: 88,
+      warehouseId: 1,
+      locationId: 11,
+      createdBy: 2001,
+      items: [{ productId: 1, quantity: 1 }],
+    });
+
+    expect(created.docNo).toMatch(/^SO\d{10}$/);
+    expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
+      where: { id: 701n },
+      data: { docNo: created.docNo },
+    });
+  });
+
   it('rejects confirmed outbound when available quantity is insufficient', async () => {
     const inventoryService = {
       assertAvailable: jest.fn().mockRejectedValue(

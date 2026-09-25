@@ -34,7 +34,7 @@ export type DocumentCodeRule = {
   updatedBy: string;
 };
 
-export type DocumentCodeRuleKind = 'demand_no' | 'quote_no' | 'customer_order_no';
+export type DocumentCodeRuleKind = 'demand_no' | 'quote_no';
 
 export type ValidateDocumentCodeRuleResult =
   | { ok: true }
@@ -62,14 +62,6 @@ const defaultDemandNoSegments: DocumentCodeRuleSegment[] = [
   { key: 'serial', enabled: true, order: 5 },
 ];
 
-const defaultCustomerOrderNoSegments: DocumentCodeRuleSegment[] = [
-  { key: 'prefix', enabled: true, order: 1, value: 'PO' },
-  { key: 'year', enabled: true, order: 2 },
-  { key: 'month', enabled: true, order: 3 },
-  { key: 'day', enabled: true, order: 4 },
-  { key: 'serial', enabled: true, order: 5 },
-];
-
 export const defaultQuoteNoRule: DocumentCodeRule = {
   strategy: 'composed_segments',
   serialLength: 4,
@@ -88,19 +80,9 @@ export const defaultDemandNoRule: DocumentCodeRule = {
   updatedBy: 'system',
 };
 
-export const defaultCustomerOrderNoRule: DocumentCodeRule = {
-  strategy: 'composed_segments',
-  serialLength: 4,
-  serialScope: 'global_day',
-  segments: defaultCustomerOrderNoSegments,
-  updatedAt: '2026-07-16T00:00:00.000Z',
-  updatedBy: 'system',
-};
-
 export const defaultDocumentCodeRuleSet = {
   demandNoRule: defaultDemandNoRule,
   quoteNoRule: defaultQuoteNoRule,
-  customerOrderNoRule: defaultCustomerOrderNoRule,
 };
 
 type LegacyDocumentCodeRuleSerialScope = 'global' | 'per_year' | 'per_month' | 'per_day';
@@ -153,7 +135,7 @@ function formatSerial(sequence: number, serialLength: number) {
 
 function formatYear(value: string | Date | undefined) {
   const date = value ? new Date(value) : new Date();
-  return String(date.getUTCFullYear());
+  return String(date.getUTCFullYear()).slice(-2);
 }
 
 function formatMonth(value: string | Date | undefined) {
@@ -284,7 +266,15 @@ export function buildDocumentCodePreview(
       }
     })
     .filter(Boolean)
-    .join('-');
+    .join('');
+}
+
+export function buildSequentialDocumentCode(
+  prefix: string,
+  sequence: number,
+  now: string | Date = new Date(),
+) {
+  return `${prefix}${formatYear(now)}${formatMonth(now)}${formatDay(now)}${formatSerial(sequence, 4)}`;
 }
 
 export function describeDocumentCodeRule(rule: DocumentCodeRule) {

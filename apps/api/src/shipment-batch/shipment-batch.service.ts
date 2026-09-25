@@ -12,6 +12,7 @@ import type {
   ShipmentBatchListQuery,
   ShipmentBatchListResponse,
 } from '@erp/shared';
+import { buildSequentialDocumentCode } from '@erp/shared';
 import { type FormalSession } from '../auth/formal-session';
 import { shipmentBatchListData } from './shipment-batch-list.data';
 import { resolveShipmentBatchStore } from './shipment-batch.store';
@@ -1044,7 +1045,7 @@ export class ShipmentBatchService {
       const finalPayload: CreatedShipmentBatchRecord = {
         ...basePayload,
         id: Number(created.id),
-        batchNo: `SH20260711${String(Number(created.id)).padStart(4, '0')}`,
+        batchNo: buildSequentialDocumentCode('SH', Number(created.id)),
       };
       const updated = (await this.prismaDb!.businessDocument.update({
         where: { id: created.id },
@@ -1087,7 +1088,7 @@ export class ShipmentBatchService {
     const id = this.store.nextShipmentBatchId();
     const created: CreatedShipmentBatchRecord = {
       id,
-      batchNo: `SH20260711${String(id).padStart(4, '0')}`,
+      batchNo: buildSequentialDocumentCode('SH', id),
       status: 'shipped',
       receiptSendStatus: 'pending',
       shippedQty: payload.shippedQty,

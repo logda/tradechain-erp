@@ -10,6 +10,7 @@ import type {
   SampleListQuery,
   SampleListResponse,
 } from '@erp/shared';
+import { buildSequentialDocumentCode } from '@erp/shared';
 import {
   type FormalSession,
   filterVisibleFormalItems,
@@ -1080,7 +1081,7 @@ export class SampleOrderService {
       const finalPayload: SampleOrderDetailRecord = {
         ...payload,
         id: Number(created.id),
-        sampleNo: `SP20260711${String(Number(created.id)).padStart(4, '0')}`,
+        sampleNo: buildSequentialDocumentCode('SP', Number(created.id)),
       };
 
       const updated = (await this.prismaDb!.businessDocument.update({
@@ -1108,7 +1109,7 @@ export class SampleOrderService {
     const id = this.store.nextSampleOrderId();
     const created: SampleOrderDetailRecord = {
       id,
-      sampleNo: `SP20260711${String(id).padStart(4, '0')}`,
+      sampleNo: buildSequentialDocumentCode('SP', id),
       currentVersionNo: 1,
       currentStatus: 'draft',
       sourceQuoteOrderId: dto.quoteOrderId,

@@ -83,7 +83,7 @@ describe('AfterSalesService prisma document storage', () => {
     expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
       where: { id: 501n },
       data: expect.objectContaining({
-        docNo: 'AS202607110501',
+        docNo: result.afterSalesNo,
       }),
     });
     expect(prismaMock.operationLog.create).toHaveBeenCalledWith({
@@ -96,7 +96,7 @@ describe('AfterSalesService prisma document storage', () => {
     });
     expect(result).toMatchObject({
       id: 501,
-      afterSalesNo: 'AS202607110501',
+      afterSalesNo: expect.stringMatching(/^AS\d{10}$/),
       status: 'pending_submit',
       financeReviewStatus: 'pending',
     });

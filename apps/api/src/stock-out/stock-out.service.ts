@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { paginateItems } from '../common/pagination';
+import { buildSequentialDocumentCode } from '@erp/shared';
 import { PrismaService } from '../storage/prisma.service';
 import { resolveStorageMode } from '../storage/storage-mode';
 import {
@@ -223,10 +224,15 @@ export class StockOutService {
           createdBy: BigInt(payload.createdBy),
         },
       })) as { id: bigint; docNo: string };
+      const docNo = buildSequentialDocumentCode('SO', Number(created.id));
+      await (this.prisma as PrismaStockOutDb).businessDocument.update({
+        where: { id: created.id },
+        data: { docNo },
+      });
 
       return {
         id: Number(created.id),
-        docNo: created.docNo,
+        docNo,
         status: 'draft',
       };
     }
@@ -235,7 +241,7 @@ export class StockOutService {
     const now = new Date().toISOString();
     const record: StockOutOrderStoreItem = {
       id,
-      docNo: `SO20260714${String(id).padStart(4, '0')}`,
+      docNo: buildSequentialDocumentCode('SO', id),
       sourceBizType: payload.sourceBizType,
       sourceBizId: payload.sourceBizId,
       sourceDocNo: payload.sourceDocNo ?? '',

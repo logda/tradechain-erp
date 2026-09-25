@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import {
   defaultDemandNoRule,
-  defaultCustomerOrderNoRule,
   defaultQuoteNoRule,
   normalizeDocumentCodeRule,
   type DocumentCodeRule,
@@ -11,7 +10,6 @@ import {
 export type DocumentCodeRuleSetRecord = {
   demandNoRule: DocumentCodeRule;
   quoteNoRule: DocumentCodeRule;
-  customerOrderNoRule: DocumentCodeRule;
 };
 
 const documentCodeRuleStoreCache = new Map<string, DocumentCodeRuleRuntimeStore>();
@@ -27,7 +25,6 @@ function cloneRuleSet(ruleSet: DocumentCodeRuleSetRecord): DocumentCodeRuleSetRe
   return {
     demandNoRule: cloneRule(ruleSet.demandNoRule),
     quoteNoRule: cloneRule(ruleSet.quoteNoRule),
-    customerOrderNoRule: cloneRule(ruleSet.customerOrderNoRule),
   };
 }
 
@@ -35,7 +32,6 @@ function createDefaultRuleSet(): DocumentCodeRuleSetRecord {
   return {
     demandNoRule: cloneRule(defaultDemandNoRule),
     quoteNoRule: cloneRule(defaultQuoteNoRule),
-    customerOrderNoRule: cloneRule(defaultCustomerOrderNoRule),
   };
 }
 
@@ -75,13 +71,6 @@ function readRuleSet(filePath: string): DocumentCodeRuleSetRecord {
         ? parsed.quoteNoRule!.segments.map((segment) => ({ ...segment }))
         : cloneRule(defaultQuoteNoRule).segments,
     } as DocumentCodeRule),
-    customerOrderNoRule: normalizeDocumentCodeRule({
-      ...cloneRule(defaultCustomerOrderNoRule),
-      ...(parsed.customerOrderNoRule ?? {}),
-      segments: Array.isArray(parsed.customerOrderNoRule?.segments)
-        ? parsed.customerOrderNoRule!.segments.map((segment) => ({ ...segment }))
-        : cloneRule(defaultCustomerOrderNoRule).segments,
-    } as DocumentCodeRule),
   };
 }
 
@@ -105,16 +94,14 @@ export class DocumentCodeRuleRuntimeStore {
   }
 
   updateRule(
-    kind: 'demand_no' | 'quote_no' | 'customer_order_no',
+    kind: 'demand_no' | 'quote_no',
     rule: DocumentCodeRule,
   ) {
     this.ruleSet = {
       ...this.ruleSet,
       ...(kind === 'demand_no'
         ? { demandNoRule: cloneRule(normalizeDocumentCodeRule(rule)) }
-        : kind === 'quote_no'
-        ? { quoteNoRule: cloneRule(normalizeDocumentCodeRule(rule)) }
-        : { customerOrderNoRule: cloneRule(normalizeDocumentCodeRule(rule)) }),
+        : { quoteNoRule: cloneRule(normalizeDocumentCodeRule(rule)) }),
     };
     this.persist();
     return this.getRuleSet();

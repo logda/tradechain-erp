@@ -121,13 +121,6 @@ const compactInputStyle = {
   boxSizing: 'border-box',
 } satisfies React.CSSProperties;
 
-const disabledInputStyle = {
-  ...inputStyle,
-  color: '#475569',
-  background: '#f1f5f9',
-  cursor: 'not-allowed',
-} satisfies React.CSSProperties;
-
 const compactDisabledInputStyle = {
   ...compactInputStyle,
   color: '#475569',
@@ -1287,17 +1280,6 @@ export function CreateSalesOrderForm({
 
       <div style={gridStyle}>
         <label style={labelStyle}>
-          客户订单号 Customer PO No
-          <input
-            type="text"
-            readOnly
-            value={initialSalesOrder?.customerOrderNo ?? ''}
-            placeholder="系统自动生成"
-            style={disabledInputStyle}
-          />
-        </label>
-
-        <label style={labelStyle}>
           门店 Store
           <input
             name="storeName"
@@ -1733,6 +1715,17 @@ export function CreateSalesOrderForm({
           新增产品行
         </button>
       </fieldset>
+
+      <label style={labelStyle}>
+        客户订单号 Customer PO No
+        <input
+          name="customerOrderNo"
+          type="text"
+          defaultValue={initialSalesOrder?.customerOrderNo ?? ''}
+          placeholder="留空时与销售单号相同；提交审核前可修改"
+          style={inputStyle}
+        />
+      </label>
 
       <label style={labelStyle}>
         备注 Remark

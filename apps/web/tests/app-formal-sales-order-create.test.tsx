@@ -224,7 +224,7 @@ describe('formal sales order create page', () => {
     expect(screen.getByLabelText('订货单位 Ordering')).toHaveAttribute('type', 'text');
     expect(screen.getByLabelText('客户编码 Customer Code')).toHaveAttribute('type', 'text');
     expect(screen.getByText('同步保存到往来单位 Save to Counterparty')).toBeInTheDocument();
-    expect(screen.getByLabelText('客户订单号 Customer PO No')).toBeInTheDocument();
+    expect(screen.getByLabelText('客户订单号 Customer PO No')).not.toHaveAttribute('readonly');
     expect(document.querySelector('form')).toHaveAttribute('novalidate');
     expect(screen.getByLabelText('门店 Store')).toBeInTheDocument();
     expect(screen.getByLabelText('订货日期 Order Date')).toBeInTheDocument();
@@ -566,6 +566,7 @@ describe('formal sales order create page', () => {
       salesUserId: 2001,
       createdBy: 2001,
       orderingUnit: '',
+      customerOrderNo: '',
       storeName: '02 Libuys',
       orderDate: '2026-05-30',
       estimatedDeliveryDate: '2026-06-08',
@@ -764,6 +765,7 @@ describe('formal sales order create page', () => {
         salesUserId: 2001,
         createdBy: 2001,
         orderingUnit: '',
+        customerOrderNo: '',
         storeName: '02 Libuys',
         orderDate: '2026-05-30',
         estimatedDeliveryDate: '2026-06-08',
@@ -959,6 +961,7 @@ describe('formal sales order create page', () => {
           salesUserId: 2001,
           createdBy: 2001,
           orderingUnit: '',
+          customerOrderNo: '',
           storeName: '',
           orderDate: '',
           estimatedDeliveryDate: '',
@@ -1086,6 +1089,7 @@ describe('formal sales order create page', () => {
           salesUserId: 2001,
           createdBy: 2001,
           orderingUnit: '',
+          customerOrderNo: '',
           storeName: '02 Libuys',
           orderDate: '2026-05-30',
           estimatedDeliveryDate: '2026-06-08',

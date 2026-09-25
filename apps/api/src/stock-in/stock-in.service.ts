@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { paginateItems } from '../common/pagination';
+import { buildSequentialDocumentCode } from '@erp/shared';
 import { InventoryService } from '../inventory/inventory.service';
 import { PrismaService } from '../storage/prisma.service';
 import { resolveStorageMode } from '../storage/storage-mode';
@@ -63,7 +64,7 @@ function resolveProductMeta(productId: number) {
 }
 
 function createStockInDocNo(id: number) {
-  return `SI20260714${String(id).padStart(4, '0')}`;
+  return buildSequentialDocumentCode('SI', id);
 }
 
 function resolveWarehouseName(warehouseId: number) {
@@ -253,6 +254,11 @@ export class StockInService {
         docNo: string;
         createdAt?: Date;
       };
+      const docNo = createStockInDocNo(Number(created.id));
+      await prismaDb.businessDocument.update({
+        where: { id: created.id },
+        data: { docNo },
+      });
 
       await prismaDb.operationLog.create({
         data: {
@@ -270,7 +276,7 @@ export class StockInService {
 
       return {
         id: Number(created.id),
-        docNo: created.docNo,
+        docNo,
         status: 'draft',
         sourceBizType: payload.sourceBizType,
         sourceBizId: payload.sourceBizId,

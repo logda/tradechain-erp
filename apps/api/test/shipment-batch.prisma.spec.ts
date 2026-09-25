@@ -103,7 +103,7 @@ describe('ShipmentBatchService prisma document storage', () => {
     expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
       where: { id: 401n },
       data: expect.objectContaining({
-        docNo: 'SH202607110401',
+        docNo: result.batchNo,
       }),
     });
     expect(prismaMock.operationLog.create).toHaveBeenCalledWith({
@@ -116,7 +116,7 @@ describe('ShipmentBatchService prisma document storage', () => {
     });
     expect(result).toMatchObject({
       id: 401,
-        batchNo: 'SH202607110401',
+        batchNo: expect.stringMatching(/^SH\d{10}$/),
       status: 'shipped',
       salesOrderLocked: true,
     });

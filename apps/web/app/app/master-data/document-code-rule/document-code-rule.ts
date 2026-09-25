@@ -1,6 +1,5 @@
 export {
   buildDocumentCodePreview,
-  defaultCustomerOrderNoRule,
   defaultDemandNoRule,
   defaultQuoteNoRule,
   describeDocumentCodeRule,

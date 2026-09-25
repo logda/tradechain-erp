@@ -3,7 +3,6 @@ import { AppShell } from '../../_components/app-shell';
 import { canViewFormalModule, resolveDemoSession } from '../../_lib/demo-session';
 import { canUseFormalMasterDataActions } from '../../_lib/formal-access';
 import {
-  defaultCustomerOrderNoRule,
   defaultDemandNoRule,
   defaultQuoteNoRule,
   normalizeDocumentCodeRule,
@@ -36,7 +35,6 @@ function getApiBaseUrl() {
 type DocumentCodeRuleSet = {
   demandNoRule: DocumentCodeRule;
   quoteNoRule: DocumentCodeRule;
-  customerOrderNoRule: DocumentCodeRule;
 };
 
 function hasValidDocumentCodeRule(value: unknown): value is DocumentCodeRule {
@@ -57,8 +55,7 @@ function hasValidRuleSet(value: unknown): value is DocumentCodeRuleSet {
     typeof value === 'object' &&
     value !== null &&
     hasValidDocumentCodeRule((value as DocumentCodeRuleSet).demandNoRule) &&
-    hasValidDocumentCodeRule((value as DocumentCodeRuleSet).quoteNoRule) &&
-    hasValidDocumentCodeRule((value as DocumentCodeRuleSet).customerOrderNoRule)
+    hasValidDocumentCodeRule((value as DocumentCodeRuleSet).quoteNoRule)
   );
 }
 
@@ -66,7 +63,6 @@ function buildFallbackRuleSet(): DocumentCodeRuleSet {
   return {
     demandNoRule: defaultDemandNoRule,
     quoteNoRule: defaultQuoteNoRule,
-    customerOrderNoRule: defaultCustomerOrderNoRule,
   };
 }
 
@@ -86,7 +82,6 @@ async function loadRuleSet(session: ReturnType<typeof resolveDemoSession>) {
       ? {
           demandNoRule: normalizeDocumentCodeRule(result.demandNoRule),
           quoteNoRule: normalizeDocumentCodeRule(result.quoteNoRule),
-          customerOrderNoRule: normalizeDocumentCodeRule(result.customerOrderNoRule),
         }
       : buildFallbackRuleSet();
   } catch {
@@ -112,7 +107,7 @@ export default async function AppDocumentCodeRulePage({
       >
         <section style={sectionStyle}>
           <h2>无权限访问单据编号规则</h2>
-          <p>请切换到管理员账号后再配置需求单号、报价单号和客户订单号规则。</p>
+          <p>请切换到管理员账号后再配置需求单号和报价单号规则。</p>
         </section>
       </AppShell>
     );
@@ -123,7 +118,7 @@ export default async function AppDocumentCodeRulePage({
   return (
     <AppShell
       title="单据编号规则"
-      subtitle="统一配置需求单号、报价单号和客户订单号的自动生成规则，作为主数据中心的一部分。"
+      subtitle="统一配置需求单号和报价单号的自动生成规则，作为主数据中心的一部分。"
       session={session}
     >
       <section style={sectionStyle}>

@@ -13,7 +13,6 @@ import {
 import { PrismaService } from '../storage/prisma.service';
 import { resolveStorageMode } from '../storage/storage-mode';
 import { resolveQuoteStore } from '../quote/quote.store';
-import { resolveSalesOrderStore } from '../sales-order/sales-order.store';
 import {
   resolveDocumentCodeRuleStore,
   type DocumentCodeRuleSetRecord,
@@ -27,7 +26,7 @@ type PrismaBusinessDocumentRecord = {
   } | null;
 };
 
-type DocumentCodeKind = 'demand_no' | 'quote_no' | 'customer_order_no';
+type DocumentCodeKind = 'demand_no' | 'quote_no';
 
 function normalizeText(value: string | undefined) {
   return value?.trim() ?? '';
@@ -111,7 +110,6 @@ function isQuoteDocument(record: {
 export class DocumentCodeRuleService {
   private readonly store = resolveDocumentCodeRuleStore();
   private readonly quoteStore = resolveQuoteStore();
-  private readonly salesOrderStore = resolveSalesOrderStore();
   private readonly fallbackSequenceCache = new Map<string, number>();
 
   constructor(
@@ -161,15 +159,6 @@ export class DocumentCodeRuleService {
     });
   }
 
-  async generateCustomerOrderNo() {
-    const rule = this.getRuleSet().customerOrderNoRule;
-    const sequence = await this.resolveNextSequence('customer_order_no', rule);
-    return buildDocumentCodePreview(rule, {
-      now: new Date(),
-      sequence,
-    });
-  }
-
   private async resolveNextSequence(kind: DocumentCodeKind, rule: DocumentCodeRule) {
     const records = await this.loadCreatedAtRecords(kind);
     const now = new Date();
@@ -205,27 +194,16 @@ export class DocumentCodeRuleService {
     ) {
       const records = (await this.prisma!.businessDocument.findMany({
         where: {
-          bizType:
-            kind === 'customer_order_no'
-              ? 'sales_order'
-              : 'quote',
+          bizType: 'quote',
         },
         orderBy: { createdAt: 'asc' },
         select: { createdAt: true, docNo: true, payload: true },
       })) as PrismaBusinessDocumentRecord[];
 
       return records
-        .filter((record) => {
-          if (kind === 'demand_no') {
-            return isDemandDocument(record);
-          }
-
-          if (kind === 'quote_no') {
-            return isQuoteDocument(record);
-          }
-
-          return true;
-        })
+        .filter((record) => kind === 'demand_no'
+          ? isDemandDocument(record)
+          : isQuoteDocument(record))
         .map((record) => ({ createdAt: record.createdAt }));
     }
 
@@ -237,16 +215,8 @@ export class DocumentCodeRuleService {
         }));
     }
 
-    if (kind === 'quote_no') {
-      return this.quoteStore.listQuotes()
-        .filter((record) => isQuoteDocument(record))
-        .map((record) => ({
-          createdAt: record.createdAt,
-        }));
-    }
-
-    return this.salesOrderStore.listSalesOrders().map((record) => ({
-      createdAt: record.createdAt,
-    }));
+    return this.quoteStore.listQuotes()
+      .filter((record) => isQuoteDocument(record))
+      .map((record) => ({ createdAt: record.createdAt }));
   }
 }

@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import {
+  buildSequentialDocumentCode,
   normalizeSalesDocumentSourceMode,
   resolveSalesDocumentSourceMode,
   type SalesOrderListItem,
@@ -29,7 +30,6 @@ import {
   CounterpartyService,
   type CounterpartyRecord,
 } from '../counterparty/counterparty.service';
-import { DocumentCodeRuleService } from '../document-code-rule/document-code-rule.service';
 import { ProductService } from '../product/product.service';
 import { isQuoteConvertibleToSales } from '../quote/quote-workflow';
 
@@ -703,19 +703,12 @@ function snapshotAuditData<T>(value: T): T {
 @Injectable()
 export class SalesOrderService {
   private readonly store = resolveSalesOrderStore();
-  private readonly documentCodeRuleService: DocumentCodeRuleService;
 
   constructor(
     @Optional()
     @Inject(PrismaService)
     private readonly prisma?: PrismaService,
-    @Optional()
-    @Inject(DocumentCodeRuleService)
-    documentCodeRuleService?: DocumentCodeRuleService,
-  ) {
-    this.documentCodeRuleService =
-      documentCodeRuleService ?? new DocumentCodeRuleService(this.prisma);
-  }
+  ) {}
 
   private shouldUsePrisma() {
     return resolveStorageMode() === 'prisma' && this.prisma;
@@ -725,24 +718,12 @@ export class SalesOrderService {
     return this.prisma as PrismaSalesDb | undefined;
   }
 
-  private async resolveCustomerOrderNo(existingValue?: string | null) {
-    const trimmed = existingValue?.trim();
-    if (trimmed) {
-      return trimmed;
-    }
-
-    const customerOrderNo = await this.documentCodeRuleService.generateCustomerOrderNo();
-
-    return customerOrderNo;
-  }
-
   async create(dto: CreateDirectSalesOrderDto): Promise<CreatedSalesOrderRecord> {
     const counterpartyService = new CounterpartyService(this.prisma);
     const salesOrderCustomer = await resolveDirectSalesOrderCustomer(
       dto,
       counterpartyService,
     );
-    const customerOrderNo = await this.resolveCustomerOrderNo();
     let customerId = salesOrderCustomer.customerId;
     let customerName = salesOrderCustomer.customerName;
     let customerCode = salesOrderCustomer.customerCode;
@@ -802,7 +783,7 @@ export class SalesOrderService {
         customerCode,
         customerEntryMode: salesOrderCustomer.customerEntryMode,
         orderingUnit: dto.orderingUnit?.trim() || customerName,
-        customerOrderNo,
+        customerOrderNo: dto.customerOrderNo?.trim() || undefined,
         storeName: dto.storeName?.trim() || undefined,
         orderDate: dto.orderDate?.trim() || undefined,
         estimatedDeliveryDate: dto.estimatedDeliveryDate?.trim() || undefined,
@@ -830,7 +811,8 @@ export class SalesOrderService {
       const finalPayload: CreatedSalesOrderRecord = {
         ...payload,
         id: Number(created.id),
-        salesNo: `S20260711${String(Number(created.id)).padStart(4, '0')}`,
+        salesNo: buildSequentialDocumentCode('S', Number(created.id), createdAt),
+        customerOrderNo: dto.customerOrderNo?.trim() || buildSequentialDocumentCode('S', Number(created.id), createdAt),
       };
       const updated = (await this.prismaDb!.businessDocument.update({
         where: { id: created.id },
@@ -874,7 +856,7 @@ export class SalesOrderService {
     }
 
     const id = this.store.nextSalesOrderId();
-    const salesNo = `S20260711${String(id).padStart(4, '0')}`;
+    const salesNo = buildSequentialDocumentCode('S', id, createdAt);
     const created: CreatedSalesOrderRecord = {
       id,
       salesNo,
@@ -899,7 +881,7 @@ export class SalesOrderService {
       customerCode,
       customerEntryMode: salesOrderCustomer.customerEntryMode,
       orderingUnit: dto.orderingUnit?.trim() || customerName,
-      customerOrderNo,
+      customerOrderNo: dto.customerOrderNo?.trim() || salesNo,
       storeName: dto.storeName?.trim() || undefined,
       orderDate: dto.orderDate?.trim() || undefined,
       estimatedDeliveryDate: dto.estimatedDeliveryDate?.trim() || undefined,
@@ -1022,7 +1004,9 @@ export class SalesOrderService {
     const items = Array.isArray(dto.items)
       ? normalizeDirectSalesOrderItems(dto.items)
       : existing.items;
-    const customerOrderNo = await this.resolveCustomerOrderNo(existing.customerOrderNo);
+    const customerOrderNo = hasOwnField(dto, 'customerOrderNo')
+      ? dto.customerOrderNo?.trim() || existing.salesNo
+      : existing.customerOrderNo || existing.salesNo;
 
     if (this.shouldUsePrisma()) {
       const beforeData = existing;
@@ -1400,7 +1384,6 @@ export class SalesOrderService {
     const sourceDocumentLabel = sourceDocumentType === 'demand' ? '需求单' : '报价单';
 
     if (this.shouldUsePrisma()) {
-      const customerOrderNo = await this.resolveCustomerOrderNo();
       const apply = async (db: PrismaSalesDb) => {
         const payloadRecord: ConvertedSalesOrderRecord = {
         id: payload.quoteOrderId,
@@ -1434,7 +1417,7 @@ export class SalesOrderService {
         customerCode: payload.customerCode?.trim().toUpperCase() || undefined,
         customerEntryMode: payload.customerEntryMode ?? 'existing',
         orderingUnit: payload.customerName?.trim() || `客户 ${payload.customerId}`,
-        customerOrderNo,
+        customerOrderNo: undefined,
         storeName: payload.sourceCode?.trim() || undefined,
         orderDate: payload.inquiryDate?.trim() || undefined,
         shipTo: payload.destination?.trim() || undefined,
@@ -1460,7 +1443,8 @@ export class SalesOrderService {
         const finalPayload: ConvertedSalesOrderRecord = {
         ...payloadRecord,
         id: Number(created.id),
-        salesNo: `S20260711${String(Number(created.id)).padStart(4, '0')}`,
+        salesNo: buildSequentialDocumentCode('S', Number(created.id), createdAt),
+        customerOrderNo: buildSequentialDocumentCode('S', Number(created.id), createdAt),
       };
         const updated = (await db.businessDocument.update({
         where: { id: created.id },
@@ -1494,7 +1478,7 @@ export class SalesOrderService {
     }
 
     const id = this.store.nextSalesOrderId();
-    const salesNo = `S20260711${String(id).padStart(4, '0')}`;
+    const salesNo = buildSequentialDocumentCode('S', id, createdAt);
     const converted: ConvertedSalesOrderRecord = {
       id,
       salesNo,
@@ -1527,7 +1511,7 @@ export class SalesOrderService {
       customerCode: payload.customerCode?.trim().toUpperCase() || undefined,
       customerEntryMode: payload.customerEntryMode ?? 'existing',
       orderingUnit: payload.customerName?.trim() || `客户 ${payload.customerId}`,
-      customerOrderNo: await this.resolveCustomerOrderNo(),
+      customerOrderNo: salesNo,
       storeName: payload.sourceCode?.trim() || undefined,
       orderDate: payload.inquiryDate?.trim() || undefined,
       shipTo: payload.destination?.trim() || undefined,

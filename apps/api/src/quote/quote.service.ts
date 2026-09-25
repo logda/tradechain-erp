@@ -5,7 +5,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import type { QuoteListItem, QuoteListQuery, QuoteListResponse } from '@erp/shared';
+import { buildSequentialDocumentCode, type QuoteListItem, type QuoteListQuery, type QuoteListResponse } from '@erp/shared';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { UpdateQuoteDraftDto } from './dto/update-quote-draft.dto';
 import { quoteListData } from './quote-list.data';
@@ -1182,7 +1182,7 @@ export class QuoteService {
         },
       })) as PrismaBusinessDocumentRecord;
 
-      const inquiryNo = `IQ20260708${String(Number(created.id)).padStart(4, '0')}`;
+      const inquiryNo = buildSequentialDocumentCode('IQ', Number(created.id));
       const payload = buildInquiryFromQuote(
         quote,
         Number(created.id),
@@ -1216,7 +1216,7 @@ export class QuoteService {
 
     const inquiryStore = resolveInquiryStore();
     const inquiryId = inquiryStore.nextInquiryId();
-    const inquiryNo = `IQ20260708${String(inquiryId).padStart(4, '0')}`;
+    const inquiryNo = buildSequentialDocumentCode('IQ', inquiryId);
     const inquiry = buildInquiryFromQuote(quote, inquiryId, inquiryNo);
 
     inquiryStore.upsertInquiry(inquiry);

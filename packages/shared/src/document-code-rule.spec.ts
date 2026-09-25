@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildDocumentCodePreview,
+  buildSequentialDocumentCode,
   describeDocumentCodeRule,
   defaultDemandNoRule,
   defaultQuoteNoRule,
@@ -37,7 +38,7 @@ describe('document code rule', () => {
     expect(describeDocumentCodeRule(composedRule)).toContain(
       '固定前缀 + 年 + 月 + 日 + 4 位流水号',
     );
-    expect(describeDocumentCodeRule(composedRule)).toContain('XQ-2026-08-09-0001');
+    expect(describeDocumentCodeRule(composedRule)).toContain('XQ2608090001');
   });
 
   it('builds a preview from rule segments', () => {
@@ -47,16 +48,21 @@ describe('document code rule', () => {
         now: '2026-08-08T08:00:00.000Z',
         sequence: 1,
       }),
-    ).toBe('XQ-2026-08-08-0001');
+    ).toBe('XQ2608080001');
   });
 
   it('keeps demand and quote defaults distinct', () => {
     expect(describeDocumentCodeRule(defaultDemandNoRule)).toContain(
-      'XQ-2026-08-09-0001',
+      'XQ2608090001',
     );
     expect(describeDocumentCodeRule(defaultQuoteNoRule)).toContain(
-      'BJ-2026-08-09-0001',
+      'BJ2608090001',
     );
+  });
+
+  it('uses the same compact date format for sequential business documents', () => {
+    expect(buildSequentialDocumentCode('S', 12, '2026-08-09T00:00:00.000Z'))
+      .toBe('S2608090012');
   });
 
   it('rejects rules that only contain serial segments', () => {

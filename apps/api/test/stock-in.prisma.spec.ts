@@ -29,7 +29,7 @@ describe('StockInService prisma storage', () => {
     };
 
     const service = new StockInService(prismaMock as any, {} as any);
-    await service.create({
+    const created = await service.create({
       sourceBizType: 'purchase_order',
       sourceBizId: 100,
       sourceDocNo: 'P202607110100',
@@ -48,6 +48,11 @@ describe('StockInService prisma storage', () => {
     });
 
     expect(prismaMock.businessDocument.create).toHaveBeenCalled();
+    expect(created.docNo).toMatch(/^SI\d{10}$/);
+    expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
+      where: { id: 601n },
+      data: { docNo: created.docNo },
+    });
   });
 
   it('rejects purchase-order stock-in creation before purchase approval is completed', async () => {

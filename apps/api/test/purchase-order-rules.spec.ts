@@ -6,6 +6,7 @@ describe('PurchaseOrderService', () => {
 
     const result = await service.createFromSalesOrder({
       salesOrderId: 88,
+      salesOrderNo: 'S2609250088',
       createdBy: 2001,
       items: [
         {
@@ -33,6 +34,11 @@ describe('PurchaseOrderService', () => {
     });
 
     expect(result.purchaseOrders).toHaveLength(3);
+    expect(result.purchaseOrders.map((item) => item.purchaseNo)).toEqual([
+      'C2609250088-1',
+      'C2609250088-2',
+      'C2609250088-3',
+    ]);
     expect(result.purchaseOrders).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -77,6 +83,28 @@ describe('PurchaseOrderService', () => {
       supplierId: 2,
       supplierName: 'Bravo Industrial',
     });
+  });
+
+  it('uses the persisted source sales number instead of a stale request value', async () => {
+    const source = {
+      getDetail: jest.fn().mockResolvedValue({
+        salesNo: 'S2609250099',
+        customerOrderNo: 'CUSTOMER-PO-99',
+      }),
+      syncOperationalAggregates: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new PurchaseOrderService(undefined, source as never);
+    const result = await service.createFromSalesOrder({
+      salesOrderId: 99,
+      salesOrderNo: 'S2609250001',
+      customerOrderNo: 'STALE-PO',
+      createdBy: 2001,
+      items: [{ salesItemId: 1, supplierId: 3001, productId: 501, quantity: 1 }],
+    });
+
+    expect(result.purchaseOrders[0].purchaseNo).toBe('C2609250099');
+    expect(result.purchaseOrders[0].salesOrderNo).toBe('S2609250099');
+    expect(result.purchaseOrders[0].customerOrderNo).toBe('CUSTOMER-PO-99');
   });
 
   it('uses purchase owner passed from product master data when no owner is selected', async () => {
@@ -241,6 +269,7 @@ describe('PurchaseOrderService', () => {
 
     const createdResult = await service.createFromSalesOrder({
       salesOrderId: 88,
+      salesOrderNo: 'S2609250088',
       createdBy: 2001,
       items: [
         {
@@ -264,7 +293,7 @@ describe('PurchaseOrderService', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: expect.any(Number),
-          purchaseNo: expect.stringMatching(/^P20260711/),
+          purchaseNo: expect.stringMatching(/^C2609250088-[12]$/),
         }),
       ]),
     );

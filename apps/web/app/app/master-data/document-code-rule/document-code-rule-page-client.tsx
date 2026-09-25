@@ -1,5 +1,4 @@
 import {
-  defaultCustomerOrderNoRule,
   defaultDemandNoRule,
   defaultQuoteNoRule,
   normalizeDocumentCodeRule,
@@ -10,7 +9,6 @@ import { UpdateDocumentCodeRuleForm } from './update-document-code-rule-form';
 type DocumentCodeRuleSet = {
   demandNoRule: DocumentCodeRule;
   quoteNoRule: DocumentCodeRule;
-  customerOrderNoRule: DocumentCodeRule;
 };
 
 type DocumentCodeRulePageClientProps = {
@@ -50,9 +48,6 @@ export function DocumentCodeRulePageClient({
   const quoteNoRule = normalizeDocumentCodeRule(
     initialRuleSet.quoteNoRule ?? defaultQuoteNoRule,
   );
-  const customerOrderNoRule = normalizeDocumentCodeRule(
-    initialRuleSet.customerOrderNoRule ?? defaultCustomerOrderNoRule,
-  );
 
   return (
     <section style={sectionStyle}>
@@ -80,17 +75,6 @@ export function DocumentCodeRulePageClient({
         />
       </div>
 
-      <div style={cardStyle}>
-        <UpdateDocumentCodeRuleForm
-          endpoint={`${endpoint}/customer-order-no`}
-          item={customerOrderNoRule}
-          updatedBy={updatedBy}
-          title="客户订单号规则"
-          description="销售单的客户订单号自动生成，默认前缀为 PO，不允许手填。"
-          examplePrefix="PO"
-          actorAccessScopes={actorAccessScopes}
-        />
-      </div>
     </section>
   );
 }

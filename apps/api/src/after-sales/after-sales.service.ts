@@ -10,6 +10,7 @@ import type {
   AfterSalesListQuery,
   AfterSalesListResponse,
 } from '@erp/shared';
+import { buildSequentialDocumentCode } from '@erp/shared';
 import {
   type FormalSession,
   filterVisibleFormalItems,
@@ -603,7 +604,7 @@ export class AfterSalesService {
       const finalPayload: CreatedAfterSalesRecord = {
         ...basePayload,
         id: Number(created.id),
-        afterSalesNo: `AS20260711${String(Number(created.id)).padStart(4, '0')}`,
+        afterSalesNo: buildSequentialDocumentCode('AS', Number(created.id)),
       };
       const updated = (await this.prismaDb!.businessDocument.update({
         where: { id: created.id },
@@ -642,7 +643,7 @@ export class AfterSalesService {
     const items = normalizeAfterSalesItems(payload.items);
     const created: CreatedAfterSalesRecord = {
       id,
-      afterSalesNo: `AS20260711${String(id).padStart(4, '0')}`,
+      afterSalesNo: buildSequentialDocumentCode('AS', id),
       status: 'pending_submit',
       financeReviewStatus: 'pending',
       salesOrderId: payload.salesOrderId,

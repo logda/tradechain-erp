@@ -1147,6 +1147,31 @@ export class PurchaseOrderService {
 
   async createFromSalesOrder(payload: CreateFromSalesOrderPayload) {
     const groupedByProduct = new Map<string, PurchaseOrderItem[]>();
+    const sourceSalesOrder = await this.loadSourceSalesOrderDetail(payload.salesOrderId);
+    if (this.salesOrderService?.getDetail && !sourceSalesOrder) {
+      throw new NotFoundException('来源销售单不存在');
+    }
+    const salesOrderNo = sourceSalesOrder?.salesNo || payload.salesOrderNo?.trim() ||
+      `S20260708${String(payload.salesOrderId).padStart(4, '0')}`;
+    const customerOrderNo = sourceSalesOrder?.customerOrderNo?.trim() ||
+      payload.customerOrderNo?.trim() || undefined;
+    if (!salesOrderNo.startsWith('S')) {
+      throw new BadRequestException('来源销售单号无效');
+    }
+    const purchaseNoBase = `C${salesOrderNo.slice(1)}`;
+    const existingPurchaseOrders = this.shouldUsePrisma()
+      ? ((await this.prismaDb!.businessDocument.findMany({
+          where: { bizType: 'purchase_order' },
+        })) as PrismaBusinessDocumentRecord[]).map(toPurchaseDocumentPayload)
+      : this.store.listPurchaseOrders();
+    const existingCodes = existingPurchaseOrders
+      .filter((record) => record.sourceSalesOrderId === payload.salesOrderId)
+      .map((record) => record.purchaseNo);
+    let nextSuffix = Math.max(0, ...existingCodes.map((code) => {
+      const match = code.match(new RegExp(`^${purchaseNoBase}-(\\d+)$`));
+      return match ? Number(match[1]) : 0;
+    }));
+    const useSuffix = existingCodes.length > 0;
     const initialStatus =
       payload.initialStatus === 'pending_purchase_claim'
         ? 'pending_purchase_claim'
@@ -1158,6 +1183,10 @@ export class PurchaseOrderService {
       currentItems.push(item);
       groupedByProduct.set(groupKey, currentItems);
     });
+    const splitCount = groupedByProduct.size;
+    const nextPurchaseNo = () => splitCount > 1 || useSuffix
+      ? `${purchaseNoBase}-${++nextSuffix}`
+      : purchaseNoBase;
 
     if (this.shouldUsePrisma()) {
       const purchaseOrders: CreatedPurchaseOrderRecord[] = [];
@@ -1186,10 +1215,8 @@ export class PurchaseOrderService {
           itemCount: items.length,
           createdBy: payload.createdBy,
           createdAt: '2026-07-11T10:00:00.000Z',
-          salesOrderNo:
-            payload.salesOrderNo?.trim() ||
-            `S20260708${String(payload.salesOrderId).padStart(4, '0')}`,
-          customerOrderNo: payload.customerOrderNo?.trim() || undefined,
+          salesOrderNo,
+          customerOrderNo,
           storeName: payload.storeName?.trim() || undefined,
           orderDate: payload.orderDate?.trim() || undefined,
           factoryEstimatedDeliveryDate:
@@ -1223,7 +1250,7 @@ export class PurchaseOrderService {
         const finalPayload: CreatedPurchaseOrderRecord = {
           ...basePayload,
           id: Number(created.id),
-          purchaseNo: `P20260711${String(Number(created.id)).padStart(4, '0')}`,
+          purchaseNo: nextPurchaseNo(),
         };
         const updated = (await this.prismaDb!.businessDocument.update({
           where: { id: created.id },
@@ -1271,7 +1298,7 @@ export class PurchaseOrderService {
       const id = this.store.nextPurchaseOrderId();
       const createdRecord: CreatedPurchaseOrderRecord = {
           id,
-          purchaseNo: `P20260711${String(id).padStart(4, '0')}`,
+          purchaseNo: nextPurchaseNo(),
           sourceSalesOrderId: payload.salesOrderId,
           supplierId,
           supplierName,
@@ -1281,10 +1308,8 @@ export class PurchaseOrderService {
           itemCount: items.length,
           createdBy: payload.createdBy,
           createdAt: '2026-07-11T10:00:00.000Z',
-          salesOrderNo:
-            payload.salesOrderNo?.trim() ||
-            `S20260708${String(payload.salesOrderId).padStart(4, '0')}`,
-          customerOrderNo: payload.customerOrderNo?.trim() || undefined,
+          salesOrderNo,
+          customerOrderNo,
           storeName: payload.storeName?.trim() || undefined,
           orderDate: payload.orderDate?.trim() || undefined,
           factoryEstimatedDeliveryDate:

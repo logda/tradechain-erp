@@ -173,7 +173,7 @@ describe('SampleOrderService', () => {
       quoteOrderId: 77,
       totalSampleCount: 3,
       activeSampleCount: 2,
-      latestSampleNo: 'SP202607110102',
+      latestSampleNo: expect.stringMatching(/^SP\d{10}$/),
     });
   });
 

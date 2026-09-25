@@ -75,6 +75,6 @@ describe('AppDocumentCodeRulePage', () => {
     ).toHaveAttribute('href', '/app/master-data');
     expect(screen.getByRole('heading', { name: '需求单号规则' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '报价单号规则' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '客户订单号规则' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '客户订单号规则' })).not.toBeInTheDocument();
   });
 });

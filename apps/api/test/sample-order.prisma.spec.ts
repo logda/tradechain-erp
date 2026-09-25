@@ -212,7 +212,7 @@ describe('SampleOrderService prisma document storage', () => {
     expect(prismaMock.businessDocument.update).toHaveBeenCalledWith({
       where: { id: 601n },
       data: expect.objectContaining({
-        docNo: 'SP202607110601',
+        docNo: created.sampleNo,
       }),
     });
     expect(prismaMock.operationLog.create).toHaveBeenCalledWith({
