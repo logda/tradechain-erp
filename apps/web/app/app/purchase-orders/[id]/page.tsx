@@ -49,6 +49,7 @@ type PurchaseOrderDetail = {
   ownerName?: string;
   sourceInquiryId?: number;
   lockedPurchaseOwner?: boolean;
+  needsPurchaseAssignment?: boolean;
   createdBy?: number;
   customerOrderNo?: string;
   storeName?: string;
@@ -677,7 +678,7 @@ const actionPanelStyle = {
 const actionGridStyle = {
   display: 'grid',
   gap: '16px',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  maxWidth: '720px',
   alignItems: 'start',
 } satisfies React.CSSProperties;
 
@@ -812,6 +813,8 @@ export default async function AppPurchaseOrderDetailPage({
     currentBatchCount: effectiveCurrentBatchCount,
   };
   const canApprovePurchaseOrder = canApproveFormalPurchaseOrder(session);
+  const canAssignPurchaseOwner = canApprovePurchaseOrder &&
+    ['admin', 'boss', 'purchase_manager'].includes(session.role);
   const sourceInquiry = canApprovePurchaseOrder &&
     purchaseOrder.status === 'pending_purchase_manager_approval' &&
     purchaseOrder.sourceInquiryId
@@ -839,6 +842,7 @@ export default async function AppPurchaseOrderDetailPage({
     remainingShipmentQty > 0;
   const canShowPurchaseSubmitAction =
     canSubmitPurchaseOrder &&
+    !purchaseOrder.needsPurchaseAssignment &&
     (!purchaseOrder.lockedPurchaseOwner || purchaseOrder.ownerName === session.user) &&
     (purchaseOrder.status === 'draft' ||
       purchaseOrder.status === 'pending_purchase_claim');
@@ -1147,11 +1151,48 @@ export default async function AppPurchaseOrderDetailPage({
           </div>
         </article>
 
-        <article style={actionPanelStyle}>
+        <article style={{
+          ...actionPanelStyle,
+          ...(purchaseOrder.status === 'pending_purchase_claim' || purchaseOrder.status === 'draft'
+            ? { maxWidth: '780px' }
+            : {}),
+        }}>
           <ActionPermissionNote>
-            当前角色动作权限：可提交采购审批；通过/驳回需采购主管、老板或管理员。
+            {purchaseOrder.needsPurchaseAssignment
+              ? '当前节点需采购主管、老板或管理员先分配采购负责人。'
+              : '当前角色动作权限：可提交采购审批；通过/驳回需采购主管、老板或管理员。'}
           </ActionPermissionNote>
           <div style={actionGridStyle}>
+            {purchaseOrder.needsPurchaseAssignment && canAssignPurchaseOwner ? (
+              <MutationActionForm
+                endpoint={`${getPurchaseOrderApiBaseUrl()}/purchase-orders/${purchaseOrder.id}/assign-owner`}
+                label="分配采购负责人"
+                successLabel="采购负责人已分配"
+                requiredAction="purchase.order.approve"
+                requiredActionLabel="采购主管审批"
+                requestHeaders={actionRequestHeaders}
+                fields={[
+                  { name: 'currentStatus', value: purchaseOrder.status },
+                  {
+                    name: 'ownerName',
+                    value: purchaseOrder.ownerName ?? '',
+                    display: 'select',
+                    label: '采购负责人',
+                    required: true,
+                    options: [
+                      { value: '', label: '请选择采购负责人' },
+                      ...purchaseOwnerOptions.filter((owner) => owner.status === 'active' && owner.id > 0).map((owner) => ({
+                        value: owner.realName,
+                        label: owner.realName,
+                      })),
+                    ],
+                  },
+                ]}
+              />
+            ) : null}
+            {purchaseOrder.needsPurchaseAssignment && !canAssignPurchaseOwner ? (
+              <p>待采购主管分配采购负责人</p>
+            ) : null}
             {canSavePurchaseDraft ? (
               <PurchaseOrderDraftForm
                 endpoint={`${getPurchaseOrderApiBaseUrl()}/purchase-orders/${purchaseOrder.id}/draft`}

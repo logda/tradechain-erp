@@ -672,6 +672,7 @@ function resolvePurchaseAggregateStatus(records: CreatedPurchaseOrderRecord[]) {
 export class PurchaseOrderService {
   private readonly store = resolvePurchaseOrderStore();
   private readonly activeSalesTransfers = new Map<number, Promise<{ purchaseOrders: CreatedPurchaseOrderRecord[] }>>();
+  private readonly activeOwnerAssignments = new Map<number, Promise<{ ownerName: string; lockedPurchaseOwner: boolean }>>();
 
   constructor(
     @Optional()
@@ -807,6 +808,92 @@ export class PurchaseOrderService {
     } catch {
       return null;
     }
+  }
+
+  private async needsExistingDirectOwnerAssignment(record: CreatedPurchaseOrderRecord) {
+    if (record.lockedPurchaseOwner ||
+        (record.status !== 'pending_purchase_claim' && record.status !== 'draft')) {
+      return false;
+    }
+    const source = await this.loadSourceSalesOrderDetail(record.sourceSalesOrderId);
+    return source?.sourceMode === 'direct';
+  }
+
+  async assignExistingDirectPurchaseOwner(payload: {
+    purchaseOrderId: number;
+    ownerName: string;
+    currentStatus?: string;
+    session?: FormalSession;
+  }) {
+    const active = this.activeOwnerAssignments.get(payload.purchaseOrderId);
+    if (active) throw new BadRequestException('采购负责人正在分配，请刷新页面');
+    const assignment = this.assignExistingDirectPurchaseOwnerOnce(payload);
+    this.activeOwnerAssignments.set(payload.purchaseOrderId, assignment);
+    try {
+      return await assignment;
+    } finally {
+      this.activeOwnerAssignments.delete(payload.purchaseOrderId);
+    }
+  }
+
+  private async assignExistingDirectPurchaseOwnerOnce(payload: {
+    purchaseOrderId: number;
+    ownerName: string;
+    currentStatus?: string;
+    session?: FormalSession;
+  }) {
+    const owners = await this.listAssignablePurchaseOwners(payload.session);
+    const requestedOwnerName = normalizeOwnerName(payload.ownerName);
+    const owner = owners.find((item) => item.id > 0 && item.realName === requestedOwnerName);
+    if (!owner) throw new BadRequestException('请选择有效的采购负责人');
+
+    if (this.shouldUsePrisma()) {
+      const existing = (await this.prismaDb!.businessDocument.findUnique({
+        where: { id: BigInt(payload.purchaseOrderId) },
+      })) as PrismaBusinessDocumentRecord | null;
+      if (!existing || existing.bizType !== 'purchase_order') {
+        throw new NotFoundException('采购单不存在');
+      }
+      const beforeData = toPurchaseDocumentPayload(existing);
+      if (payload.currentStatus && beforeData.status !== payload.currentStatus) {
+        throw new BadRequestException('采购单状态已变更，请刷新页面');
+      }
+      if (!(await this.needsExistingDirectOwnerAssignment(beforeData))) {
+        throw new BadRequestException('采购负责人已分配或当前采购单不需分配');
+      }
+      const nextPayload = { ...beforeData, ownerName: owner.realName, lockedPurchaseOwner: true };
+      await this.prismaDb!.businessDocument.update({
+        where: { id: existing.id },
+        data: { ownerUserId: BigInt(owner.id), payload: nextPayload },
+      });
+      await this.prismaDb!.operationLog.create({
+        data: {
+          bizType: 'purchase_order', bizId: existing.id,
+          operationType: 'assign_purchase_owner', operatorId: existing.createdBy ?? 0n,
+          beforeData, afterData: nextPayload,
+        },
+      });
+      return { ownerName: owner.realName, lockedPurchaseOwner: true };
+    }
+
+    const existing = this.store.getPurchaseOrder(payload.purchaseOrderId);
+    if (!existing) throw new NotFoundException('采购单不存在');
+    if (payload.currentStatus && existing.status !== payload.currentStatus) {
+      throw new BadRequestException('采购单状态已变更，请刷新页面');
+    }
+    if (!(await this.needsExistingDirectOwnerAssignment(existing))) {
+      throw new BadRequestException('采购负责人已分配或当前采购单不需分配');
+    }
+    const beforeData = snapshotAuditData(existing);
+    existing.ownerName = owner.realName;
+    existing.lockedPurchaseOwner = true;
+    this.store.upsertPurchaseOrder(existing);
+    this.store.recordAuditLog({
+      bizType: 'purchase_order', bizId: existing.id,
+      operationType: 'assign_purchase_owner', operatorId: existing.createdBy,
+      beforeData, afterData: existing,
+    });
+    return { ownerName: owner.realName, lockedPurchaseOwner: true };
   }
 
   private async ensureSubmittedPurchaseProducts(record: CreatedPurchaseOrderRecord) {
@@ -1447,6 +1534,7 @@ export class PurchaseOrderService {
 
         return {
           ...detail,
+          needsPurchaseAssignment: await this.needsExistingDirectOwnerAssignment(detail),
           stockInStatus: detail.stockInStatus ?? 'not_started',
           stockInDocNo: detail.stockInDocNo ?? null,
         };
@@ -1465,6 +1553,7 @@ export class PurchaseOrderService {
 
       return {
         ...created,
+        needsPurchaseAssignment: await this.needsExistingDirectOwnerAssignment(created),
         stockInStatus: created.stockInStatus ?? 'not_started',
         stockInDocNo: created.stockInDocNo ?? null,
       };
@@ -1538,6 +1627,7 @@ export class PurchaseOrderService {
 
     return {
       ...fallback,
+      needsPurchaseAssignment: await this.needsExistingDirectOwnerAssignment(fallback),
       stockInStatus: fallback.stockInStatus ?? 'not_started',
       stockInDocNo: fallback.stockInDocNo ?? null,
     };
@@ -1569,6 +1659,9 @@ export class PurchaseOrderService {
       })) as PrismaBusinessDocumentRecord | null;
       if (existing?.bizType === 'purchase_order') {
         const detail = toPurchaseDocumentPayload(existing);
+        if (await this.needsExistingDirectOwnerAssignment(detail)) {
+          throw new BadRequestException('请先分配采购负责人');
+        }
         this.assertPurchaseOwnerForMutation(detail, payload.session);
         if (detail.status !== payload.currentStatus) {
           throw new BadRequestException('采购单状态已变更，请刷新页面');
@@ -1610,6 +1703,9 @@ export class PurchaseOrderService {
 
     const created = this.store.getPurchaseOrder(payload.purchaseOrderId);
     if (created) {
+      if (await this.needsExistingDirectOwnerAssignment(created)) {
+        throw new BadRequestException('请先分配采购负责人');
+      }
       this.assertPurchaseOwnerForMutation(created, payload.session);
       if (created.status !== payload.currentStatus) {
         throw new BadRequestException('采购单状态已变更，请刷新页面');
@@ -1664,6 +1760,9 @@ export class PurchaseOrderService {
       }
 
       const beforeData = toPurchaseDocumentPayload(existing);
+      if (await this.needsExistingDirectOwnerAssignment(beforeData)) {
+        throw new BadRequestException('请先分配采购负责人');
+      }
       this.assertPurchaseOwnerForMutation(beforeData, payload.session);
       if (
         beforeData.status !== 'draft' &&
@@ -1731,6 +1830,9 @@ export class PurchaseOrderService {
 
     const created = this.store.getPurchaseOrder(payload.purchaseOrderId);
     if (created) {
+      if (await this.needsExistingDirectOwnerAssignment(created)) {
+        throw new BadRequestException('请先分配采购负责人');
+      }
       this.assertPurchaseOwnerForMutation(created, payload.session);
       if (
         created.status !== 'draft' &&

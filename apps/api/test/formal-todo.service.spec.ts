@@ -11,6 +11,25 @@ function createListResponse<T>(items: T[]) {
 }
 
 describe('FormalTodoService', () => {
+  it('routes an existing direct purchase claim awaiting assignment to the manager', async () => {
+    const empty = { list: jest.fn().mockResolvedValue(createListResponse([])) };
+    const purchase = {
+      list: jest.fn().mockResolvedValue(createListResponse([{
+        docNo: 'C-OLD-1', title: 'Old direct purchase', status: 'pending_purchase_claim',
+        ownerName: 'Leo', detailHref: '/purchase-orders/501',
+      }])),
+      getDetail: jest.fn().mockResolvedValue({ needsPurchaseAssignment: true }),
+    };
+    const service = new FormalTodoService(empty as never, empty as never, purchase as never,
+      empty as never, empty as never);
+    const managerTodos = await service.listFormalTodos({ role: 'purchase_manager', user: 'Mia' });
+    expect(managerTodos.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ docNo: 'C-OLD-1', ownerName: '', statusLabel: '待分配' }),
+    ]));
+    const ownerTodos = await service.listFormalTodos({ role: 'purchase', user: 'Leo' });
+    expect(ownerTodos.items.some((item) => item.docNo === 'C-OLD-1')).toBe(false);
+  });
+
   it('aggregates open todos from quote, sales, purchase, shipment, and after-sales lists', async () => {
     const service = new FormalTodoService(
       {

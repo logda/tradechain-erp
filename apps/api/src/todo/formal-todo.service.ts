@@ -103,7 +103,7 @@ export class FormalTodoService {
     @Inject(SalesOrderService)
     private readonly salesOrderService: Pick<SalesOrderService, 'list' | 'listPendingPurchaseAssignments'>,
     @Inject(PurchaseOrderService)
-    private readonly purchaseOrderService: Pick<PurchaseOrderService, 'list'>,
+    private readonly purchaseOrderService: Pick<PurchaseOrderService, 'list'> & Partial<Pick<PurchaseOrderService, 'getDetail'>>,
     @Inject(ShipmentBatchService)
     private readonly shipmentBatchService: Pick<ShipmentBatchService, 'list'>,
     @Inject(AfterSalesService)
@@ -380,21 +380,30 @@ export class FormalTodoService {
       });
     });
 
-    purchaseOrders.items
+    const purchaseClaims = purchaseOrders.items
       .filter((item) => !countClosed(item, 'purchase'))
-      .filter((item) => item.status === 'pending_purchase_claim')
-      .forEach((item) => {
+      .filter((item) => item.status === 'pending_purchase_claim');
+    const purchaseClaimsWithAssignment = await Promise.all(purchaseClaims.map(async (item) => {
+      const id = Number(item.detailHref.split('/').filter(Boolean).at(-1));
+      const detail = Number.isSafeInteger(id) && id > 0
+        ? await this.purchaseOrderService.getDetail?.(id)
+        : null;
+      return { item, needsAssignment: detail?.needsPurchaseAssignment === true };
+    }));
+    purchaseClaimsWithAssignment.forEach(({ item, needsAssignment }) => {
         items.push({
-          id: `purchase-claim-${item.docNo}`,
+          id: `${needsAssignment ? 'purchase-assignment' : 'purchase-claim'}-${item.docNo}`,
           docNo: item.docNo,
-          title: '采购单待负责人建单',
+          title: needsAssignment ? '采购单待分配采购负责人' : '采购单待负责人建单',
           domain: 'purchase',
           moduleLabel: '采购单',
-          statusLabel: '待采购建单',
-          ownerName: item.ownerName ?? '',
+          statusLabel: needsAssignment ? '待分配' : '待采购建单',
+          ownerName: needsAssignment ? '' : item.ownerName ?? '',
           href: formalDetailHref(item.detailHref, '/app/purchase-orders'),
           priority: 'high',
-          description: `${item.title} 已指定采购负责人，请补齐采购信息并提交审批。`,
+          description: needsAssignment
+            ? `${item.title} 需要采购主管或老板指定采购负责人。`
+            : `${item.title} 已指定采购负责人，请补齐采购信息并提交审批。`,
         });
       });
 

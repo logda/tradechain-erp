@@ -158,6 +158,23 @@ export class PurchaseOrderController {
 
   @FormalRoles('admin', 'boss', 'purchase_manager')
   @FormalActions('purchase.order.approve')
+  @Post(':id/assign-owner')
+  assignExistingDirectPurchaseOwner(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { ownerName: string; currentStatus?: string },
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    return this.purchaseOrderService.assignExistingDirectPurchaseOwner({
+      purchaseOrderId: id,
+      ownerName: body.ownerName,
+      currentStatus: body.currentStatus,
+      session: readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user }),
+    });
+  }
+
+  @FormalRoles('admin', 'boss', 'purchase_manager')
+  @FormalActions('purchase.order.approve')
   @Get(':id/source-inquiry')
   async getSourceInquiryForApproval(
     @Param('id', ParseIntPipe) id: number,

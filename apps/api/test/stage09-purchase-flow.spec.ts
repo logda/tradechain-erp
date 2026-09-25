@@ -6,6 +6,7 @@ import { PurchaseOrderService } from '../src/purchase-order/purchase-order.servi
 import { SalesOrderService } from '../src/sales-order/sales-order.service';
 import { SalesOrderController } from '../src/sales-order/sales-order.controller';
 import { PurchaseOrderController } from '../src/purchase-order/purchase-order.controller';
+import { resolvePurchaseOrderStore } from '../src/purchase-order/purchase-order.store';
 import type { PrismaService } from '../src/storage/prisma.service';
 
 describe('stage 09 purchase ownership', () => {
@@ -120,6 +121,96 @@ describe('stage 09 purchase ownership', () => {
       currentStatus: 'pending_purchase_claim',
       session: { role: 'purchase', user: 'Nina' },
     })).rejects.toThrow('仅指定采购负责人');
+  });
+
+  it('requires explicit manager assignment for an existing direct-sale purchase claim', async () => {
+    const source = {
+      getDetail: jest.fn().mockResolvedValue({
+        id: 903, salesNo: 'S2609250903', sourceMode: 'direct', status: 'purchasing',
+      }),
+      syncOperationalAggregates: jest.fn().mockResolvedValue(undefined),
+    };
+    const directory = { listAssignablePurchaseUsers: jest.fn().mockResolvedValue([
+      { id: 2002, realName: 'Leo', username: 'leo', roleCode: 'purchase', status: 'active' },
+      { id: 2003, realName: 'Nina', username: 'nina', roleCode: 'purchase', status: 'active' },
+    ]) };
+    const service = new PurchaseOrderService(undefined, source as never, directory as never);
+    const created = await service.createFromSalesOrder({
+      salesOrderId: 903, createdBy: 2001, ownerName: 'Leo',
+      initialStatus: 'pending_purchase_claim',
+      items: [{ salesItemId: 1, supplierId: 3001, productId: 501, quantity: 1, unitPrice: 10 }],
+    });
+    const legacy = created.purchaseOrders[0];
+    resolvePurchaseOrderStore().upsertPurchaseOrder({ ...legacy, lockedPurchaseOwner: undefined });
+
+    expect(await service.getDetail(legacy.id)).toMatchObject({ needsPurchaseAssignment: true });
+    await expect(service.assignExistingDirectPurchaseOwner({
+      purchaseOrderId: legacy.id, ownerName: '',
+      session: { role: 'purchase_manager', user: 'Mia' },
+    })).rejects.toThrow('请选择有效的采购负责人');
+    await expect(service.submit({
+      purchaseOrderId: legacy.id, currentStatus: 'pending_purchase_claim',
+      session: { role: 'purchase', user: 'Leo' },
+    })).rejects.toThrow('请先分配采购负责人');
+    await expect(service.assignExistingDirectPurchaseOwner({
+      purchaseOrderId: legacy.id, ownerName: 'Nina',
+      session: { role: 'purchase_manager', user: 'Mia' },
+    })).resolves.toMatchObject({ ownerName: 'Nina', lockedPurchaseOwner: true });
+    expect(await service.getDetail(legacy.id)).toMatchObject({
+      ownerName: 'Nina', lockedPurchaseOwner: true, needsPurchaseAssignment: false,
+    });
+    await expect(service.assignExistingDirectPurchaseOwner({
+      purchaseOrderId: legacy.id, ownerName: 'Leo',
+      session: { role: 'purchase_manager', user: 'Mia' },
+    })).rejects.toThrow('已分配');
+    await expect(service.saveDraft({
+      purchaseOrderId: legacy.id, currentStatus: 'pending_purchase_claim', ownerName: 'Leo',
+      session: { role: 'purchase', user: 'Leo' },
+    })).rejects.toThrow('仅指定采购负责人');
+  });
+
+  it('persists an existing direct purchase assignment in Prisma without changing the supplier', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const record = {
+      id: 504n, bizType: 'purchase_order', docNo: 'C504', status: 'pending_purchase_claim',
+      ownerUserId: 2002n, counterpartyId: 3001n, createdBy: 2001n,
+      createdAt: new Date(), updatedAt: new Date(),
+      payload: {
+        id: 504, purchaseNo: 'C504', sourceSalesOrderId: 904, supplierId: 3001,
+        supplierName: 'Factory A', ownerName: 'Leo', currentVersionNo: 1,
+        status: 'pending_purchase_claim', itemCount: 0, createdBy: 2001,
+        createdAt: new Date().toISOString(), salesOrderNo: 'S904', currentBatchCount: 0,
+        versionHistory: [], items: [],
+      },
+    };
+    const prisma = {
+      businessDocument: {
+        findUnique: jest.fn().mockImplementation(async () => record),
+        update: jest.fn().mockImplementation(async ({ data }) => {
+          record.ownerUserId = data.ownerUserId;
+          record.payload = data.payload;
+          return record;
+        }),
+      },
+      operationLog: { create: jest.fn().mockResolvedValue({ id: 1n }) },
+    } as unknown as PrismaService;
+    const source = { getDetail: jest.fn().mockResolvedValue({ sourceMode: 'direct' }) };
+    const directory = { listAssignablePurchaseUsers: jest.fn().mockResolvedValue([
+      { id: 2002, realName: 'Leo', username: 'leo', roleCode: 'purchase', status: 'active' },
+      { id: 2003, realName: 'Nina', username: 'nina', roleCode: 'purchase', status: 'active' },
+    ]) };
+    const service = new PurchaseOrderService(prisma, source as never, directory as never);
+    expect(await service.getDetail(504)).toMatchObject({ needsPurchaseAssignment: true });
+    await expect(service.assignExistingDirectPurchaseOwner({
+      purchaseOrderId: 504, currentStatus: 'pending_purchase_claim', ownerName: 'Nina',
+      session: { role: 'purchase_manager', user: 'Mia' },
+    })).resolves.toMatchObject({ ownerName: 'Nina', lockedPurchaseOwner: true });
+    expect(record.ownerUserId).toBe(2003n);
+    expect(record.payload).toMatchObject({
+      ownerName: 'Nina', supplierId: 3001, supplierName: 'Factory A', lockedPurchaseOwner: true,
+    });
+    expect(await service.getDetail(504)).toMatchObject({ needsPurchaseAssignment: false });
+    expect(prisma.operationLog.create).toHaveBeenCalledTimes(1);
   });
 
   it('uses the actual inquiry comparison submitter for quote-sourced purchase conversion', async () => {
