@@ -50,6 +50,7 @@ const actionOptions = [
   { value: 'admin.user.write', label: '账号管理' },
   { value: 'admin.role.write', label: '角色权限' },
   { value: 'master_data.write', label: '主数据维护' },
+  { value: 'product.write', label: '产品库维护' },
   { value: 'counterparty.write', label: '往来单位维护' },
   { value: 'sales.quote.write', label: '报价' },
   { value: 'sales.inquiry.submit', label: '询价提交' },

@@ -1183,7 +1183,7 @@ export function CreateFormalQuoteForm({
               style={inputStyle}
             />
           </label>
-          <label style={labelStyle}>
+          {documentType === 'demand' && productEntryMode === 'candidate' ? null : <label style={labelStyle}>
             销售单价 Sale Price
             <input
               name="salePrice"
@@ -1194,7 +1194,7 @@ export function CreateFormalQuoteForm({
               onChange={(event) => setSalePriceValue(event.target.value)}
               style={productInputStyle}
             />
-          </label>
+          </label>}
         </div>
         {productEntryMode === 'existing' ? (
           <p style={helperTextStyle}>

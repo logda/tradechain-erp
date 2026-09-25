@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import { canViewFormalModule, resolveDemoSession } from '../../_lib/demo-session';
-import { canUseFormalMasterDataActions } from '../../_lib/formal-access';
+import { canUseFormalProductActions } from '../../_lib/formal-access';
 import {
   defaultProductCodeRule,
   defaultProductCodeRuleSet,
@@ -94,9 +94,9 @@ export default async function AppProductCodeRulePage({
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = resolveDemoSession(resolvedSearchParams);
-  const canManageMasterData = canUseFormalMasterDataActions(session);
+  const canManageMasterData = canUseFormalProductActions(session);
 
-  if (!canViewFormalModule(session, 'admin')) {
+  if (!canViewFormalModule(session, 'admin') && !canViewFormalModule(session, 'sales') && !canViewFormalModule(session, 'purchase')) {
     return (
       <AppShell
         title="产品编码规则"
@@ -120,8 +120,8 @@ export default async function AppProductCodeRulePage({
       session={session}
     >
       <section style={sectionStyle}>
-        <Link href="/app/master-data" style={linkStyle}>
-          返回主数据中心
+        <Link href="/app/master-data/products" style={linkStyle}>
+          返回产品库
         </Link>
         {canManageMasterData ? (
           <ProductCodeRulePageClient

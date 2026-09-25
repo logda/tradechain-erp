@@ -183,6 +183,7 @@ describe('UserManagementService', () => {
           'admin.user.write',
           'admin.role.write',
           'master_data.write',
+          'product.write',
           'product.custom_field.write',
           'counterparty.write',
           'sales.quote.write',
@@ -346,5 +347,20 @@ describe('UserManagementService', () => {
         'sales.sample.execute',
       ],
     });
+  });
+
+  it('persists product.write independently from master_data.write', async () => {
+    const service = new UserManagementService();
+    const updated = await service.updateRolePermission('boss', {
+      modules: ['sales', 'purchase'],
+      dataScope: 'all',
+      actions: ['product.write'],
+      updatedBy: 'admin',
+    });
+    expect(updated.accessScopes.actions).toEqual(['product.write']);
+
+    const session = await service.authenticate({ username: 'mia', password: 'Mia123456' });
+    expect(session.accessScopes.actions).toContain('product.write');
+    expect(session.accessScopes.actions).not.toContain('master_data.write');
   });
 });

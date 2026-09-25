@@ -451,8 +451,8 @@ export function ProductTableRow({
                   endpoint={`${mutationApiBaseUrl}/products/${currentItem.id}/deactivate`}
                   label="停用"
                   successLabel="操作成功，商品已停用（假删除）"
-                  requiredAction="master_data.write"
-                  requiredActionLabel="主数据维护"
+                  requiredAction="product.write"
+                  requiredActionLabel="产品库维护"
                   requestHeaders={requestHeaders}
                   onSuccess={(result) => {
                     const responseItem =
@@ -480,8 +480,8 @@ export function ProductTableRow({
                   endpoint={`${mutationApiBaseUrl}/products/${currentItem.id}/activate`}
                   label="启用"
                   successLabel="操作成功，商品已重新启用"
-                  requiredAction="master_data.write"
-                  requiredActionLabel="主数据维护"
+                  requiredAction="product.write"
+                  requiredActionLabel="产品库维护"
                   requestHeaders={requestHeaders}
                   onSuccess={(result) => {
                     const responseItem =
@@ -506,8 +506,8 @@ export function ProductTableRow({
                 endpoint={`${mutationApiBaseUrl}/products/${currentItem.id}/delete`}
                 label="删除"
                 successLabel="操作成功，商品已删除并退出业务调用"
-                requiredAction="master_data.write"
-                requiredActionLabel="主数据维护"
+                requiredAction="product.write"
+                requiredActionLabel="产品库维护"
                 requestHeaders={requestHeaders}
                 onSuccess={(result) => {
                   const responseItem =
@@ -537,8 +537,8 @@ export function ProductTableRow({
                   endpoint={`${mutationApiBaseUrl}/products/${currentItem.id}/convert-to-formal`}
                   label="转正式产品"
                   successLabel="操作成功，候选产品已转为正式产品"
-                  requiredAction="master_data.write"
-                  requiredActionLabel="主数据维护"
+                  requiredAction="product.write"
+                  requiredActionLabel="产品库维护"
                   requestHeaders={requestHeaders}
                   onSuccess={(result) => {
                     const responseItem =

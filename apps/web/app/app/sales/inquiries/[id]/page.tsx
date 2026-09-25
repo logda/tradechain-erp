@@ -465,6 +465,7 @@ function isDemandSource(quoteNo: string, documentType?: SourceQuoteDetail['docum
 
 function renderSourceQuoteOverview(quote: SourceQuoteDetail, inquiryId: number) {
   const isDemand = isDemandSource(quote.quoteNo, quote.documentType);
+  const hideSalePrice = isDemand && quote.productSource === 'candidate';
   return (
     <section style={quoteOverviewStyle}>
       <div style={quoteOverviewHeaderStyle}>
@@ -509,8 +510,8 @@ function renderSourceQuoteOverview(quote: SourceQuoteDetail, inquiryId: number) 
               <th style={headCellStyle}>图片</th>
               <th style={headCellStyle}>数量</th>
               <th style={headCellStyle}>目标价</th>
-              <th style={headCellStyle}>客户价 / 销售单价</th>
-              <th style={headCellStyle}>金额</th>
+              {hideSalePrice ? null : <th style={headCellStyle}>客户价 / 销售单价</th>}
+              {hideSalePrice ? null : <th style={headCellStyle}>金额</th>}
             </tr>
           </thead>
           <tbody>
@@ -530,8 +531,8 @@ function renderSourceQuoteOverview(quote: SourceQuoteDetail, inquiryId: number) 
                   {item.quantity} {item.unit}
                 </td>
                 <td style={cellStyle}>{item.targetPrice ?? 0}</td>
-                <td style={cellStyle}>{item.salePrice}</td>
-                <td style={cellStyle}>{item.amount}</td>
+                {hideSalePrice ? null : <td style={cellStyle}>{item.salePrice}</td>}
+                {hideSalePrice ? null : <td style={cellStyle}>{item.amount}</td>}
               </tr>
             ))}
           </tbody>

@@ -509,6 +509,8 @@ describe('formal inquiry pages', () => {
     expect(screen.queryByRole('link', { name: '打开源报价详情' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '比价明细' })).not.toBeInTheDocument();
     expect(screen.queryByText('NEW-TEMP-SKU')).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: '客户价 / 销售单价' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: '金额' })).not.toBeInTheDocument();
   });
 
   it('hides inquiry actions once the boss has already confirmed the inquiry', async () => {

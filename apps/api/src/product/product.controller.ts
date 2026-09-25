@@ -37,7 +37,8 @@ export class ProductController {
   @Get()
   list(@Query() query: ListProductsQuery, @Req() request?: { headers: Record<string, string | string[] | undefined> }) {
     const role = request?.headers['x-erp-role'] as FormalRole | undefined;
-    return this.productService.list(normalizePaginationQuery(query), role === 'sales' || role === 'sales_manager' ? 'sales' : 'full');
+    const actions = String(request?.headers['x-erp-actions'] ?? '').split(',');
+    return this.productService.list(normalizePaginationQuery(query), (role === 'sales' || role === 'sales_manager') && !actions.includes('product.write') ? 'sales' : 'full');
   }
 
   @FormalActions('audit.view')
@@ -48,13 +49,11 @@ export class ProductController {
   }
 
   @Get('code-rule')
-  @FormalRoles('admin', 'boss')
   getCodeRule() {
     return this.productService.getCodeRule();
   }
 
   @Get('code-rules')
-  @FormalRoles('admin', 'boss')
   getCodeRules() {
     return this.productService.getCodeRules();
   }
@@ -67,21 +66,20 @@ export class ProductController {
 
   @Post('custom-fields')
   @FormalRoles('admin', 'boss')
-  @FormalActions('product.custom_field.write')
+  @FormalActions('product.write', 'product.custom_field.write')
   createCustomField(@Body() body: { name: string; type: string }, @Req() request: { headers: Record<string, string | string[] | undefined> }) {
     return this.productService.createCustomField({ ...body, createdBy: String(request.headers['x-erp-user'] ?? '') });
   }
 
   @Delete('custom-fields/:id')
   @FormalRoles('admin', 'boss')
-  @FormalActions('product.custom_field.write')
+  @FormalActions('product.write', 'product.custom_field.write')
   deleteCustomField(@Param('id', ParseIntPipe) id: number) {
     return this.productService.deleteCustomField(id);
   }
 
   @Post()
-  @FormalRoles('admin')
-  @FormalActions('master_data.write')
+  @FormalActions('product.write')
   create(@Body() body: CreateProductPayload) {
     if (body.productStage !== 'quote_candidate' && body.productStage !== 'formal') {
       throw new BadRequestException('请选择产品阶段');
@@ -90,15 +88,13 @@ export class ProductController {
   }
 
   @Patch('code-rule')
-  @FormalRoles('admin')
-  @FormalActions('master_data.write')
+  @FormalActions('product.write')
   updateCodeRule(@Body() body: UpdateProductCodeRulePayload) {
     return this.productService.updateCodeRule(body);
   }
 
   @Patch('code-rules/:kind')
-  @FormalRoles('admin')
-  @FormalActions('master_data.write')
+  @FormalActions('product.write')
   updateCodeRuleByKind(
     @Param('kind') kind: string,
     @Body() body: UpdateProductCodeRulePayload,
@@ -110,15 +106,13 @@ export class ProductController {
   }
 
   @Patch(':id')
-  @FormalRoles('admin')
-  @FormalActions('master_data.write')
+  @FormalActions('product.write')
   update(@Param('id', ParseIntPipe) id: number, @Body() body: UpdateProductPayload) {
     return this.productService.update(id, body);
   }
 
   @Post(':id/deactivate')
-  @FormalRoles('admin')
-  @FormalActions('master_data.write')
+  @FormalActions('product.write')
   deactivate(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { operatedBy: string; reason: string },
@@ -127,8 +121,7 @@ export class ProductController {
   }
 
   @Post(':id/activate')
-  @FormalRoles('admin')
-  @FormalActions('master_data.write')
+  @FormalActions('product.write')
   activate(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { operatedBy: string; reason: string },
@@ -137,8 +130,7 @@ export class ProductController {
   }
 
   @Post(':id/delete')
-  @FormalRoles('admin')
-  @FormalActions('master_data.write')
+  @FormalActions('product.write')
   deleteProduct(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { operatedBy: string; reason: string },
@@ -147,8 +139,7 @@ export class ProductController {
   }
 
   @Post(':id/convert-to-formal')
-  @FormalRoles('admin')
-  @FormalActions('master_data.write')
+  @FormalActions('product.write')
   convertToFormal(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { operatedBy: string },

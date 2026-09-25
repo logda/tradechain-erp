@@ -906,4 +906,40 @@ describe('admin users page', () => {
       }),
     );
   });
+
+  it('lets admins grant product maintenance without granting master data maintenance', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ roleCode: 'boss', accessScopes: { modules: ['sales'], dataScope: 'all', actions: ['product.write'] } }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <RolePermissionEditor
+        endpoint="http://127.0.0.1:3001/api/admin/users/role-permissions/boss"
+        roleCode="boss"
+        roleLabel="老板"
+        modules={['sales']}
+        dataScope="all"
+        actions={[]}
+        updatedBy="system"
+        updatedAt="2026-07-11T09:00:00.000Z"
+        actorRole="admin"
+        actorUser="Admin"
+        actorAccessScopes={{ modules: ['admin'], dataScope: 'all', actions: ['admin.role.write'] }}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('产品库维护'));
+    expect(screen.getByLabelText('主数据维护')).not.toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: '保存权限' }));
+
+    await waitFor(() => expect(screen.getByText('老板 权限已更新')).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3001/api/admin/users/role-permissions/boss',
+      expect.objectContaining({ body: JSON.stringify({
+        modules: ['sales'], dataScope: 'all', actions: ['product.write'], updatedBy: 'Admin',
+      }) }),
+    );
+  });
 });

@@ -395,10 +395,10 @@ describe('formal detail pages', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '报价结果' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: '老板确认售价' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '报价结果' })).not.toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '销售单价 Sale Price' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: '原销售单价' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '报价结果' }).closest('article')).toHaveTextContent('18.8');
+    expect(screen.getByRole('heading', { name: '报价明细' }).closest('article')).toHaveTextContent('18.8');
     expect(screen.queryByText('最终供应商')).not.toBeInTheDocument();
     expect(screen.queryByText('采购价')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '老板确认报价售价' })).not.toBeInTheDocument();

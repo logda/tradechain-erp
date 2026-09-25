@@ -109,6 +109,7 @@ const actionLabels: Record<string, string> = {
   'admin.user.write': '账号管理',
   'admin.role.write': '角色权限',
   'master_data.write': '主数据维护',
+  'product.write': '产品库维护',
   'counterparty.write': '往来单位维护',
   'sales.quote.write': '报价',
   'sales.inquiry.submit': '询价提交',

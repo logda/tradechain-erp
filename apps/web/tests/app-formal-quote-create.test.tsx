@@ -391,7 +391,7 @@ describe('formal quote create page', () => {
           },
           quantity: 50,
           targetPrice: 98,
-          salePrice: 120,
+          salePrice: 0,
           imageUrls: [],
         },
       ],
@@ -420,7 +420,7 @@ describe('formal quote create page', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText('数量 Quantity')).toBeInTheDocument();
     expect(screen.getByLabelText('客户目标价 Target Price')).toBeInTheDocument();
-    expect(screen.getByLabelText('销售单价 Sale Price')).toBeInTheDocument();
+    expect(screen.queryByLabelText('销售单价 Sale Price')).not.toBeInTheDocument();
     expect(screen.getByLabelText('产品编码 Product Code')).toBeInTheDocument();
     expect(screen.getByLabelText('产品名称 Product Name')).toBeInTheDocument();
     expect(screen.getByLabelText('产品类别 Product Category')).toBeInTheDocument();

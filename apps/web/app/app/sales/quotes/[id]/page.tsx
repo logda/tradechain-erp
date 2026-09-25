@@ -572,6 +572,8 @@ export default async function AppQuoteDetailPage({
     );
   }
 
+  const hideSalePrice = quote.documentType === 'demand' && quote.productSource === 'candidate';
+
   return (
     <AppShell
       title="正式需求和报价详情"
@@ -692,9 +694,9 @@ export default async function AppQuoteDetailPage({
                   <th style={headCellStyle}>数量 Qty</th>
                   <th style={headCellStyle}>单位 Unit</th>
                   <th style={headCellStyle}>目标价 Target</th>
-                  <th style={headCellStyle}>销售单价 Sale Price</th>
+                  {hideSalePrice ? null : <th style={headCellStyle}>销售单价 Sale Price</th>}
                   <th style={headCellStyle}>图片 PIC</th>
-                  <th style={headCellStyle}>金额 Amount</th>
+                  {hideSalePrice ? null : <th style={headCellStyle}>金额 Amount</th>}
                 </tr>
               </thead>
               <tbody>
@@ -713,9 +715,9 @@ export default async function AppQuoteDetailPage({
                     <td style={cellStyle}>{item.quantity}</td>
                     <td style={cellStyle}>{item.unit}</td>
                     <td style={cellStyle}>{item.targetPrice ?? 0}</td>
-                    <td style={cellStyle}>{item.salePrice}</td>
+                    {hideSalePrice ? null : <td style={cellStyle}>{item.salePrice}</td>}
                     <td style={cellStyle}>{renderQuoteItemImages(item)}</td>
-                    <td style={cellStyle}>{item.amount}</td>
+                    {hideSalePrice ? null : <td style={cellStyle}>{item.amount}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -727,34 +729,6 @@ export default async function AppQuoteDetailPage({
           <article style={infoCardStyle}>
             <p style={labelStyle}>版本 Version</p>
             <p style={valueStyle}>V{quote.currentVersionNo}</p>
-          </article>
-        ) : null}
-
-        {(quote.items ?? []).some((item) => Number(item.confirmedSalePrice) > 0) ? (
-          <article style={infoCardStyle}>
-            <h3 style={{ marginTop: 0 }}>报价结果</h3>
-            <div style={tableWrapStyle}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={headCellStyle}>行号</th>
-                    <th style={headCellStyle}>SKU</th>
-                    <th style={headCellStyle}>商品</th>
-                    <th style={headCellStyle}>老板确认售价</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(quote.items ?? []).map((item) => (
-                    <tr key={`confirmed-${item.lineNo}-${item.sku}`}>
-                      <td style={cellStyle}>{item.lineNo}</td>
-                      <td style={cellStyle}>{item.sku}</td>
-                      <td style={cellStyle}>{item.productName}</td>
-                      <td style={cellStyle}>{item.confirmedSalePrice ?? '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </article>
         ) : null}
 

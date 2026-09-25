@@ -652,7 +652,8 @@ describe('QuoteService runtime audit logs', () => {
     expect(result.items[0].sku).toBe('SKU-Q-900');
     expect(result.items[0].productName).toBe('报价新品');
     expect(result.items[0].quantity).toBe(50);
-    expect(result.items[0].salePrice).toBe(120);
+    expect(result.items[0].salePrice).toBe(0);
+    expect(result.items[0].amount).toBe(0);
     expect(result).toMatchObject({
       documentType: 'demand',
       productSource: 'candidate',
@@ -792,7 +793,7 @@ describe('QuoteService runtime audit logs', () => {
       productName: '未入主数据候选品',
       quantity: 20,
       targetPrice: 19.8,
-      salePrice: 25.6,
+      salePrice: 0,
     });
     expect(after.items.map((item) => item.sku)).not.toContain(uniqueSku);
   });

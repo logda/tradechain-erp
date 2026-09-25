@@ -38,6 +38,19 @@ async function renderDetail(detail: Record<string, unknown> = demand, role = 'bo
 afterEach(() => vi.unstubAllGlobals());
 
 describe('R05 quote list and detail acceptance', () => {
+  it('hides sale price and amount on a hand-filled demand before boss pricing', async () => {
+    await renderDetail({
+      ...demand,
+      productSource: 'candidate',
+      status: 'inquiry_in_progress',
+      items: [{ ...lines[0], salePrice: 120, amount: 1440 }],
+    });
+    expect(screen.getByRole('heading', { name: '需求明细' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: '销售单价 Sale Price' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: '金额 Amount' })).not.toBeInTheDocument();
+    expect(screen.queryByText('120')).not.toBeInTheDocument();
+  });
+
   it('shows the original demand snapshot and the selected sampling note at the bottom of a derived quote', async () => {
     await renderDetail({
       ...demand,

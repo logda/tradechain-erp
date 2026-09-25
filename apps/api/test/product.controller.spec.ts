@@ -1,55 +1,73 @@
-import { ParseIntPipe } from '@nestjs/common';
+import { ForbiddenException, ParseIntPipe, type ExecutionContext } from '@nestjs/common';
 import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { Test } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
 import { FormalRoleGuard } from '../src/auth/formal-role.guard';
 import { FORMAL_ACTIONS_KEY, FORMAL_ROLES_KEY } from '../src/auth/formal-role.decorator';
 import { ProductController } from '../src/product/product.controller';
 import { ProductService, type CreateProductPayload } from '../src/product/product.service';
 
 describe('ProductController', () => {
-  it('allows sales to read products while restricting mutations to admin', () => {
+  it('allows configured product maintainers to mutate products', () => {
     expect(Reflect.getMetadata(GUARDS_METADATA, ProductController)).toEqual(
       expect.arrayContaining([FormalRoleGuard]),
     );
     expect(Reflect.getMetadata(FORMAL_ROLES_KEY, ProductController)).toContain('sales');
-    expect(Reflect.getMetadata(FORMAL_ROLES_KEY, ProductController.prototype.create)).toEqual(['admin']);
+    expect(Reflect.getMetadata(FORMAL_ROLES_KEY, ProductController.prototype.create)).toBeUndefined();
     expect(Reflect.getMetadata(FORMAL_ROLES_KEY, ProductController.prototype.createCustomField)).toEqual(['admin', 'boss']);
+    expect(Reflect.getMetadata(FORMAL_ACTIONS_KEY, ProductController.prototype.createCustomField)).toEqual(['product.write', 'product.custom_field.write']);
     expect(
       Reflect.getMetadata(FORMAL_ACTIONS_KEY, ProductController.prototype.create),
-    ).toEqual(['master_data.write']);
+    ).toEqual(['product.write']);
     expect(
       Reflect.getMetadata(FORMAL_ACTIONS_KEY, ProductController.prototype.update),
-    ).toEqual(['master_data.write']);
+    ).toEqual(['product.write']);
     expect(
       Reflect.getMetadata(
         FORMAL_ACTIONS_KEY,
         ProductController.prototype.deactivate,
       ),
-    ).toEqual(['master_data.write']);
+    ).toEqual(['product.write']);
     expect(
       Reflect.getMetadata(
         FORMAL_ACTIONS_KEY,
         ProductController.prototype.activate,
       ),
-    ).toEqual(['master_data.write']);
+    ).toEqual(['product.write']);
     expect(
       Reflect.getMetadata(
         FORMAL_ACTIONS_KEY,
         ProductController.prototype.deleteProduct,
       ),
-    ).toEqual(['master_data.write']);
+    ).toEqual(['product.write']);
     expect(
       Reflect.getMetadata(
         FORMAL_ACTIONS_KEY,
         ProductController.prototype.convertToFormal,
       ),
-    ).toEqual(['master_data.write']);
+    ).toEqual(['product.write']);
     expect(
       Reflect.getMetadata(
         FORMAL_ACTIONS_KEY,
         ProductController.prototype.updateCodeRule,
       ),
-    ).toEqual(['master_data.write']);
+    ).toEqual(['product.write']);
+  });
+
+  it('requires product.write independently of master_data.write for product mutations', () => {
+    const guard = new FormalRoleGuard(new Reflector());
+    const context = (actions: string) => ({
+      getClass: () => ProductController,
+      getHandler: () => ProductController.prototype.create,
+      switchToHttp: () => ({ getRequest: () => ({ headers: {
+        'x-erp-role': 'boss',
+        'x-erp-modules': 'sales,purchase',
+        'x-erp-actions': actions,
+      } }) }),
+    }) as unknown as ExecutionContext;
+
+    expect(guard.canActivate(context('product.write'))).toBe(true);
+    expect(() => guard.canActivate(context('master_data.write'))).toThrow(ForbiddenException);
   });
 
   it('passes normalized list query parameters to the service', async () => {

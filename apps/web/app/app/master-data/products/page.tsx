@@ -4,7 +4,7 @@ import { AuditLogTable } from '../../_components/audit-log-table';
 import { canViewFormalModule, resolveDemoSession } from '../../_lib/demo-session';
 import { hasValidAuditLogResponse, type AuditLogResponse } from '../../_lib/audit-log';
 import { buildFormalRequestHeaders } from '../../_lib/formal-request-headers';
-import { canUseFormalMasterDataActions } from '../../_lib/formal-access';
+import { canUseFormalProductActions } from '../../_lib/formal-access';
 import { normalizePageNumber, paginateItems } from '../../_lib/formal-pagination';
 import {
   type PricingMode,
@@ -501,9 +501,10 @@ export default async function AppProductsPage({
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = resolveDemoSession(resolvedSearchParams);
-  const canManageMasterData = session.role === 'admin' && canUseFormalMasterDataActions(session);
-  const salesView = session.role === 'sales' || session.role === 'sales_manager';
-  const canConfigureFields = session.role === 'admin' || session.role === 'boss';
+  const canManageMasterData = canUseFormalProductActions(session);
+  const salesView = (session.role === 'sales' || session.role === 'sales_manager') && !canManageMasterData;
+  const canConfigureFields = canManageMasterData && (session.role === 'admin' || session.role === 'boss') &&
+    (session.accessScopes ? session.accessScopes.actions?.includes('product.custom_field.write') === true : true);
 
   if (!canViewFormalModule(session, 'admin') && !canViewFormalModule(session, 'sales') && !canViewFormalModule(session, 'purchase')) {
     return (

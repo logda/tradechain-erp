@@ -57,7 +57,7 @@ function getAdminApiBaseUrl() {
 const fullAdminAccessScopes = {
   modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'admin', 'audit'],
   dataScope: 'all',
-  actions: ['audit.view', 'admin.user.write', 'admin.role.write', 'master_data.write'],
+  actions: ['audit.view', 'admin.user.write', 'admin.role.write', 'master_data.write', 'product.write'],
 };
 
 function hasValidUserListResponse(value: unknown): value is UserListResponse {
@@ -151,7 +151,7 @@ const fallbackUsers: UserListItem[] = [
     accessScopes: {
       modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'admin', 'audit'],
       dataScope: 'all',
-      actions: ['admin.user.write', 'admin.role.write', 'master_data.write'],
+      actions: ['admin.user.write', 'admin.role.write', 'master_data.write', 'product.write'],
     },
     createdAt: '2026-07-11T09:00:00.000Z',
     createdBy: 'system',
@@ -166,7 +166,7 @@ const fallbackUsers: UserListItem[] = [
     accessScopes: {
       modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'audit'],
       dataScope: 'all',
-      actions: ['sales.order.write', 'purchase.order.approve', 'boss.confirm', 'finance.confirm'],
+      actions: ['product.write', 'sales.order.write', 'purchase.order.approve', 'boss.confirm', 'finance.confirm'],
     },
     createdAt: '2026-07-11T09:05:00.000Z',
     createdBy: 'system',
@@ -219,6 +219,7 @@ function resolveRoleAccessScopes(roleCode: string) {
         'admin.user.write',
         'admin.role.write',
         'master_data.write',
+        'product.write',
         'sales.quote.write',
         'sales.inquiry.submit',
         'sales.order.write',
@@ -241,7 +242,7 @@ function resolveRoleAccessScopes(roleCode: string) {
     return {
       modules: ['sales', 'purchase', 'operations', 'boss_dashboard', 'audit'],
       dataScope: 'all',
-      actions: ['sales.order.write', 'purchase.order.approve', 'boss.confirm', 'finance.confirm'],
+      actions: ['product.write', 'sales.order.write', 'purchase.order.approve', 'boss.confirm', 'finance.confirm'],
     };
   }
 

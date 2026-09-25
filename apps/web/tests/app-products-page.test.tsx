@@ -9,6 +9,30 @@ describe('formal product master data page', () => {
     vi.unstubAllGlobals();
   });
 
+  it('shows product maintenance to boss only when product.write is granted', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [], total: 0, page: 1, pageSize: 20 }),
+    }));
+
+    const granted = await AppProductsPage({ searchParams: Promise.resolve({
+      role: 'boss', user: 'Mia',
+      access: JSON.stringify({ modules: ['sales', 'purchase'], dataScope: 'all', actions: ['product.write'] }),
+    }) });
+    const { unmount } = render(<>{granted}</>);
+    expect(screen.getByText('可维护产品')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新增' })).toBeInTheDocument();
+    unmount();
+
+    const denied = await AppProductsPage({ searchParams: Promise.resolve({
+      role: 'boss', user: 'Mia',
+      access: JSON.stringify({ modules: ['sales', 'purchase'], dataScope: 'all', actions: ['master_data.write'] }),
+    }) });
+    render(<>{denied}</>);
+    expect(screen.getByText('产品只读')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '新增' })).not.toBeInTheDocument();
+  });
+
   it('renders the product master data page for admin users', async () => {
     vi.stubGlobal(
       'fetch',
@@ -678,7 +702,7 @@ describe('formal product master data page', () => {
         actorAccessScopes={{
           modules: ['admin'],
           dataScope: 'all',
-          actions: ['master_data.write'],
+          actions: ['product.write'],
         }}
       />,
     );
@@ -786,7 +810,7 @@ describe('formal product master data page', () => {
         method: 'POST',
         body: expect.stringContaining('"sku":"SALE-CAM-009"'),
         headers: expect.objectContaining({
-          'x-erp-actions': 'master_data.write',
+          'x-erp-actions': 'product.write',
         }),
       }),
     );
@@ -877,7 +901,7 @@ describe('formal product master data page', () => {
         actorAccessScopes={{
           modules: ['admin'],
           dataScope: 'all',
-          actions: ['master_data.write'],
+          actions: ['product.write'],
         }}
         onSuccess={onSuccess}
       />,
@@ -949,7 +973,7 @@ describe('formal product master data page', () => {
         actorAccessScopes={{
           modules: ['admin'],
           dataScope: 'all',
-          actions: ['master_data.write'],
+          actions: ['product.write'],
         }}
       />,
     );
@@ -1044,7 +1068,7 @@ describe('formal product master data page', () => {
         actorAccessScopes={{
           modules: ['admin'],
           dataScope: 'all',
-          actions: ['master_data.write'],
+          actions: ['product.write'],
         }}
       />,
     );

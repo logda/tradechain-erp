@@ -545,7 +545,7 @@ async function normalizeQuoteItems(
           unit: candidate.unit ?? '',
           quantity: Number(item.quantity),
           targetPrice: item.targetPrice != null ? Number(item.targetPrice) : undefined,
-          salePrice: Number(item.salePrice),
+          salePrice: documentType === 'demand' ? 0 : Number(item.salePrice),
           imageUrls: item.imageUrls,
         },
         index,

@@ -399,7 +399,7 @@ export async function buildCreateFormalQuotePayload(
             createCandidateProduct: buildCandidateProductDraft(formData),
             quantity: Number(formData.get('quantity')),
             ...(targetPrice != null ? { targetPrice } : {}),
-            salePrice: Number.isFinite(salePrice) ? salePrice : 0,
+            salePrice: documentType === 'demand' ? 0 : Number.isFinite(salePrice) ? salePrice : 0,
             imageUrls,
           },
         ]

@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { UserManagementService } from '../src/user-management/user-management.service';
+import { UserManagementRuntimeStore } from '../src/user-management/user-management.store';
 
 describe('UserManagementService persistence and audit logs', () => {
   let runtimeDir: string;
@@ -30,6 +31,26 @@ describe('UserManagementService persistence and audit logs', () => {
     const listed = await secondService.list();
 
     expect(listed.items.map((item) => item.username)).toContain('ivy');
+  });
+
+  it('adds product.write once to existing boss permissions and preserves later edits', () => {
+    const filePath = join(runtimeDir, 'user-management.json');
+    new UserManagementRuntimeStore(filePath);
+    const previous = JSON.parse(readFileSync(filePath, 'utf8'));
+    delete previous.productWriteActionMigrated;
+    previous.rolePermissions = previous.rolePermissions.map((item: { roleCode: string; accessScopes: { actions: string[] } }) => ({
+      ...item,
+      accessScopes: { ...item.accessScopes, actions: item.accessScopes.actions.filter((action) => action !== 'product.write') },
+    }));
+    writeFileSync(filePath, JSON.stringify(previous));
+
+    const migrated = new UserManagementRuntimeStore(filePath);
+    const boss = migrated.listRolePermissions().find((item) => item.roleCode === 'boss')!;
+    expect(boss.accessScopes.actions).toContain('product.write');
+    expect(migrated.listRolePermissions().find((item) => item.roleCode === 'admin')!.accessScopes.actions).toContain('product.write');
+
+    migrated.saveRolePermission({ ...boss, accessScopes: { ...boss.accessScopes, actions: boss.accessScopes.actions.filter((action) => action !== 'product.write') } });
+    expect(new UserManagementRuntimeStore(filePath).listRolePermissions().find((item) => item.roleCode === 'boss')!.accessScopes.actions).not.toContain('product.write');
   });
 
   it('records login and user lifecycle audit logs', async () => {

@@ -294,6 +294,14 @@ export function canUseFormalMasterDataActions(session: DemoSession) {
   return session.role === 'admin';
 }
 
+export function canUseFormalProductActions(session: DemoSession) {
+  if (session.accessScopes) {
+    return hasFormalAction(session, 'product.write');
+  }
+
+  return isFormalAdminOrBoss(session);
+}
+
 export function canUseFormalSalesOrderActions(session: DemoSession) {
   if (session.accessScopes) {
     return hasFormalAction(session, 'sales.order.write');
