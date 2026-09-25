@@ -315,6 +315,7 @@ describe('formal detail pages', () => {
     expect(
       screen.queryByRole('button', { name: '转为销售订单' }),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '老板确认报价售价' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '创建样品单' }),
     ).not.toBeInTheDocument();
@@ -368,9 +369,9 @@ describe('formal detail pages', () => {
                 productName: '智能 LED 灯带',
                 unit: 'set',
                 quantity: 500,
-                salePrice: 15.9,
+                salePrice: 18.8,
                 confirmedSalePrice: 18.8,
-                amount: 7950,
+                amount: 9400,
               },
             ],
           }),
@@ -396,12 +397,16 @@ describe('formal detail pages', () => {
 
     expect(screen.getByRole('heading', { name: '报价结果' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: '老板确认售价' })).toBeInTheDocument();
-    expect(screen.getByText('18.8')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: '原销售单价' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '报价结果' }).closest('article')).toHaveTextContent('18.8');
     expect(screen.queryByText('最终供应商')).not.toBeInTheDocument();
     expect(screen.queryByText('采购价')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '老板确认报价售价' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '老板确认报价售价' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '销售记录客户反馈' })).toBeInTheDocument();
-    expect(screen.getAllByText('V1').length).toBeGreaterThan(0);
+    expect(screen.queryByText('版本 Version')).not.toBeInTheDocument();
+    expect(screen.getByText('当前报价版本').closest('div')).toHaveTextContent('V1');
+    expect(screen.getByText('老板已确认售价，等待销售记录客户反馈。')).toBeInTheDocument();
+    expect(screen.queryByText(/必须先由老板确认售价/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '保存客户反馈' })).toBeInTheDocument();
   });
 

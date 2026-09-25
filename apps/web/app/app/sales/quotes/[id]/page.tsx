@@ -723,10 +723,12 @@ export default async function AppQuoteDetailPage({
           </div>
         </article>
 
-        <article style={infoCardStyle}>
-          <p style={labelStyle}>版本 Version</p>
-          <p style={valueStyle}>V{quote.currentVersionNo}</p>
-        </article>
+        {quote.documentType === 'demand' ? (
+          <article style={infoCardStyle}>
+            <p style={labelStyle}>版本 Version</p>
+            <p style={valueStyle}>V{quote.currentVersionNo}</p>
+          </article>
+        ) : null}
 
         {(quote.items ?? []).some((item) => Number(item.confirmedSalePrice) > 0) ? (
           <article style={infoCardStyle}>
@@ -738,7 +740,6 @@ export default async function AppQuoteDetailPage({
                     <th style={headCellStyle}>行号</th>
                     <th style={headCellStyle}>SKU</th>
                     <th style={headCellStyle}>商品</th>
-                    <th style={headCellStyle}>原销售单价</th>
                     <th style={headCellStyle}>老板确认售价</th>
                   </tr>
                 </thead>
@@ -748,7 +749,6 @@ export default async function AppQuoteDetailPage({
                       <td style={cellStyle}>{item.lineNo}</td>
                       <td style={cellStyle}>{item.sku}</td>
                       <td style={cellStyle}>{item.productName}</td>
-                      <td style={cellStyle}>{item.salePrice}</td>
                       <td style={cellStyle}>{item.confirmedSalePrice ?? '-'}</td>
                     </tr>
                   ))}
@@ -758,7 +758,7 @@ export default async function AppQuoteDetailPage({
           </article>
         ) : null}
 
-        {quote.documentType === 'quote' ? (
+        {quote.documentType === 'quote' && quote.status === 'pending_boss_price_confirmation' ? (
           <article style={actionPanelStyle}>
             <h2 style={{ marginTop: 0 }}>老板确认报价售价</h2>
             <ActionPermissionNote>
@@ -880,6 +880,8 @@ export default async function AppQuoteDetailPage({
                   : '当前为报价单草稿：提交后等待老板确认最终售价，不生成首次采购询价。'
                 : quote.documentType === 'demand'
                   ? '需求单尚未满足转销售单条件，请按当前流程状态继续处理。'
+                  : quote.status === 'pending_customer_feedback'
+                    ? '老板已确认售价，等待销售记录客户反馈。'
                   : '报价单尚未满足转销售单条件：必须先由老板确认售价，再由销售记录客户接受。'}
           </ActionPermissionNote>
           {quote.documentType === 'demand' &&
