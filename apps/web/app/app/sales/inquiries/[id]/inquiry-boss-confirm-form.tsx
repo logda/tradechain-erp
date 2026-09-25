@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitFormalJsonMutationAction } from '../../../_actions/formal-mutation-action';
 import { useMutationAttempt } from '../../../_lib/use-mutation-attempt';
@@ -17,6 +17,7 @@ type InquiryBossConfirmFormProps = {
   quoteVersionNo: number;
   customerName: string;
   customerFullName?: string | null;
+  rejectAction?: React.ReactNode;
   items: Array<{
     itemId: number;
     lineNo: number;
@@ -264,6 +265,7 @@ export function InquiryBossConfirmForm({
   quoteVersionNo,
   customerName,
   customerFullName,
+  rejectAction,
   items,
 }: InquiryBossConfirmFormProps) {
   let router: { refresh?: () => void } = {};
@@ -274,6 +276,7 @@ export function InquiryBossConfirmForm({
   }
 
   const [state, setState] = useState(initialState);
+  const confirmFormId = useId();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const attempt = useMutationAttempt();
   const [finalPrices, setFinalPrices] = useState<Record<number, string>>(() =>
@@ -365,7 +368,8 @@ export function InquiryBossConfirmForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={cardStyle}>
+    <div style={cardStyle}>
+      <form id={confirmFormId} onSubmit={handleSubmit} onChangeCapture={attempt.resetFailedAfterEdit} style={{ display: 'grid', gap: '18px' }}>
       <div style={headerStyle}>
         <div>
           <p style={eyebrowStyle}>Boss Approval</p>
@@ -492,11 +496,13 @@ export function InquiryBossConfirmForm({
         </p>
       ) : null}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button className="erp-button erp-button--primary" type="submit" disabled={isSubmitting || attempt.isComplete || items.length === 0}>
+      </form>
+      <div role="group" aria-label="老板询价操作" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
+        {rejectAction}
+        <button className="erp-button erp-button--primary" type="submit" form={confirmFormId} disabled={isSubmitting || attempt.isComplete || items.length === 0}>
           {isSubmitting ? '确认中...' : label}
         </button>
       </div>
-    </form>
+    </div>
   );
 }

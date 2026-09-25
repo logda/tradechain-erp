@@ -306,9 +306,11 @@ export default async function AppFormalInquiryPage({
         <Link href="/app/sales" style={mutedLinkStyle}>
           返回销售中心
         </Link>
-        <Link href="/app/sales/quotes" style={actionLinkStyle}>
-          进入需求/报价模块
-        </Link>
+        {canViewFormalModule(session, 'sales') ? (
+          <Link href="/app/sales/quotes" style={actionLinkStyle}>
+            进入需求/报价模块
+          </Link>
+        ) : null}
       </div>
 
       <StatStrip

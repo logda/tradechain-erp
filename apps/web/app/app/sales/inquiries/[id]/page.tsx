@@ -665,62 +665,6 @@ export default async function AppFormalInquiryDetailPage({
         {sourceQuote ? renderSourceQuoteOverview(sourceQuote, inquiry.id) : null}
 
         <section style={actionPanelStyle}>
-          <h2>询价动作</h2>
-          <ActionPermissionNote>
-            {inquiry.status === 'pending_inquiry'
-              ? '待询价可填写供应商报价并提交比价。'
-              : inquiry.status === 'pending_boss_review'
-                ? '待老板确认期间，供应商信息已锁定；老板驳回后，采购可继续询价并重新提交。'
-                : '老板已确认价格，询价信息不可再修改。'}
-          </ActionPermissionNote>
-          <div style={actionGridStyle}>
-            {canSubmitComparison ? (
-              <InquiryComparisonSubmitForm
-                endpoint={`${getInquiryApiBaseUrl()}/quote-inquiries/${inquiry.id}/submit-for-comparison`}
-                label={getInquiryStatusActionLabel(inquiry.status)}
-                requestHeaders={actionRequestHeaders}
-                supplierOptions={supplierOptions}
-                items={inquiry.items}
-              />
-            ) : null}
-            {canConfirmFinalPrice ? (
-              <><InquiryBossConfirmForm
-                endpoint={`${getInquiryApiBaseUrl()}/quote-inquiries/${inquiry.id}/boss-confirm`}
-                label={getBossConfirmLabel(inquiry.status)}
-                requestHeaders={actionRequestHeaders}
-                quoteNo={inquiry.quoteOrderNo}
-                quoteVersionNo={inquiry.quoteVersionNo}
-                customerName={
-                  sourceQuote?.customerName ??
-                  inquiry.customerName
-                }
-                customerFullName={sourceQuote?.customerFullName ?? inquiry.customerFullName}
-                items={inquiry.items}
-              />
-              <MutationActionForm
-                endpoint={`${getInquiryApiBaseUrl()}/quote-inquiries/${inquiry.id}/boss-reject`}
-                label="驳回询价"
-                successLabel="已驳回，采购可继续询价"
-                confirmMessage="确认驳回本次比价并退回待询价？"
-                requiredAction="boss.confirm"
-                requiredActionLabel="老板确认"
-                requestHeaders={actionRequestHeaders}
-                fields={[]}
-              /></>
-            ) : null}
-            {!hasAvailableActions ? (
-              <p style={detailTextStyle}>
-                {inquiry.status === 'pending_inquiry'
-                  ? '当前角色无询价提交权限。'
-                  : inquiry.status === 'pending_boss_review'
-                    ? '等待老板确认价格，当前角色不能执行此操作。'
-                    : '当前询价单已归档，无需继续提交比价或老板确认。'}
-              </p>
-            ) : null}
-          </div>
-        </section>
-
-        <section style={actionPanelStyle}>
           <h2>比价明细</h2>
           <div style={tableWrapStyle}>
             <table style={tableStyle}>
@@ -765,6 +709,65 @@ export default async function AppFormalInquiryDetailPage({
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section style={actionPanelStyle}>
+          <h2>询价动作</h2>
+          <ActionPermissionNote>
+            {inquiry.status === 'pending_inquiry'
+              ? '待询价可填写供应商报价并提交比价。'
+              : inquiry.status === 'pending_boss_review'
+                ? '待老板确认期间，供应商信息已锁定；老板驳回后，采购可继续询价并重新提交。'
+                : '老板已确认价格，询价信息不可再修改。'}
+          </ActionPermissionNote>
+          <div style={actionGridStyle}>
+            {canSubmitComparison ? (
+              <InquiryComparisonSubmitForm
+                endpoint={`${getInquiryApiBaseUrl()}/quote-inquiries/${inquiry.id}/submit-for-comparison`}
+                label={getInquiryStatusActionLabel(inquiry.status)}
+                requestHeaders={actionRequestHeaders}
+                supplierOptions={supplierOptions}
+                items={inquiry.items}
+              />
+            ) : null}
+            {canConfirmFinalPrice ? (
+              <InquiryBossConfirmForm
+                endpoint={`${getInquiryApiBaseUrl()}/quote-inquiries/${inquiry.id}/boss-confirm`}
+                label={getBossConfirmLabel(inquiry.status)}
+                requestHeaders={actionRequestHeaders}
+                quoteNo={inquiry.quoteOrderNo}
+                quoteVersionNo={inquiry.quoteVersionNo}
+                customerName={
+                  sourceQuote?.customerName ??
+                  inquiry.customerName
+                }
+                customerFullName={sourceQuote?.customerFullName ?? inquiry.customerFullName}
+                items={inquiry.items}
+                rejectAction={
+                  <MutationActionForm
+                    endpoint={`${getInquiryApiBaseUrl()}/quote-inquiries/${inquiry.id}/boss-reject`}
+                    label="驳回询价"
+                    successLabel="已驳回，采购可继续询价"
+                    confirmMessage="确认驳回本次比价并退回待询价？"
+                    requiredAction="boss.confirm"
+                    requiredActionLabel="老板确认"
+                    requestHeaders={actionRequestHeaders}
+                    fields={[]}
+                    buttonVariant="secondary"
+                  />
+                }
+              />
+            ) : null}
+            {!hasAvailableActions ? (
+              <p style={detailTextStyle}>
+                {inquiry.status === 'pending_inquiry'
+                  ? '当前角色无询价提交权限。'
+                  : inquiry.status === 'pending_boss_review'
+                    ? '等待老板确认价格，当前角色不能执行此操作。'
+                    : '当前询价单已归档，无需继续提交比价或老板确认。'}
+              </p>
+            ) : null}
           </div>
         </section>
 

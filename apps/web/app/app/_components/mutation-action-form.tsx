@@ -28,6 +28,7 @@ type MutationActionFormProps = {
   fields: MutationField[];
   requestHeaders?: Record<string, string>;
   onSuccess?: (result: unknown) => void;
+  buttonVariant?: 'secondary';
 };
 
 type MutationActionState = {
@@ -242,6 +243,7 @@ export function MutationActionForm({
   fields,
   requestHeaders,
   onSuccess,
+  buttonVariant,
 }: MutationActionFormProps) {
   let router: { push: (href: string) => void; refresh?: () => void } = {
     push: () => undefined,
@@ -426,6 +428,12 @@ export function MutationActionForm({
         disabled={isSubmitting || isComplete || !canSubmit}
         style={{
           ...formalActionButtonStyle,
+          ...(buttonVariant === 'secondary' ? {
+            borderColor: '#cbd5e1',
+            background: '#ffffff',
+            color: '#0f172a',
+            boxShadow: 'none',
+          } : {}),
           ...(isSubmitting || isComplete || !canSubmit ? formalActionButtonDisabledStyle : {}),
         }}
       >

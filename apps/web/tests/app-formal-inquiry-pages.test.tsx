@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 function buildSourceQuoteFixture(detail: unknown) {
@@ -413,6 +413,12 @@ describe('formal inquiry pages', () => {
     expect(screen.queryByRole('button', { name: '再次提交比价' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '老板确认' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '驳回询价' })).toBeInTheDocument();
+    const bossActions = screen.getByRole('group', { name: '老板询价操作' });
+    expect(within(bossActions).getByRole('button', { name: '老板确认' })).toBeInTheDocument();
+    expect(within(bossActions).getByRole('button', { name: '驳回询价' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '比价明细' }).compareDocumentPosition(
+      screen.getByRole('heading', { name: '询价动作' }),
+    ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(
       screen.getByText(
         '待老板确认期间，供应商信息已锁定；老板驳回后，采购可继续询价并重新提交。',
@@ -744,6 +750,7 @@ describe('formal inquiry pages', () => {
     expect(screen.getByRole('heading', { name: '正式询价单' })).toBeInTheDocument();
     expect(screen.queryByText('无权限访问正式询价单')).not.toBeInTheDocument();
     expect(screen.getByText('IQ-PURCHASE-001')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '进入需求/报价模块' })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('http://127.0.0.1:3001/api/quote-inquiries'),
       expect.objectContaining({
