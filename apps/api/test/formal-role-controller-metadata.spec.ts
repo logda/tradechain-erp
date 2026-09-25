@@ -2,6 +2,7 @@ import { RequestMethod } from '@nestjs/common';
 import { GUARDS_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
 import {
   FORMAL_ACTIONS_KEY,
+  FORMAL_ANY_ACTIONS_KEY,
   FORMAL_ANY_MODULES_KEY,
   FORMAL_MODULES_KEY,
   FORMAL_ROLES_KEY,
@@ -36,10 +37,13 @@ function getMethodRoles(controller: Function, methodName: string) {
 }
 
 function getMethodActions(controller: Function, methodName: string) {
-  return Reflect.getMetadata(
+  return (Reflect.getMetadata(
     FORMAL_ACTIONS_KEY,
     controller.prototype[methodName],
-  ) as string[] | undefined;
+  ) as string[] | undefined) ?? (Reflect.getMetadata(
+    FORMAL_ANY_ACTIONS_KEY,
+    controller.prototype[methodName],
+  ) as string[] | undefined);
 }
 
 function getClassModules(controller: Function) {

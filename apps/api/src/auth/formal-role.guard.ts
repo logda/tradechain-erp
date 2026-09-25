@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   FORMAL_ACTIONS_KEY,
+  FORMAL_ANY_ACTIONS_KEY,
   FORMAL_ANY_MODULES_KEY,
   FORMAL_MODULES_KEY,
   FORMAL_ROLES_KEY,
@@ -200,17 +201,21 @@ export class FormalRoleGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    if (!requiredActions?.length) {
-      return true;
-    }
-
     const grantedActions = signedSession?.actions ??
       readHeaderList(request.headers['x-erp-actions']);
-    const missingAction = requiredActions.find(
+    const missingAction = requiredActions?.find(
       (action) => !grantedActions.includes(action),
     );
 
     if (missingAction) {
+      throw new ForbiddenException('当前角色无权执行该业务操作');
+    }
+
+    const anyActions = this.reflector.getAllAndOverride<string[] | undefined>(
+      FORMAL_ANY_ACTIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (anyActions?.length && !anyActions.some((action) => grantedActions.includes(action))) {
       throw new ForbiddenException('当前角色无权执行该业务操作');
     }
 

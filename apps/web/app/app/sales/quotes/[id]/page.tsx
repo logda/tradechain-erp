@@ -75,6 +75,17 @@ type QuoteDetail = {
   linkedInquiryVersionNo?: number;
   sourceDemandId?: number;
   sourceDemandNo?: string;
+  sourceDemandSnapshot?: {
+    id: number;
+    quoteNo: string;
+    status: string;
+    customerName?: string;
+    requirements: string;
+    sourceCode: string;
+    createdAt?: string;
+    quoteAttachments?: QuoteDetail['quoteAttachments'];
+    items: NonNullable<QuoteDetail['items']>;
+  };
   customerFeedbackResult?: 'accepted' | 'no_follow_up' | 'price_issue';
   customerFeedbackRemark?: string;
   customerFeedbackBy?: string;
@@ -111,6 +122,10 @@ type QuoteDetail = {
     confirmedSupplierName?: string;
     confirmedPurchasePrice?: number;
     confirmedProductId?: number;
+    samplingInfo?: string;
+    cartonQuantity?: number;
+    outerCartonSizeCm?: string;
+    outerCartonGrossWeightKg?: number;
   }>;
 };
 
@@ -494,11 +509,9 @@ export default async function AppQuoteDetailPage({
   const canUseQuoteActions = canUseFormalQuoteActions(session);
   const canUseBossActions = canUseFormalInquiryBossConfirmAction(session);
   const canRecordCustomerFeedback =
-    canUseQuoteActions &&
-    (session.role === 'admin' ||
-      session.role === 'sales_manager' ||
-      session.role === 'sales');
-  const canConvertToSalesOrder = canUseFormalSalesOrderActions(session);
+    canUseQuoteActions || (session.role === 'boss' && canUseBossActions);
+  const canConvertToSalesOrder = canUseFormalSalesOrderActions(session) ||
+    (session.role === 'boss' && canUseBossActions);
   const canCreateSampleOrder = canUseFormalSampleSubmitAction(session);
   const actionRequestHeaders = buildFormalRequestHeaders(session);
   const access = encodeAccessScopes(session.accessScopes);
@@ -689,7 +702,14 @@ export default async function AppQuoteDetailPage({
                   <tr key={`${item.lineNo}-${item.sku}`}>
                     <td style={cellStyle}>{item.lineNo}</td>
                     <td style={cellStyle}>{item.sku}</td>
-                    <td style={cellStyle}>{item.productName}</td>
+                    <td style={cellStyle}>
+                      {item.productName}
+                      {item.samplingInfo ? (
+                        <p style={{ ...detailTextStyle, margin: '4px 0 0' }}>
+                          打样信息：<span>{item.samplingInfo}</span>
+                        </p>
+                      ) : null}
+                    </td>
                     <td style={cellStyle}>{item.quantity}</td>
                     <td style={cellStyle}>{item.unit}</td>
                     <td style={cellStyle}>{item.targetPrice ?? 0}</td>
@@ -969,6 +989,39 @@ export default async function AppQuoteDetailPage({
             </div>
           )}
         </article>
+
+        {quote.documentType === 'quote' && quote.sourceDemandSnapshot ? (
+          <article style={infoCardStyle}>
+            <h2 style={{ marginTop: 0 }}>需求单信息</h2>
+            <p style={detailTextStyle}>
+              <strong>{quote.sourceDemandSnapshot.quoteNo}</strong> · {quote.sourceDemandSnapshot.customerName || '-'} · {quote.sourceDemandSnapshot.sourceCode || '-'}
+            </p>
+            <p style={detailTextStyle}>{quote.sourceDemandSnapshot.requirements}</p>
+            <div style={{ ...tableWrapStyle, marginTop: '12px' }}>
+              <table style={tableStyle}>
+                <thead><tr>
+                  <th style={headCellStyle}>行号</th><th style={headCellStyle}>商品</th>
+                  <th style={headCellStyle}>数量</th><th style={headCellStyle}>目标价</th>
+                  <th style={headCellStyle}>图片</th>
+                </tr></thead>
+                <tbody>{quote.sourceDemandSnapshot.items.map((item) => (
+                  <tr key={`source-demand-${item.lineNo}`}>
+                    <td style={cellStyle}>{item.lineNo}</td>
+                    <td style={cellStyle}>{item.productName}</td>
+                    <td style={cellStyle}>{item.quantity} {item.unit}</td>
+                    <td style={cellStyle}>{item.targetPrice ?? '-'}</td>
+                    <td style={cellStyle}>{renderQuoteItemImages(item)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            {quote.sourceDemandSnapshot.quoteAttachments?.length ? (
+              <div style={{ ...detailTextStyle, marginTop: '12px' }}>
+                来源附件：{renderQuoteAttachments(quote.sourceDemandSnapshot.quoteAttachments)}
+              </div>
+            ) : null}
+          </article>
+        ) : null}
 
         <AuditLogTable session={session} items={auditLogs?.items ?? []} />
       </section>

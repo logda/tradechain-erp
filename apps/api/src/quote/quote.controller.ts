@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { quoteListSortFields } from '@erp/shared';
-import { FormalActions, FormalModules, FormalRoles } from '../auth/formal-role.decorator';
+import { FormalActions, FormalAnyActions, FormalModules, FormalRoles } from '../auth/formal-role.decorator';
 import { FormalRoleGuard } from '../auth/formal-role.guard';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { ListQuotesQueryDto } from './dto/list-quotes-query.dto';
@@ -120,7 +120,7 @@ export class QuoteController {
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
-  @FormalActions('sales.order.write')
+  @FormalAnyActions('sales.order.write', 'boss.confirm')
   @Post(':id/convert-to-sales')
   async convertToSales(
     @Param('id', ParseIntPipe) id: number,
@@ -206,8 +206,8 @@ export class QuoteController {
     );
   }
 
-  @FormalRoles('admin', 'sales_manager', 'sales')
-  @FormalActions('sales.quote.write')
+  @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
+  @FormalAnyActions('sales.quote.write', 'boss.confirm')
   @Post(':id/customer-feedback')
   recordCustomerFeedback(
     @Param('id', ParseIntPipe) id: number,

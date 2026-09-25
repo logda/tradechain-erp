@@ -37,6 +37,7 @@ type InquiryComparisonSubmitFormProps = {
       cartonQuantity?: number;
       outerCartonSizeCm?: string;
       outerCartonGrossWeightKg?: number;
+      samplingInfo?: string;
       remark?: string;
     }>;
   }>;
@@ -64,6 +65,7 @@ type DraftSupplierQuote = {
   cartonQuantity: string;
   outerCartonSizeCm: string;
   outerCartonGrossWeightKg: string;
+  samplingInfo: string;
   remark: string;
 };
 
@@ -219,6 +221,7 @@ function createDraftSupplierQuote(
       supplierQuote?.outerCartonGrossWeightKg !== undefined
         ? String(supplierQuote.outerCartonGrossWeightKg)
         : '',
+    samplingInfo: supplierQuote?.samplingInfo ?? '',
     remark: supplierQuote?.remark ?? '',
   };
 }
@@ -341,6 +344,7 @@ export function InquiryComparisonSubmitForm({
               cartonQuantity: readOptionalPositiveInteger(entry.cartonQuantity),
               outerCartonSizeCm: readOptionalText(entry.outerCartonSizeCm),
               outerCartonGrossWeightKg: readOptionalNumber(entry.outerCartonGrossWeightKg),
+              samplingInfo: readOptionalText(entry.samplingInfo),
               remark: readOptionalText(entry.remark),
             };
           }
@@ -365,6 +369,7 @@ export function InquiryComparisonSubmitForm({
             cartonQuantity: readOptionalPositiveInteger(entry.cartonQuantity),
             outerCartonSizeCm: readOptionalText(entry.outerCartonSizeCm),
             outerCartonGrossWeightKg: readOptionalNumber(entry.outerCartonGrossWeightKg),
+            samplingInfo: readOptionalText(entry.samplingInfo),
             remark: readOptionalText(entry.remark),
           };
         })
@@ -673,7 +678,19 @@ export function InquiryComparisonSubmitForm({
                         aria-label={`行 ${item.lineNo} 备注 ${supplierIndex}`}
                         value={entry.remark}
                         onChange={(event) => updateDraftEntry(item.itemId, entry.key, { remark: event.target.value })}
-                        placeholder="打样时间、打样费用等内容统一填写在这里"
+                        placeholder="其他供应商报价备注"
+                        rows={3}
+                        style={{ ...inputStyle, resize: 'vertical' }}
+                      />
+                    </label>
+
+                    <label style={labelStyle}>
+                      {`行 ${item.lineNo} 打样信息 ${supplierIndex}`}
+                      <textarea
+                        aria-label={`行 ${item.lineNo} 打样信息 ${supplierIndex}`}
+                        value={entry.samplingInfo}
+                        onChange={(event) => updateDraftEntry(item.itemId, entry.key, { samplingInfo: event.target.value })}
+                        placeholder="打样时间、费用及其他打样说明"
                         rows={3}
                         style={{ ...inputStyle, resize: 'vertical' }}
                       />

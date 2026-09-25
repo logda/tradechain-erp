@@ -29,6 +29,9 @@ type ConvertQuoteLineItem = {
   confirmedSupplierName?: string;
   confirmedPurchasePrice?: number;
   confirmedProductId?: number;
+  cartonQuantity?: number;
+  outerCartonSizeCm?: string;
+  outerCartonGrossWeightKg?: number;
 };
 
 type ConvertQuoteAttachment = {
@@ -173,6 +176,15 @@ function parseConvertQuoteItems(value: FormDataEntryValue | null) {
             : {}),
           ...(Number.isFinite(confirmedProductId) && confirmedProductId > 0
             ? { confirmedProductId }
+            : {}),
+          ...(candidate.cartonQuantity != null && Number.isFinite(Number(candidate.cartonQuantity))
+            ? { cartonQuantity: Number(candidate.cartonQuantity) }
+            : {}),
+          ...(typeof candidate.outerCartonSizeCm === 'string' && candidate.outerCartonSizeCm.trim()
+            ? { outerCartonSizeCm: candidate.outerCartonSizeCm.trim() }
+            : {}),
+          ...(candidate.outerCartonGrossWeightKg != null && Number.isFinite(Number(candidate.outerCartonGrossWeightKg))
+            ? { outerCartonGrossWeightKg: Number(candidate.outerCartonGrossWeightKg) }
             : {}),
           ...(imageUrls.length > 0 ? { imageUrls } : {}),
         };

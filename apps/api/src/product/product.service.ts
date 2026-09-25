@@ -166,6 +166,9 @@ export type FindOrCreateQuoteCandidatePayload = {
   unit: string;
   confirmedSalePrice: number;
   confirmedPurchasePrice: number;
+  cartonQuantity?: number;
+  outerCartonSizeCm?: string;
+  outerCartonGrossWeightKg?: number;
   supplierCode?: string;
   operator: string;
 };
@@ -1058,7 +1061,7 @@ export class ProductService {
       ) {
         throw new BadRequestException('SKU 已存在，但产品名称或分类不一致');
       }
-      return existing;
+      return this.applyConfirmedInquiryValues(existing.id, payload);
     }
 
     return this.create({
@@ -1075,10 +1078,62 @@ export class ProductService {
       currency: 'USD',
       defaultSalePrice: payload.confirmedSalePrice,
       defaultPurchasePrice: payload.confirmedPurchasePrice,
+      cartonQuantity: payload.cartonQuantity,
+      cartonSpec: payload.outerCartonSizeCm,
+      cartonWeight: payload.outerCartonGrossWeightKg,
       ownerName: normalizeText(payload.operator) || 'system',
       createdBy: normalizeText(payload.operator) || 'system',
       status: 'active',
     });
+  }
+
+  async applyConfirmedInquiryValues(
+    id: number,
+    payload: Pick<FindOrCreateQuoteCandidatePayload,
+      'confirmedSalePrice' | 'confirmedPurchasePrice' | 'cartonQuantity' |
+      'outerCartonSizeCm' | 'outerCartonGrossWeightKg' | 'operator'>,
+  ): Promise<ProductRecord> {
+    const existing = await this.findProductByIdOrSku({ productId: id });
+    if (!existing) throw new NotFoundException('商品不存在');
+    this.assertProductNotDeleted(existing, '已删除商品不能更新询价资料');
+
+    const changes = {
+      defaultSalePrice: payload.confirmedSalePrice,
+      defaultPurchasePrice: payload.confirmedPurchasePrice,
+      ...(payload.cartonQuantity !== undefined ? { cartonQuantity: payload.cartonQuantity } : {}),
+      ...(payload.outerCartonSizeCm !== undefined ? { cartonSpec: payload.outerCartonSizeCm } : {}),
+      ...(payload.outerCartonGrossWeightKg !== undefined
+        ? { cartonWeight: payload.outerCartonGrossWeightKg } : {}),
+      updatedBy: payload.operator,
+    };
+
+    if (this.shouldUsePrisma()) {
+      const updated = await this.prismaProductDelegate.update({
+        where: { id: BigInt(id) },
+        data: changes,
+        include: productSalePriceTiersInclude,
+      }) as PrismaProductRecord;
+      const result = toProductRecord(updated);
+      await this.prisma!.operationLog.create({ data: {
+        bizType: 'product', bizId: BigInt(id), operationType: 'sync_confirmed_inquiry',
+        operatorId: 0n, beforeData: existing, afterData: result,
+      } });
+      return result;
+    }
+
+    const updated: ProductRecord = {
+      ...existing,
+      ...changes,
+      updatedAt: new Date().toISOString(),
+    };
+    this.store.saveProducts(
+      this.store.listProducts().map((product) => product.id === id ? updated : product),
+    );
+    this.store.recordAuditLog({
+      bizType: 'product', bizId: id, operationType: 'sync_confirmed_inquiry',
+      operatorId: 0, beforeData: existing, afterData: updated,
+    });
+    return updated;
   }
 
   async update(id: number, payload: UpdateProductPayload) {

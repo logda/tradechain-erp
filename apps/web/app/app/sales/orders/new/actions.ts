@@ -42,6 +42,9 @@ type SalesOrderItemPayload = {
   factoryPicUrls?: string[];
   packageQuantity: number;
   unitsPerPackage: number;
+  cartonQuantity?: number;
+  outerCartonSizeCm?: string;
+  outerCartonGrossWeightKg?: number;
   totalQuantity: number;
   quantity: number;
   unit: string;
@@ -199,6 +202,15 @@ function parseSalesOrderItems(value: FormDataEntryValue | null): SalesOrderItemP
             Number.isFinite(unitsPerPackage) && unitsPerPackage > 0
               ? unitsPerPackage
               : totalQuantity,
+          ...(candidate.cartonQuantity != null && Number.isFinite(Number(candidate.cartonQuantity))
+            ? { cartonQuantity: Number(candidate.cartonQuantity) }
+            : {}),
+          ...(typeof candidate.outerCartonSizeCm === 'string' && candidate.outerCartonSizeCm.trim()
+            ? { outerCartonSizeCm: candidate.outerCartonSizeCm.trim() }
+            : {}),
+          ...(candidate.outerCartonGrossWeightKg != null && Number.isFinite(Number(candidate.outerCartonGrossWeightKg))
+            ? { outerCartonGrossWeightKg: Number(candidate.outerCartonGrossWeightKg) }
+            : {}),
           totalQuantity,
           quantity: totalQuantity,
           unit,

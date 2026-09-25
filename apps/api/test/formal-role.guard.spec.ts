@@ -9,6 +9,7 @@ import type { FormalRole } from '../src/auth/formal-role.decorator';
 const FORMAL_ACTIONS_KEY = 'formal_actions';
 const FORMAL_MODULES_KEY = 'formal_modules';
 const FORMAL_ANY_MODULES_KEY = 'formal_any_modules';
+const FORMAL_ANY_ACTIONS_KEY = 'formal_any_actions';
 
 function createSignedSession(
   payload: {
@@ -66,11 +67,13 @@ function createGuard({
   requiredActions,
   requiredModules,
   requiredAnyModules,
+  requiredAnyActions,
 }: {
   allowedRoles?: FormalRole[];
   requiredActions?: string[];
   requiredModules?: string[];
   requiredAnyModules?: string[];
+  requiredAnyActions?: string[];
 }) {
   const reflector = {
     getAllAndOverride: jest.fn((key: string) => {
@@ -83,6 +86,9 @@ function createGuard({
       if (key === FORMAL_ANY_MODULES_KEY) {
         return requiredAnyModules;
       }
+      if (key === FORMAL_ANY_ACTIONS_KEY) {
+        return requiredAnyActions;
+      }
 
       return allowedRoles;
     }),
@@ -92,6 +98,16 @@ function createGuard({
 }
 
 describe('FormalRoleGuard', () => {
+  it('allows either the quote write action or boss confirmation action for a shared quote operation', () => {
+    const guard = createGuard({
+      allowedRoles: ['boss', 'sales'],
+      requiredModules: ['sales'],
+      requiredAnyActions: ['sales.quote.write', 'boss.confirm'],
+    });
+    expect(guard.canActivate(createContext('boss', 'boss.confirm', 'sales'))).toBe(true);
+    expect(guard.canActivate(createContext('sales', 'sales.quote.write', 'sales'))).toBe(true);
+    expect(() => guard.canActivate(createContext('sales', 'sales.order.write', 'sales'))).toThrow(ForbiddenException);
+  });
   const originalSecret = process.env.ERP_FORMAL_SESSION_SECRET;
   const originalStrictMode = process.env.ERP_REQUIRE_SIGNED_FORMAL_SESSION;
   const originalNodeEnv = process.env.NODE_ENV;

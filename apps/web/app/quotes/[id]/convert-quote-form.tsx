@@ -43,6 +43,9 @@ type ConvertQuoteFormProps = {
     confirmedSupplierName?: string;
     confirmedPurchasePrice?: number;
     confirmedProductId?: number;
+    cartonQuantity?: number;
+    outerCartonSizeCm?: string;
+    outerCartonGrossWeightKg?: number;
   }>;
   quoteAttachments?: Array<{
     key?: string;

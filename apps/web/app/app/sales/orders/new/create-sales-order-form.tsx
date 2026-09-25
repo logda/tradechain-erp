@@ -35,6 +35,9 @@ type SalesOrderItemDraft = {
   factoryPicUrls: string[];
   packageQuantity: string;
   unitsPerPackage: string;
+  cartonQuantity: string;
+  outerCartonSizeCm: string;
+  outerCartonGrossWeightKg: string;
   unit: string;
   salePrice: string;
 };
@@ -71,6 +74,9 @@ export type InitialSalesOrderFormValue = {
     factoryPicUrls?: string[];
     packageQuantity?: number;
     unitsPerPackage?: number;
+    cartonQuantity?: number;
+    outerCartonSizeCm?: string;
+    outerCartonGrossWeightKg?: number;
     totalQuantity?: number;
     quantity: number;
     unit: string;
@@ -435,6 +441,9 @@ function createEmptySalesOrderItemDraft(id: number): SalesOrderItemDraft {
     factoryPicUrls: [],
     packageQuantity: '1',
     unitsPerPackage: '1',
+    cartonQuantity: '',
+    outerCartonSizeCm: '',
+    outerCartonGrossWeightKg: '',
     unit: 'pcs',
     salePrice: '0',
   };
@@ -748,6 +757,11 @@ function serializeSalesOrderItems(items: SalesOrderItemDraft[]) {
         factoryPicUrls: item.factoryPicUrls,
         packageQuantity: readDraftNumber(item.packageQuantity, 0),
         unitsPerPackage: readDraftNumber(item.unitsPerPackage, 0),
+        ...(item.cartonQuantity.trim() ? { cartonQuantity: Number(item.cartonQuantity) } : {}),
+        ...(item.outerCartonSizeCm.trim() ? { outerCartonSizeCm: item.outerCartonSizeCm.trim() } : {}),
+        ...(item.outerCartonGrossWeightKg.trim()
+          ? { outerCartonGrossWeightKg: Number(item.outerCartonGrossWeightKg) }
+          : {}),
         totalQuantity,
         quantity: totalQuantity,
         unit: item.unit.trim(),
@@ -795,6 +809,9 @@ function createSalesOrderItemDraftsFromInitialValue(
       factoryPicUrls: item.factoryPicUrls ?? [],
       packageQuantity: String(packageQuantity),
       unitsPerPackage: String(unitsPerPackage),
+      cartonQuantity: item.cartonQuantity == null ? '' : String(item.cartonQuantity),
+      outerCartonSizeCm: item.outerCartonSizeCm ?? '',
+      outerCartonGrossWeightKg: item.outerCartonGrossWeightKg == null ? '' : String(item.outerCartonGrossWeightKg),
       unit: item.unit,
       salePrice: String(item.salePrice),
     } satisfies SalesOrderItemDraft;
@@ -1608,6 +1625,54 @@ export function CreateSalesOrderForm({
                           productOptions,
                         ),
                       )
+                    }
+                    style={compactInputStyle}
+                  />
+                </label>
+
+                <label style={labelStyle}>
+                  装箱数 Carton Qty
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={item.cartonQuantity}
+                    onChange={(event) =>
+                      updateSalesOrderItem(item.id, (current) => ({
+                        ...current,
+                        cartonQuantity: event.target.value,
+                      }))
+                    }
+                    style={compactInputStyle}
+                  />
+                </label>
+
+                <label style={labelStyle}>
+                  外箱尺寸 Carton Size
+                  <input
+                    value={item.outerCartonSizeCm}
+                    onChange={(event) =>
+                      updateSalesOrderItem(item.id, (current) => ({
+                        ...current,
+                        outerCartonSizeCm: event.target.value,
+                      }))
+                    }
+                    style={compactInputStyle}
+                  />
+                </label>
+
+                <label style={labelStyle}>
+                  外箱毛重 Gross Weight
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.outerCartonGrossWeightKg}
+                    onChange={(event) =>
+                      updateSalesOrderItem(item.id, (current) => ({
+                        ...current,
+                        outerCartonGrossWeightKg: event.target.value,
+                      }))
                     }
                     style={compactInputStyle}
                   />

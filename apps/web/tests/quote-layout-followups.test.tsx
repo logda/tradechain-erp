@@ -38,6 +38,35 @@ async function renderDetail(detail: Record<string, unknown> = demand, role = 'bo
 afterEach(() => vi.unstubAllGlobals());
 
 describe('R05 quote list and detail acceptance', () => {
+  it('shows the original demand snapshot and the selected sampling note at the bottom of a derived quote', async () => {
+    await renderDetail({
+      ...demand,
+      quoteNo: 'Q811',
+      documentType: 'quote',
+      status: 'customer_accepted',
+      sourceDemandId: 810,
+      sourceDemandNo: 'XQ810',
+      sourceDemandSnapshot: demand,
+      items: [{ ...lines[0], samplingInfo: '三天出样' }],
+    }, 'sales');
+    expect(screen.getByText('三天出样')).toBeInTheDocument();
+    const source = screen.getByRole('heading', { name: '需求单信息' }).closest('article')!;
+    expect(within(source).getByText('历史快照')).toBeInTheDocument();
+    expect(within(source).getByText('XQ810')).toBeInTheDocument();
+    expect(within(source).getByText(longName)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '转为销售订单' })).toBeInTheDocument();
+  });
+
+  it('lets the boss continue customer feedback and sales conversion on a quote', async () => {
+    await renderDetail({ ...demand, documentType: 'quote', status: 'customer_accepted' }, 'boss');
+    expect(screen.getByRole('button', { name: '转为销售订单' })).toBeInTheDocument();
+  });
+
+  it('offers customer feedback to the boss after inquiry pricing succeeds', async () => {
+    await renderDetail({ ...demand, documentType: 'quote', status: 'pending_customer_feedback' }, 'boss');
+    expect(screen.getByRole('button', { name: '保存客户反馈' })).toBeInTheDocument();
+  });
+
   it('keeps one document row with paired full product names and quantities in eight business columns', async () => {
     mockApi();
     render(await QuoteListPage({ searchParams: Promise.resolve({ role: 'sales', user: 'Zoe' }) }));

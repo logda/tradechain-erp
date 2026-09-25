@@ -3,6 +3,7 @@ import { AppShell } from '../../../_components/app-shell';
 import { AuditLogTable } from '../../../_components/audit-log-table';
 import { ActionPermissionNote } from '../../../_components/action-permission-note';
 import { ImagePreviewGallery } from '../../../_components/image-preview-gallery';
+import { MutationActionForm } from '../../../_components/mutation-action-form';
 import { resolveDemoSession } from '../../../_lib/demo-session';
 import {
   canUseFormalInquiryBossConfirmAction,
@@ -62,6 +63,7 @@ type InquiryDetail = {
       cartonQuantity?: number;
       outerCartonSizeCm?: string;
       outerCartonGrossWeightKg?: number;
+      samplingInfo?: string;
       remark?: string;
     }>;
     confirmedSalePrice: number;
@@ -432,6 +434,7 @@ function renderSupplierQuoteDetails(
         {supplierQuote.outerCartonGrossWeightKg ?? '-'} kg
       </span>
       <span>备注：{supplierQuote.remark || '-'}</span>
+      <span>打样信息：{supplierQuote.samplingInfo || '-'}</span>
     </span>
   );
 }
@@ -606,8 +609,7 @@ export default async function AppFormalInquiryDetailPage({
     ? await loadSourceQuoteDetail(inquiry.quoteOrderId, session)
     : null;
   const canSubmitComparison =
-    canSubmitInquiry &&
-    (inquiry.status === 'pending_inquiry' || inquiry.status === 'pending_boss_review');
+    canSubmitInquiry && inquiry.status === 'pending_inquiry';
   const canConfirmFinalPrice =
     canBossConfirmInquiry && inquiry.status === 'pending_boss_review';
   const hasAvailableActions = canSubmitComparison || canConfirmFinalPrice;
@@ -665,7 +667,11 @@ export default async function AppFormalInquiryDetailPage({
         <section style={actionPanelStyle}>
           <h2>询价动作</h2>
           <ActionPermissionNote>
-            当前状态动作：待询价可提交比价；待老板确认可确认最终售价；老板已确认后不再展示提交和确认入口。
+            {inquiry.status === 'pending_inquiry'
+              ? '待询价可填写供应商报价并提交比价。'
+              : inquiry.status === 'pending_boss_review'
+                ? '待老板确认期间，供应商信息已锁定；老板驳回后，采购可继续询价并重新提交。'
+                : '老板已确认价格，询价信息不可再修改。'}
           </ActionPermissionNote>
           <div style={actionGridStyle}>
             {canSubmitComparison ? (
@@ -678,7 +684,7 @@ export default async function AppFormalInquiryDetailPage({
               />
             ) : null}
             {canConfirmFinalPrice ? (
-              <InquiryBossConfirmForm
+              <><InquiryBossConfirmForm
                 endpoint={`${getInquiryApiBaseUrl()}/quote-inquiries/${inquiry.id}/boss-confirm`}
                 label={getBossConfirmLabel(inquiry.status)}
                 requestHeaders={actionRequestHeaders}
@@ -691,6 +697,16 @@ export default async function AppFormalInquiryDetailPage({
                 customerFullName={sourceQuote?.customerFullName ?? inquiry.customerFullName}
                 items={inquiry.items}
               />
+              <MutationActionForm
+                endpoint={`${getInquiryApiBaseUrl()}/quote-inquiries/${inquiry.id}/boss-reject`}
+                label="驳回询价"
+                successLabel="已驳回，采购可继续询价"
+                confirmMessage="确认驳回本次比价并退回待询价？"
+                requiredAction="boss.confirm"
+                requiredActionLabel="老板确认"
+                requestHeaders={actionRequestHeaders}
+                fields={[]}
+              /></>
             ) : null}
             {!hasAvailableActions ? (
               <p style={detailTextStyle}>当前询价单已归档，无需继续提交比价或老板确认。</p>

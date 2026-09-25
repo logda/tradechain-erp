@@ -14,6 +14,9 @@ export class CreateDirectSalesOrderItemDto {
   unit?: string;
   packageQuantity?: number;
   unitsPerPackage?: number;
+  cartonQuantity?: number;
+  outerCartonSizeCm?: string;
+  outerCartonGrossWeightKg?: number;
   totalQuantity?: number;
   quantity?: number;
   salePrice?: number;

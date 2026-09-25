@@ -12,6 +12,43 @@ describe('ProductService prisma storage', () => {
     }
   });
 
+  it('updates existing product prices and carton data from a confirmed inquiry in Prisma', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const createdAt = new Date('2026-09-25T00:00:00.000Z');
+    const row = {
+      id: 8n, sku: 'SKU-LED', nameCn: '灯带', nameEn: '', category: 'electronics',
+      unit: 'pcs', currency: 'USD', defaultSalePrice: 20, defaultPurchasePrice: 10,
+      cartonQuantity: 5, cartonSpec: '旧规格', cartonWeight: 2,
+      ownerName: 'Zoe', status: 'active', createdBy: 'Zoe', createdAt,
+      updatedAt: createdAt, salePriceTiers: [],
+    };
+    const product = {
+      findUnique: jest.fn().mockResolvedValue(row),
+      update: jest.fn().mockImplementation(async ({ data }) => ({ ...row, ...data })),
+    };
+    const operationLog = { create: jest.fn().mockResolvedValue({ id: 1n }) };
+    const service = new ProductService({ product, operationLog } as unknown as PrismaService);
+
+    const updated = await service.findOrCreateQuoteCandidate({
+      sku: 'SKU-LED', nameCn: '灯带', category: 'electronics', unit: 'pcs',
+      confirmedSalePrice: 35, confirmedPurchasePrice: 18,
+      cartonQuantity: 24, outerCartonSizeCm: '50×40×30',
+      outerCartonGrossWeightKg: 12.5, operator: 'Mia',
+    });
+
+    expect(product.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 8n },
+      data: expect.objectContaining({
+        defaultSalePrice: 35, defaultPurchasePrice: 18,
+        cartonQuantity: 24, cartonSpec: '50×40×30', cartonWeight: 12.5,
+      }),
+    }));
+    expect(updated).toMatchObject({ id: 8, defaultPurchasePrice: 18, cartonQuantity: 24 });
+    expect(operationLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      operationType: 'sync_confirmed_inquiry', bizId: 8n,
+    }) });
+  });
+
   it('stores product field definitions in Prisma and soft-deletes them', async () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const row = { id: 7n, name: '外箱标记', type: 'text', createdBy: 'Admin', createdAt: new Date('2026-09-25T00:00:00.000Z'), deletedAt: null };

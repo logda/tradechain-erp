@@ -13,6 +13,9 @@ export class ConvertQuoteToSalesItemDto {
   confirmedSupplierName?: string;
   confirmedPurchasePrice?: number;
   confirmedProductId?: number;
+  cartonQuantity?: number;
+  outerCartonSizeCm?: string;
+  outerCartonGrossWeightKg?: number;
 }
 
 export class ConvertQuoteToSalesAttachmentDto {

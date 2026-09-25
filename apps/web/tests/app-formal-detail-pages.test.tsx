@@ -687,6 +687,9 @@ describe('formal detail pages', () => {
               packageQuantity: 20,
               unitsPerPackage: 200,
               totalQuantity: 4000,
+              cartonQuantity: 24,
+              outerCartonSizeCm: '50×40×30',
+              outerCartonGrossWeightKg: 12.5,
               unit: 'set',
               salePrice: 15.9,
               amount: 7950,
@@ -756,6 +759,9 @@ describe('formal detail pages', () => {
     const salesItemsHeading = screen.getByRole('heading', { name: '销售明细' });
     const orderFieldsHeading = screen.getByRole('heading', { name: '订单字段' });
     expect(salesItemsHeading).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '装箱数' })).toBeInTheDocument();
+    expect(screen.getByText('50×40×30')).toBeInTheDocument();
+    expect(screen.getByText('12.5')).toBeInTheDocument();
     expect(orderFieldsHeading).toBeInTheDocument();
     expect(
       salesItemsHeading.compareDocumentPosition(orderFieldsHeading) &

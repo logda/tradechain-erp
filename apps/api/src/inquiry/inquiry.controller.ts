@@ -132,6 +132,7 @@ export class InquiryController {
           cartonQuantity?: number;
           outerCartonSizeCm?: string;
           outerCartonGrossWeightKg?: number;
+          samplingInfo?: string;
           remark?: string;
         }>;
       }>;
@@ -143,6 +144,21 @@ export class InquiryController {
       inquiryId: id,
       items: body.items,
     }, readOptionalFormalSession({
+      'x-erp-role': role,
+      'x-erp-user': user,
+    }));
+  }
+
+  @FormalRoles('admin', 'boss')
+  @FormalModules('purchase')
+  @FormalActions('boss.confirm')
+  @Post(':id/boss-reject')
+  bossReject(
+    @Param('id', ParseIntPipe) id: number,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+  ) {
+    return this.inquiryService.rejectByBoss(id, readOptionalFormalSession({
       'x-erp-role': role,
       'x-erp-user': user,
     }));

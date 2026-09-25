@@ -552,7 +552,7 @@ describe('QuoteService runtime audit logs', () => {
         { currentVersionNo: 1, result: 'accepted' },
         { role: 'purchase', user: 'Buyer' },
       ),
-    ).rejects.toThrow('只有销售角色可以记录客户反馈');
+    ).rejects.toThrow('只有销售或老板可以记录客户反馈');
   });
 
   it('reopens one linked inquiry and advances the same quote to V2 after boss repricing', async () => {

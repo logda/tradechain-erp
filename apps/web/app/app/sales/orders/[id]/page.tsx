@@ -96,6 +96,9 @@ type SalesOrderDetail = {
     quantity: number;
     packageQuantity?: number;
     unitsPerPackage?: number;
+    cartonQuantity?: number;
+    outerCartonSizeCm?: string;
+    outerCartonGrossWeightKg?: number;
     totalQuantity?: number;
     salePrice: number;
     amount: number;
@@ -816,6 +819,9 @@ export default async function AppSalesOrderDetailPage({
                   <th style={headCellStyle}>数量/件 Quantity</th>
                   <th style={headCellStyle}>每件数量 Quan</th>
                   <th style={headCellStyle}>总数量 Total Q</th>
+                  <th style={headCellStyle}>装箱数</th>
+                  <th style={headCellStyle}>外箱尺寸</th>
+                  <th style={headCellStyle}>外箱毛重</th>
                   <th style={headCellStyle}>单位 Unit</th>
                   <th style={headCellStyle}>单价 Unit P</th>
                   <th style={headCellStyle}>合计 Total</th>
@@ -831,6 +837,9 @@ export default async function AppSalesOrderDetailPage({
                     <td style={cellStyle}>{item.packageQuantity ?? 1}</td>
                     <td style={cellStyle}>{item.unitsPerPackage ?? item.quantity}</td>
                     <td style={cellStyle}>{item.totalQuantity ?? item.quantity}</td>
+                    <td style={cellStyle}>{item.cartonQuantity ?? '-'}</td>
+                    <td style={cellStyle}>{item.outerCartonSizeCm || '-'}</td>
+                    <td style={cellStyle}>{item.outerCartonGrossWeightKg ?? '-'}</td>
                     <td style={cellStyle}>{item.unit}</td>
                     <td style={cellStyle}>{item.salePrice}</td>
                     <td style={cellStyle}>{item.amount}</td>

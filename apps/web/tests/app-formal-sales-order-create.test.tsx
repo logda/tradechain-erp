@@ -155,6 +155,9 @@ function mockCounterpartyFetch(
               productName: '智能 LED 灯带',
               packageQuantity: 12,
               unitsPerPackage: 10,
+              cartonQuantity: 6,
+              outerCartonSizeCm: '60×40×30',
+              outerCartonGrossWeightKg: 18.5,
               totalQuantity: 120,
               quantity: 120,
               unit: 'set',
@@ -389,6 +392,9 @@ describe('formal sales order create page', () => {
     expect(screen.getByLabelText('货品编码 Product No')).toHaveValue('SKU-LED-001');
     expect(screen.getByLabelText('数量/件 Quantity')).toHaveValue(12);
     expect(screen.getByLabelText('每件数量 Quan')).toHaveValue(10);
+    expect(screen.getByLabelText('装箱数 Carton Qty')).toHaveValue(6);
+    expect(screen.getByLabelText('外箱尺寸 Carton Size')).toHaveValue('60×40×30');
+    expect(screen.getByLabelText('外箱毛重 Gross Weight')).toHaveValue(18.5);
     expect(screen.getByLabelText('总数量 Total Q')).toHaveValue('120');
     expect(screen.getByLabelText('单价 Unit P')).toHaveValue(17.2);
     expect(screen.getByLabelText('合计 Total')).toHaveValue('2064');
@@ -401,6 +407,9 @@ describe('formal sales order create page', () => {
       sku: 'SKU-LED-001',
       salePrice: 17.2,
       amount: 2064,
+      cartonQuantity: 6,
+      outerCartonSizeCm: '60×40×30',
+      outerCartonGrossWeightKg: 18.5,
     });
   });
 

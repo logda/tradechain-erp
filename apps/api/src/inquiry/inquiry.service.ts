@@ -74,6 +74,7 @@ type SubmitPayload = {
       cartonQuantity?: number;
       outerCartonSizeCm?: string;
       outerCartonGrossWeightKg?: number;
+      samplingInfo?: string;
       remark?: string;
     }>;
   }>;
@@ -98,6 +99,7 @@ type InquiryItemMutationPayload = {
     cartonQuantity?: number;
     outerCartonSizeCm?: string;
     outerCartonGrossWeightKg?: number;
+    samplingInfo?: string;
     remark?: string;
   }>;
   confirmedSalePrice?: number;
@@ -175,6 +177,7 @@ function normalizeSupplierQuotes(
     cartonQuantity?: number;
     outerCartonSizeCm?: string;
     outerCartonGrossWeightKg?: number;
+    samplingInfo?: string;
     remark?: string;
   }>,
 ): InquirySupplierQuote[] {
@@ -219,6 +222,7 @@ function normalizeSupplierQuotes(
           Number(item.outerCartonGrossWeightKg) >= 0
             ? Number(item.outerCartonGrossWeightKg)
             : undefined,
+        samplingInfo: item.samplingInfo?.trim() || undefined,
         remark: item.remark?.trim() || undefined,
       }),
     )
@@ -564,6 +568,7 @@ const inquiryProcurementSensitiveKeys = new Set([
   'cartonQuantity',
   'outerCartonSizeCm',
   'outerCartonGrossWeightKg',
+  'samplingInfo',
 ]);
 
 function hideProcurementFromValue(value: unknown): unknown {
@@ -626,6 +631,10 @@ function syncQuoteSupplierSelectionFromInquiry(
       return quoteItem;
     }
 
+    const selectedSupplier = matchedInquiryItem.confirmedSupplierQuoteIndex === undefined
+      ? undefined
+      : matchedInquiryItem.supplierQuotes[matchedInquiryItem.confirmedSupplierQuoteIndex];
+
     return {
       ...quoteItem,
       confirmedSalePrice: Number(matchedInquiryItem.confirmedSalePrice ?? 0),
@@ -635,6 +644,10 @@ function syncQuoteSupplierSelectionFromInquiry(
       confirmedSupplierName: matchedInquiryItem.confirmedSupplierName,
       confirmedPurchasePrice: matchedInquiryItem.confirmedPurchasePrice,
       confirmedProductId: matchedInquiryItem.confirmedProductId,
+      samplingInfo: selectedSupplier?.samplingInfo,
+      cartonQuantity: selectedSupplier?.cartonQuantity,
+      outerCartonSizeCm: selectedSupplier?.outerCartonSizeCm,
+      outerCartonGrossWeightKg: selectedSupplier?.outerCartonGrossWeightKg,
     };
   });
 }
@@ -976,7 +989,7 @@ export class InquiryService {
       throw new BadRequestException('询价单至少需要 1 行明细');
     }
 
-    if (existingStatus === 'boss_confirmed') {
+    if (existingStatus !== 'pending_inquiry') {
       throw new BadRequestException('只有待询价状态的询价单才能提交比价');
     }
 
@@ -1189,6 +1202,39 @@ export class InquiryService {
     };
   }
 
+  async rejectByBoss(inquiryId: number, session?: FormalSession) {
+    const inquiry = await this.loadExistingInquiry(inquiryId);
+    if (!inquiry) {
+      throw new NotFoundException('询价单不存在');
+    }
+    if (inquiry.status !== 'pending_boss_review') {
+      throw new BadRequestException('只有待老板确认状态的询价单才能驳回');
+    }
+
+    if (this.shouldUsePrisma()) {
+      await this.updateInquiryStatus({
+        inquiryId,
+        status: 'pending_inquiry',
+        operationType: 'reject_inquiry_by_boss',
+        operatorName: session?.user?.trim() || '老板',
+      });
+    } else {
+      const existing = this.store.getInquiry(inquiryId);
+      await this.updateRuntimeInquiryStatus(inquiryId, 'pending_inquiry');
+      if (existing) {
+        this.store.recordAuditLog({
+          bizType: 'quote_inquiry',
+          bizId: inquiryId,
+          operationType: 'reject_inquiry_by_boss',
+          operatorId: Number(existing.createdBy ?? 0),
+          beforeData: snapshotAuditData(existing),
+          afterData: snapshotAuditData(this.store.getInquiry(inquiryId) ?? existing),
+        });
+      }
+    }
+    return { id: inquiryId, status: 'pending_inquiry' as const };
+  }
+
   private async updateInquiryStatus(payload: {
     inquiryId: number;
     status: InquiryStatus;
@@ -1215,7 +1261,9 @@ export class InquiryService {
       comparisonSummary:
         payload.status === 'boss_confirmed'
           ? '老板已确认售价。'
-          : '比价已提交，等待老板确认最终售价。',
+          : payload.status === 'pending_inquiry'
+            ? '老板已驳回，请继续询价并重新提交比价。'
+            : '比价已提交，等待老板确认最终售价。',
       items: nextItems,
     };
     const nextPayload = nextPayloadBase;
@@ -1263,7 +1311,9 @@ export class InquiryService {
       comparisonSummary:
         status === 'boss_confirmed'
           ? '老板已确认售价。'
-          : '比价已提交，等待老板确认最终售价。',
+          : status === 'pending_inquiry'
+            ? '老板已驳回，请继续询价并重新提交比价。'
+            : '比价已提交，等待老板确认最终售价。',
       items: nextItems,
     };
     const nextPayload = nextPayloadBase;
@@ -1321,7 +1371,7 @@ export class InquiryService {
         nextPayload.currentProgress =
           inquiry.status === 'pending_boss_review'
             ? '采购比价已提交，等待老板确认最终售价'
-            : nextPayload.currentProgress;
+            : '采购询价中';
       }
 
       await prismaDb!.businessDocument.update({
@@ -1355,7 +1405,7 @@ export class InquiryService {
       currentProgress: isCandidateDemand || isRepricingQuote
         ? inquiry.status === 'pending_boss_review'
           ? '采购比价已提交，等待老板确认最终售价'
-          : quote.currentProgress
+          : '采购询价中'
         : nextProgress,
       linkedInquiryId: inquiry.id,
       linkedInquiryNo: inquiry.inquiryNo,

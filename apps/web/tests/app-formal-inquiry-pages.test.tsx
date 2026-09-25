@@ -410,11 +410,12 @@ describe('formal inquiry pages', () => {
     expect(screen.getAllByText('图片').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByLabelText('行 1 最终售价')).toHaveValue(19.6);
     expect(screen.getByText(/等待老板确认最终售价/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '再次提交比价' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '再次提交比价' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '老板确认' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '驳回询价' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        '当前状态动作：待询价可提交比价；待老板确认可确认最终售价；老板已确认后不再展示提交和确认入口。',
+        '待老板确认期间，供应商信息已锁定；老板驳回后，采购可继续询价并重新提交。',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Q202607080002')).toBeInTheDocument();
@@ -452,10 +453,8 @@ describe('formal inquiry pages', () => {
     expect(
       screen.queryByRole('dialog', { name: '多孔插座 图片预览' }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByLabelText('行 1 供应商 1'),
-    ).toHaveValue('SUP-BRAVO / 光源制造 / Bravo Industrial');
-    expect(screen.getByLabelText('行 1 采购价 1')).toHaveValue(19.6);
+    expect(screen.queryByLabelText('行 1 供应商 1')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('行 1 采购价 1')).not.toBeInTheDocument();
     expect(screen.getByText('SUP-BRAVO / 光源制造 - 19.6')).toBeInTheDocument();
   });
 
@@ -684,7 +683,7 @@ describe('formal inquiry pages', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        '当前状态动作：待询价可提交比价；待老板确认可确认最终售价；老板已确认后不再展示提交和确认入口。',
+        '待询价可填写供应商报价并提交比价。',
       ),
     ).toBeInTheDocument();
   });

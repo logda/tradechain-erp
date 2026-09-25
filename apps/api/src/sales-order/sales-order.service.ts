@@ -65,6 +65,9 @@ export type ConvertConfirmedQuotePayload = {
     confirmedSupplierName?: string;
     confirmedPurchasePrice?: number;
     confirmedProductId?: number;
+    cartonQuantity?: number;
+    outerCartonSizeCm?: string;
+    outerCartonGrossWeightKg?: number;
   }>;
   quoteAttachments?: Array<{
     key?: string;
@@ -90,6 +93,9 @@ export type SalesOrderLineItem = {
   quantity: number;
   packageQuantity?: number;
   unitsPerPackage?: number;
+  cartonQuantity?: number;
+  outerCartonSizeCm?: string;
+  outerCartonGrossWeightKg?: number;
   totalQuantity?: number;
   salePrice: number;
   amount: number;
@@ -219,6 +225,9 @@ type SourceQuoteLineSelection = {
   confirmedSupplierName?: string;
   confirmedPurchasePrice?: number;
   confirmedProductId?: number;
+  cartonQuantity?: number;
+  outerCartonSizeCm?: string;
+  outerCartonGrossWeightKg?: number;
 };
 
 type SourceQuoteDocumentRecord = {
@@ -352,6 +361,9 @@ function normalizeSalesOrderItems(
       quantity,
       packageQuantity: 1,
       unitsPerPackage: quantity,
+      cartonQuantity: item.cartonQuantity,
+      outerCartonSizeCm: item.outerCartonSizeCm,
+      outerCartonGrossWeightKg: item.outerCartonGrossWeightKg,
       totalQuantity: quantity,
       salePrice,
       amount,
@@ -437,6 +449,9 @@ function normalizeDirectSalesOrderItems(
             ? unitsPerPackage
             : totalQuantity,
         totalQuantity,
+        cartonQuantity: item.cartonQuantity,
+        outerCartonSizeCm: item.outerCartonSizeCm,
+        outerCartonGrossWeightKg: item.outerCartonGrossWeightKg,
         salePrice: Number.isFinite(salePrice) ? salePrice : 0,
         amount: Number.isFinite(amount)
           ? amount
@@ -1368,6 +1383,16 @@ export class SalesOrderService {
       payload.quoteVersionNo,
       '当前单据状态不可转销售单',
     );
+    const sourceItems = await this.loadSourceQuoteLineSelections(payload.quoteOrderId);
+    const conversionItems = payload.items?.map((item) => {
+      const source = sourceItems.find((entry) => Number(entry.lineNo) === Number(item.lineNo));
+      return {
+        ...item,
+        cartonQuantity: source?.cartonQuantity,
+        outerCartonSizeCm: source?.outerCartonSizeCm,
+        outerCartonGrossWeightKg: source?.outerCartonGrossWeightKg,
+      };
+    });
     const createdAt = new Date().toISOString();
     const sourceQuoteNo = payload.sourceQuoteNo?.trim() || undefined;
     const sourceDocumentType =
@@ -1419,7 +1444,7 @@ export class SalesOrderService {
         ),
         title: `${sourceDocumentLabel} ${sourceQuoteNo ?? payload.quoteOrderId} 转销售单`,
         salesUserId: payload.createdBy,
-        items: normalizeSalesOrderItems(payload.items),
+        items: normalizeSalesOrderItems(conversionItems),
       };
         const created = (await db.businessDocument.create({
         data: {
@@ -1455,7 +1480,7 @@ export class SalesOrderService {
         },
       });
 
-        await this.formalizeCandidateProducts(payload, db);
+        await this.formalizeCandidateProducts({ ...payload, items: conversionItems }, db);
         await this.markSourceQuoteConvertedToSales(payload, finalPayload, db);
 
         return finalPayload;
@@ -1512,10 +1537,10 @@ export class SalesOrderService {
       ),
       title: `${sourceDocumentLabel} ${sourceQuoteNo ?? payload.quoteOrderId} 转销售单`,
       salesUserId: payload.createdBy,
-      items: normalizeSalesOrderItems(payload.items),
+      items: normalizeSalesOrderItems(conversionItems),
     };
 
-    await this.formalizeCandidateProducts(payload);
+    await this.formalizeCandidateProducts({ ...payload, items: conversionItems });
     this.store.upsertSalesOrder(converted);
     this.store.recordAuditLog({
       bizType: 'sales_order',

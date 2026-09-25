@@ -40,6 +40,7 @@ type InquiryBossConfirmFormProps = {
       cartonQuantity?: number;
       outerCartonSizeCm?: string;
       outerCartonGrossWeightKg?: number;
+      samplingInfo?: string;
       remark?: string;
     }>;
     confirmedSalePrice: number;

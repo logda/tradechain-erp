@@ -62,6 +62,7 @@ export type QuoteDetailRecord = {
   linkedInquiryStatus?: string;
   sourceDemandId?: number;
   sourceDemandNo?: string;
+  sourceDemandSnapshot?: Omit<QuoteDetailRecord, 'sourceDemandSnapshot'>;
   linkedQuoteId?: number;
   linkedQuoteNo?: string;
   linkedInquiryVersionNo?: number;
@@ -103,6 +104,10 @@ export type QuoteLineItem = {
   confirmedSupplierName?: string;
   confirmedPurchasePrice?: number;
   confirmedProductId?: number;
+  samplingInfo?: string;
+  cartonQuantity?: number;
+  outerCartonSizeCm?: string;
+  outerCartonGrossWeightKg?: number;
 };
 
 export type QuoteAttachmentInfo = {
@@ -333,9 +338,6 @@ const procurementSensitiveKeys = new Set([
   'productPackaging',
   'productWeightG',
   'bulkLeadTimeDays',
-  'cartonQuantity',
-  'outerCartonSizeCm',
-  'outerCartonGrossWeightKg',
 ]);
 
 function sanitizeProcurementValueForSales(value: unknown): unknown {
@@ -889,6 +891,9 @@ export class QuoteService {
       session ?? {},
       ['admin', 'boss', 'sales_manager'],
     ).filter((item) => {
+      if (item.documentType === 'demand' && item.status === 'converted_to_quote') {
+        return false;
+      }
       if (
         keyword &&
         ![
@@ -1436,9 +1441,10 @@ export class QuoteService {
     if (
       session?.role !== 'sales' &&
       session?.role !== 'sales_manager' &&
-      session?.role !== 'admin'
+      session?.role !== 'admin' &&
+      session?.role !== 'boss'
     ) {
-      throw new BadRequestException('只有销售角色可以记录客户反馈');
+      throw new BadRequestException('只有销售或老板可以记录客户反馈');
     }
     const existing = await this.getDetail(id);
     if (existing.documentType !== 'quote') {
@@ -1592,6 +1598,9 @@ export class QuoteService {
         confirmedSalePrice: inquiryItem.confirmedSalePrice,
         confirmedPurchasePrice: selectedSupplier.purchasePrice,
         supplierCode: selectedSupplier.supplierCode,
+        cartonQuantity: selectedSupplier.cartonQuantity,
+        outerCartonSizeCm: selectedSupplier.outerCartonSizeCm,
+        outerCartonGrossWeightKg: selectedSupplier.outerCartonGrossWeightKg,
         operator,
       });
       linkedItems.push({
@@ -1610,6 +1619,10 @@ export class QuoteService {
         confirmedSupplierName: selectedSupplier.supplierName,
         confirmedPurchasePrice: selectedSupplier.purchasePrice,
         confirmedProductId: product.id,
+        samplingInfo: selectedSupplier.samplingInfo,
+        cartonQuantity: selectedSupplier.cartonQuantity,
+        outerCartonSizeCm: selectedSupplier.outerCartonSizeCm,
+        outerCartonGrossWeightKg: selectedSupplier.outerCartonGrossWeightKg,
         amount: Number(
           (sourceItem.quantity * inquiryItem.confirmedSalePrice).toFixed(2),
         ),
@@ -1629,6 +1642,11 @@ export class QuoteService {
       submitMode: 'submit',
       sourceDemandId: sourceDemand.id,
       sourceDemandNo: sourceDemand.quoteNo,
+      sourceDemandSnapshot: {
+        ...sourceDemand,
+        items: sourceDemand.items.map((item) => ({ ...item })),
+        quoteAttachments: sourceDemand.quoteAttachments?.map((attachment) => ({ ...attachment })),
+      },
       linkedInquiryId: inquiry.id,
       linkedInquiryNo: inquiry.inquiryNo,
       linkedInquiryStatus: inquiry.status,
@@ -1763,7 +1781,10 @@ export class QuoteService {
       return {};
     }
 
-    const items = quote.items.map((item) => {
+    const productService = new ProductService(
+      (prismaDb ?? this.prisma) as PrismaService | undefined,
+    );
+    const items = await Promise.all(quote.items.map(async (item) => {
       const inquiryItem = inquiry.items.find(
         (entry) => entry.lineNo === item.lineNo,
       );
@@ -1778,6 +1799,16 @@ export class QuoteService {
       if (!selectedSupplier) {
         throw new BadRequestException(`询价第 ${item.lineNo} 行尚未选择最终供应商`);
       }
+      if (item.productId) {
+        await productService.applyConfirmedInquiryValues(item.productId, {
+          confirmedSalePrice: inquiryItem.confirmedSalePrice,
+          confirmedPurchasePrice: selectedSupplier.purchasePrice,
+          cartonQuantity: selectedSupplier.cartonQuantity,
+          outerCartonSizeCm: selectedSupplier.outerCartonSizeCm,
+          outerCartonGrossWeightKg: selectedSupplier.outerCartonGrossWeightKg,
+          operator,
+        });
+      }
       return {
         ...item,
         salePrice: inquiryItem.confirmedSalePrice,
@@ -1788,9 +1819,13 @@ export class QuoteService {
         confirmedSupplierName: selectedSupplier.supplierName,
         confirmedPurchasePrice: selectedSupplier.purchasePrice,
         confirmedProductId: item.productId,
+        samplingInfo: selectedSupplier.samplingInfo,
+        cartonQuantity: selectedSupplier.cartonQuantity,
+        outerCartonSizeCm: selectedSupplier.outerCartonSizeCm,
+        outerCartonGrossWeightKg: selectedSupplier.outerCartonGrossWeightKg,
         amount: Number((item.quantity * inquiryItem.confirmedSalePrice).toFixed(2)),
       };
-    });
+    }));
     const versionSnapshot: QuoteVersionSnapshot = {
       versionNo: inquiry.quoteVersionNo,
       status: 'pending_customer_feedback',

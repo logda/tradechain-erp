@@ -99,6 +99,9 @@ describe('InquiryComparisonSubmitForm', () => {
     fireEvent.change(screen.getByLabelText('行 1 备注 1'), {
       target: { value: '打样 2 天，费用 200 元' },
     });
+    fireEvent.change(screen.getByLabelText('行 1 打样信息 1'), {
+      target: { value: '三天出样' },
+    });
     fireEvent.click(
       within(screen.getByRole('group', { name: '行 1 录入方式 2' })).getByRole('button', {
         name: '手工填写',
@@ -135,6 +138,7 @@ describe('InquiryComparisonSubmitForm', () => {
                   cartonQuantity: 120,
                   outerCartonSizeCm: '55×45×40',
                   outerCartonGrossWeightKg: 24,
+                  samplingInfo: '三天出样',
                   remark: '打样 2 天，费用 200 元',
                 },
                 {
@@ -149,6 +153,7 @@ describe('InquiryComparisonSubmitForm', () => {
                   cartonQuantity: undefined,
                   outerCartonSizeCm: undefined,
                   outerCartonGrossWeightKg: undefined,
+                  samplingInfo: undefined,
                   remark: undefined,
                 },
               ],

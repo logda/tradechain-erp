@@ -20,6 +20,7 @@ export type InquirySupplierQuote = {
   cartonQuantity?: number;
   outerCartonSizeCm?: string;
   outerCartonGrossWeightKg?: number;
+  samplingInfo?: string;
   remark?: string;
 };
 
