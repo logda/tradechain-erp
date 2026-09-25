@@ -56,6 +56,7 @@ make ci               # 提交前门禁：install + build + test（等价 GitHub
 ```
 
 - 前端默认经 `http://127.0.0.1:3001/api` 调用后端，可用 `ERP_API_BASE_URL` 覆盖。
+- 本地页面请用 `make dev-web`（自定义端口可用 `pnpm --filter web dev --port 3100`）。开发服务使用 `.next-dev`，`make ci` 构建使用 `.next`，两者可同时运行；若手动使用 `next start` 预览构建产物，每次重新构建后须重启该预览进程。
 - **存储模式**（`ERP_STORAGE_MODE`）：`runtime`（默认，本地 JSON，开箱即用，适合开发/演示）｜`prisma`（MySQL 持久化，**生产必须用此模式**，需配 `DATABASE_URL` 并跑迁移+种子）。
 
 ### 二、发版（本地打 tag，CI 构建镜像）

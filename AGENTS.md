@@ -25,10 +25,12 @@ make dev-web      # pnpm --filter web dev
 make test         # pnpm -r test
 make build        # pnpm -r build
 make ci           # install + build + test，顺序执行 —— 与 GitHub Actions 门禁完全同一入口
-make clean        # 删 apps/api/dist、apps/web/.next、packages/shared/dist
+make clean        # 删 apps/api/dist、apps/web/.next、apps/web/.next-dev、packages/shared/dist
 make tag VERSION=vX.Y.Z   # 打 tag 并推送，触发 CI 构建镜像
 make build-image  # 本地验证 Dockerfile 能否构建（原生架构、tag 为 local、不推送）
 ```
+
+本地验收页面应使用 `make dev-web`（或 `pnpm --filter web dev --port <端口>`）：开发缓存为 `.next-dev`，`make ci` 构建产物为 `.next`，互不覆盖。不要用长期运行的 `next start` 配合反复执行 `make ci`；重新构建后它会继续引用旧 chunk，必须重启进程。`make clean` 同时清理两份 Web 缓存。
 
 **没有 lint / format 门禁**：根 `package.json` 里有 `pnpm lint` / `pnpm format`（转发到 `pnpm -r lint` / `-r format`），但三个包的 `lint`/`format` script 目前都只 `echo 'Scaffolding pending: ...'`，Makefile 里也没有对应 target。不要把它们当校验手段，也不要因为"跑过了"就认为风格已检查。
 

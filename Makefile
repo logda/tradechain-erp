@@ -32,7 +32,7 @@ ci: ## CI 门禁入口：安装 + 构建 + 测试（顺序执行，避免 make -
 	$(MAKE) install && $(MAKE) build && $(MAKE) test
 
 clean: ## 清理构建产物
-	rm -rf apps/api/dist apps/web/.next packages/shared/dist
+	rm -rf apps/api/dist apps/web/.next apps/web/.next-dev packages/shared/dist
 
 ## ===== 发版（本地只打 tag，镜像由 GitHub Actions 构建推 GHCR）=====
 

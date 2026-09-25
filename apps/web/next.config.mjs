@@ -15,6 +15,7 @@ const extraDevOrigins = (process.env.ERP_EXTRA_DEV_ORIGINS ?? '')
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  distDir: process.env.ERP_NEXT_DIST_DIR || '.next',
   outputFileTracingRoot: monorepoRoot,
   allowedDevOrigins: ['*.trycloudflare.com', ...extraDevOrigins],
   experimental: {

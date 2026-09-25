@@ -5,6 +5,7 @@ node_modules
 # 构建产物
 dist
 .next
+.next-dev
 coverage
 *.tsbuildinfo
 
