@@ -115,6 +115,10 @@ describe('formal product master data page', () => {
     expect(screen.queryByText('Owner: Zoe')).not.toBeInTheDocument();
     expect(screen.queryByText('USD')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '新增' })).toBeInTheDocument();
+    const productList = screen.getByRole('heading', { name: '商品列表' }).closest('section');
+    expect(productList).not.toBeNull();
+    expect(within(productList!).queryByRole('button', { name: '新增' })).not.toBeInTheDocument();
+    expect(within(productList!).queryByRole('textbox', { name: '关键词 Keyword' })).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '新增产品' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '查询' })).toHaveClass(
       'erp-button',
@@ -1109,6 +1113,7 @@ describe('formal product master data page', () => {
           json: async () => ({
             id: 9,
             sku: 'SALE-CAM-009',
+            nameCn: '户外摄像头',
             status: 'active',
             createdAt: '2026-07-18T09:10:00.000Z',
           }),
@@ -1210,6 +1215,8 @@ describe('formal product master data page', () => {
       expect(screen.getByText('户外摄像头')).toBeInTheDocument();
       expect(screen.getByText('SALE-CAM-009')).toBeInTheDocument();
     });
+    expect(screen.queryByRole('dialog', { name: '新增产品' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('产品“户外摄像头”新增成功');
     expect(screen.queryByText('新增成功，请刷新查看最新商品。')).not.toBeInTheDocument();
   });
 

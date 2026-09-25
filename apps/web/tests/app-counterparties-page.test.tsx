@@ -953,6 +953,8 @@ describe('formal counterparty master data page', () => {
     const details = screen.getByText('自定义字段管理').closest('details');
     expect(details).not.toHaveAttribute('open');
     fireEvent.click(screen.getByText('自定义字段管理'));
+    expect(screen.getByRole('heading', { name: '已启用字段' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '新增字段' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '删除' }));
     expect(screen.getByRole('alertdialog')).toHaveTextContent('确定删除自定义字段“旧字段”？');
     expect(fetchMock).not.toHaveBeenCalled();

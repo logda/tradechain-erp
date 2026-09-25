@@ -65,18 +65,28 @@ export function CounterpartyCustomFieldManager({ fields, onChange, endpoint, req
       <summary style={{ cursor: 'pointer', color: '#334155', fontWeight: 700, fontSize: '18px' }}>自定义字段管理</summary>
       <div style={{ paddingTop: '12px' }}>
       <p style={{ color: '#64748b', fontSize: '13px' }}>已启用 {fields.length}/10 个；删除后旧值保留，但不再显示。</p>
-      {fields.length ? <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '14px' }}><tbody>
+      {fields.length ? <>
+        <h4 style={{ margin: '16px 0 8px', fontSize: '14px', color: '#334155' }}>已启用字段</h4>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px' }}><tbody>
         {fields.map((field) => <tr key={field.id}><td style={{ padding: '8px', borderBottom: '1px solid #e5ebf2' }}>{field.name}</td><td style={{ padding: '8px', borderBottom: '1px solid #e5ebf2' }}>{field.type === 'text' ? '文字' : field.type === 'number' ? '数字' : '日期'}</td><td style={{ textAlign: 'right', borderBottom: '1px solid #e5ebf2' }}><button type="button" style={buttonStyle} disabled={busy} onClick={() => setPendingDelete(field)}>删除</button></td></tr>)}
-      </tbody></table> : null}
+        </tbody></table>
+      </> : null}
+      <div style={{ borderTop: '1px solid #e5ebf2', paddingTop: '16px' }}>
+      <h4 style={{ margin: '0 0 12px', fontSize: '14px', color: '#334155' }}>新增字段</h4>
       {fields.length >= 10 ? <p role="status" style={{ color: '#b45309' }}>自定义字段数量已达上限（10 个）</p> : (
-        <form onSubmit={create} onChangeCapture={attempt.resetAfterEdit} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <input aria-label="自定义字段名称" value={name} maxLength={64} required onChange={(event) => setName(event.target.value)} style={inputStyle} />
-          <select aria-label="自定义字段类型" value={type} onChange={(event) => setType(event.target.value as CounterpartyCustomField['type'])} style={inputStyle}>
-            <option value="text">文字</option><option value="number">数字</option><option value="date">日期</option>
-          </select>
+        <form onSubmit={create} onChangeCapture={attempt.resetAfterEdit} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'end' }}>
+          <label style={{ display: 'grid', gap: '6px', flex: '1 1 240px', color: '#475569', fontSize: '13px' }}>字段名称
+            <input aria-label="自定义字段名称" value={name} maxLength={64} required onChange={(event) => setName(event.target.value)} style={inputStyle} />
+          </label>
+          <label style={{ display: 'grid', gap: '6px', flex: '0 1 200px', color: '#475569', fontSize: '13px' }}>字段类型
+            <select aria-label="自定义字段类型" value={type} onChange={(event) => setType(event.target.value as CounterpartyCustomField['type'])} style={inputStyle}>
+              <option value="text">文字</option><option value="number">数字</option><option value="date">日期</option>
+            </select>
+          </label>
           <button type="submit" style={buttonStyle} disabled={busy || !name.trim() || attempt.isComplete}>{busy ? '保存中...' : '新增字段'}</button>
         </form>
       )}
+      </div>
       {message ? <p role="status" style={{ color: '#166534', fontSize: '13px' }}>{message}</p> : null}
       </div>
       </details>

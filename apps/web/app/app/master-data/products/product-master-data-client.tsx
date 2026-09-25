@@ -100,7 +100,7 @@ const sectionHeadingStyle = {
 } satisfies React.CSSProperties;
 
 const filterHeadingStyle = {
-  margin: 0,
+  margin: '0 0 16px',
   fontSize: '18px',
 } satisfies React.CSSProperties;
 
@@ -356,6 +356,7 @@ export function ProductMasterDataClient({
   const [items, setItems] = useState(initialItems);
   const [customFields, setCustomFields] = useState(initialCustomFields);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createNotice, setCreateNotice] = useState<string | null>(null);
   const closeCreateRef = useRef<HTMLButtonElement>(null);
   const [total, setTotal] = useState(initialTotal);
   const [appliedQuery, setAppliedQuery] = useState(initialQuery);
@@ -413,7 +414,11 @@ export function ProductMasterDataClient({
   }
 
   function handleCreated(nextItem: ProductItem) {
-    if (!matchesProductFilters(nextItem, appliedQuery)) {
+    const matchesFilters = matchesProductFilters(nextItem, appliedQuery);
+    setCreateNotice(matchesFilters && appliedQuery.page === 1
+      ? `产品“${nextItem.nameCn || nextItem.sku}”新增成功，列表已更新。`
+      : `产品“${nextItem.nameCn || nextItem.sku}”新增成功；当前筛选或分页下未显示，请调整筛选条件。`);
+    if (!matchesFilters) {
       return;
     }
 
@@ -497,13 +502,14 @@ export function ProductMasterDataClient({
 
       {canConfigureFields ? <CounterpartyCustomFieldManager fields={customFields} onChange={setCustomFields} endpoint={`${mutationApiBaseUrl}/products/custom-fields`} requestHeaders={requestHeaders} /> : null}
 
+      {canManageMasterData ? <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        {createNotice ? <p role="status" style={{ margin: 0, padding: '10px 14px', border: '1px solid #bbf7d0', borderRadius: '12px', color: '#166534', background: '#f0fdf4' }}>{createNotice}</p> : null}
+        <button type="button" className="erp-button erp-button--primary" onClick={() => { setCreateNotice(null); setIsCreateOpen(true); }}>新增</button>
+      </div> : null}
+
       <section style={sectionStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-          <h3 style={{ marginTop: 0 }}>商品列表</h3>
-          {canManageMasterData ? <button type="button" className="erp-button erp-button--primary" onClick={() => setIsCreateOpen(true)}>新增</button> : null}
-        </div>
-        <form onSubmit={handleFilterSubmit} className="erp-filter-form erp-card">
-          <h4 style={filterHeadingStyle}>筛选视图 Product Filters</h4>
+        <form onSubmit={handleFilterSubmit} className="erp-filter-form">
+          <h3 style={filterHeadingStyle}>筛选商品</h3>
           <div className="erp-form-grid">
             <label className="erp-form-field">
               关键词 Keyword
@@ -583,6 +589,8 @@ export function ProductMasterDataClient({
                 <option value="tiered">tiered / 阶梯模式筛选</option>
               </select>
             </label>
+          </div>
+          <div className="erp-filter-actions" style={{ justifyContent: 'flex-end', marginTop: '16px' }}>
             <button
               className="erp-button erp-button--primary"
               type="button"
@@ -594,6 +602,10 @@ export function ProductMasterDataClient({
           </div>
           {loadError ? <p style={{ margin: 0, color: '#b91c1c' }}>{loadError}</p> : null}
         </form>
+      </section>
+
+      <section style={sectionStyle}>
+        <h3 style={{ marginTop: 0 }}>商品列表</h3>
         <div style={tableWrapStyle}>
           <table style={tableStyle}>
             <thead>
