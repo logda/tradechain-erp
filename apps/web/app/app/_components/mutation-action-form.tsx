@@ -29,6 +29,7 @@ type MutationActionFormProps = {
   requestHeaders?: Record<string, string>;
   onSuccess?: (result: unknown) => void;
   buttonVariant?: 'secondary';
+  fullWidth?: boolean;
 };
 
 type MutationActionState = {
@@ -244,6 +245,7 @@ export function MutationActionForm({
   requestHeaders,
   onSuccess,
   buttonVariant,
+  fullWidth,
 }: MutationActionFormProps) {
   let router: { push: (href: string) => void; refresh?: () => void } = {
     push: () => undefined,
@@ -372,7 +374,7 @@ export function MutationActionForm({
         requestKey.current = null;
         setState(initialState);
       }
-    }} style={formalActionFormStyle}>
+    }} style={{ ...formalActionFormStyle, ...(fullWidth ? { width: '100%' } : {}) }}>
       {fields.filter((field) => field.display !== 'input' && field.display !== 'select').map((field) => (
         <input
           key={field.name}
@@ -440,6 +442,7 @@ export function MutationActionForm({
         disabled={isSubmitting || isComplete || !canSubmit}
         style={{
           ...formalActionButtonStyle,
+          ...(fullWidth ? { width: '100%' } : {}),
           ...(buttonVariant === 'secondary' ? {
             borderColor: '#cbd5e1',
             background: '#ffffff',

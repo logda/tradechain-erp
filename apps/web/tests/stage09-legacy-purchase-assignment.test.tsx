@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import AppPurchaseOrderDetailPage from '../app/app/purchase-orders/[id]/page';
 
@@ -63,8 +63,20 @@ it('shows an assigned purchase owner as read-only beside the claim action', asyn
   expect(screen.getByRole('button', { name: '认领并提交采购审批' })).toBeInTheDocument();
   expect(screen.queryByRole('combobox', { name: /采购负责人 Purchase Owner/ })).not.toBeInTheDocument();
   expect(screen.getByText('Leo')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '保存草稿' }).closest('form')
+  const saveButton = screen.getByRole('button', { name: '保存草稿' });
+  const submitButton = screen.getByRole('button', { name: '认领并提交采购审批' });
+  expect(saveButton.parentElement).toContainElement(submitButton);
+  expect(saveButton).toHaveStyle({ width: 'min(100%, 260px)' });
+  expect(submitButton.closest('form')?.parentElement).toHaveStyle({ width: 'min(100%, 260px)' });
+  expect(submitButton).toHaveStyle({ width: '100%' });
+  expect(document.getElementById(saveButton.getAttribute('form') ?? '')
     ?.querySelector('input[name="ownerName"]')).toHaveValue('Leo');
+
+  fireEvent.click(saveButton);
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+    'http://127.0.0.1:3001/api/purchase-orders/502/draft',
+    expect.objectContaining({ method: 'POST' }),
+  ));
 });
 
 it('does not offer claim or draft actions to a different user on an older unlocked order', async () => {

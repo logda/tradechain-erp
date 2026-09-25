@@ -678,7 +678,6 @@ const actionPanelStyle = {
 const actionGridStyle = {
   display: 'grid',
   gap: '16px',
-  maxWidth: '720px',
   alignItems: 'start',
 } satisfies React.CSSProperties;
 
@@ -1151,12 +1150,7 @@ export default async function AppPurchaseOrderDetailPage({
           </div>
         </article>
 
-        <article style={{
-          ...actionPanelStyle,
-          ...(purchaseOrder.status === 'pending_purchase_claim' || purchaseOrder.status === 'draft'
-            ? { maxWidth: '780px' }
-            : {}),
-        }}>
+        <article style={actionPanelStyle}>
           <ActionPermissionNote>
             {purchaseOrder.needsPurchaseAssignment
               ? '当前节点需采购主管、老板或管理员先分配采购负责人。'
@@ -1208,6 +1202,19 @@ export default async function AppPurchaseOrderDetailPage({
                   unitPrice: item.unitPrice,
                 }))}
                 requestHeaders={actionRequestHeaders}
+                submitAction={canShowPurchaseSubmitAction ? (
+                  <div style={{ width: 'min(100%, 260px)' }}>
+                    <MutationActionForm
+                      endpoint={`${getPurchaseOrderApiBaseUrl()}/purchase-orders/${purchaseOrder.id}/submit`}
+                      label={submitPurchaseOrderLabel}
+                      fullWidth
+                      requiredAction="purchase.order.submit"
+                      requiredActionLabel="采购单提交"
+                      requestHeaders={actionRequestHeaders}
+                      fields={[{ name: 'currentStatus', value: purchaseOrder.status }]}
+                    />
+                  </div>
+                ) : null}
               />
             ) : null}
             {canApprovePurchaseOrder &&
@@ -1283,21 +1290,6 @@ export default async function AppPurchaseOrderDetailPage({
                 endpoint={`${getPurchaseOrderApiBaseUrl()}/shipment-batches`}
                 requestHeaders={actionRequestHeaders}
                 draft={shipmentBatchDraft}
-              />
-            ) : null}
-            {canShowPurchaseSubmitAction ? (
-              <MutationActionForm
-                endpoint={`${getPurchaseOrderApiBaseUrl()}/purchase-orders/${purchaseOrder.id}/submit`}
-                label={submitPurchaseOrderLabel}
-                requiredAction="purchase.order.submit"
-                requiredActionLabel="采购单提交"
-                requestHeaders={actionRequestHeaders}
-                fields={[
-                  {
-                    name: 'currentStatus',
-                    value: purchaseOrder.status,
-                  },
-                ]}
               />
             ) : null}
           </div>

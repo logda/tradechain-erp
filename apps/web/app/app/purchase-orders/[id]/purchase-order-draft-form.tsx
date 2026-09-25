@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CounterpartyPicker,
@@ -33,12 +33,13 @@ type PurchaseOrderDraftFormProps = {
   currentSupplierName: string;
   items: PurchaseDraftLineItem[];
   requestHeaders: Record<string, string>;
+  submitAction?: ReactNode;
 };
 
 const fieldGridStyle = {
   display: 'grid',
   gap: '14px',
-  minWidth: 'min(100%, 520px)',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
 } satisfies React.CSSProperties;
 
 const fieldLabelStyle = {
@@ -119,6 +120,7 @@ export function PurchaseOrderDraftForm({
   currentSupplierName,
   items,
   requestHeaders,
+  submitAction,
 }: PurchaseOrderDraftFormProps) {
   let router: { refresh?: () => void } = {};
   try {
@@ -143,6 +145,7 @@ export function PurchaseOrderDraftForm({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const attempt = useMutationAttempt();
+  const draftFormId = useId();
 
   const selectedSupplier = useMemo(
     () =>
@@ -207,7 +210,8 @@ export function PurchaseOrderDraftForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={formalActionFormStyle}>
+    <>
+      <form id={draftFormId} onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={{ ...formalActionFormStyle, width: '100%' }}>
       <input name="currentStatus" type="hidden" value={currentStatus} />
       <input name="ownerName" type="hidden" value={currentOwnerName} />
       <input name="supplierId" type="hidden" value={supplierIdValue} />
@@ -306,9 +310,18 @@ export function PurchaseOrderDraftForm({
       {message.error ? <p style={{ margin: 0, color: '#dc2626' }}>{message.error}</p> : null}
       {message.success ? <p style={{ margin: 0, color: '#15803d' }}>{message.success}</p> : null}
 
-      <button type="submit" style={formalActionButtonStyle} disabled={isSubmitting || attempt.isComplete}>
-        {isSubmitting ? '保存中...' : '保存草稿'}
-      </button>
-    </form>
+      </form>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '12px' }}>
+        <button
+          type="submit"
+          form={draftFormId}
+          style={{ ...formalActionButtonStyle, width: 'min(100%, 260px)' }}
+          disabled={isSubmitting || attempt.isComplete}
+        >
+          {isSubmitting ? '保存中...' : '保存草稿'}
+        </button>
+        {submitAction}
+      </div>
+    </>
   );
 }
