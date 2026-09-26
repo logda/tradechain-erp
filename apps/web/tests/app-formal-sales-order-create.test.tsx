@@ -200,9 +200,7 @@ describe('formal sales order create page', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式新建销售单' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式销售单列表' }),
-    ).toHaveAttribute('href', '/app/sales/orders');
+    expect(screen.queryByRole('link', { name: '返回正式销售单列表' })).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: '订货单位录入方式 Ordering Mode' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '从客户主数据选择' })).toHaveAttribute(
       'aria-pressed',
@@ -514,7 +512,7 @@ describe('formal sales order create page', () => {
 
     expect(screen.getByRole('heading', { name: '正式新建销售单' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '无权限创建正式销售单' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute('href', '/app');
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '保存草稿' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '提交审批' })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();

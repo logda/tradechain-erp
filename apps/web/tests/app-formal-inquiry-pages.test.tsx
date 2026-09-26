@@ -186,15 +186,9 @@ describe('formal inquiry pages', () => {
       }),
     );
     expect(screen.getByRole('heading', { name: '正式询价单' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式首页' }),
-    ).toHaveAttribute('href', '/app');
-    expect(
-      screen.getByRole('link', { name: '返回销售中心' }),
-    ).toHaveAttribute('href', '/app/sales');
-    expect(
-      screen.getByRole('link', { name: '进入需求/报价模块' }),
-    ).toHaveAttribute('href', '/app/sales/quotes');
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回销售中心' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '进入需求/报价模块' })).not.toBeInTheDocument();
     expect(screen.getByText('IQ-RUNTIME-001')).toBeInTheDocument();
     expect(screen.getByLabelText('询价单号 Inquiry No')).toBeInTheDocument();
     expect(screen.getByLabelText('来源报价单号 Quote No')).toBeInTheDocument();
@@ -387,15 +381,9 @@ describe('formal inquiry pages', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式询价详情' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式询价列表' }),
-    ).toHaveAttribute('href', '/app/sales/inquiries');
-    expect(
-      screen.getByRole('link', { name: '返回正式首页' }),
-    ).toHaveAttribute('href', '/app');
-    expect(
-      screen.getByRole('link', { name: '返回销售中心' }),
-    ).toHaveAttribute('href', '/app/sales');
+    expect(screen.queryByRole('link', { name: '返回正式询价列表' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回销售中心' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: '打开源报价详情' }),
     ).toHaveAttribute('href', '/app/sales/quotes/2?fromInquiryId=2');

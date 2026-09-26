@@ -1,5 +1,5 @@
 import React from 'react';
-import Link from 'next/link';
+
 import { AppShell } from '../../../_components/app-shell';
 import { resolveDemoSession } from '../../../_lib/demo-session';
 import {
@@ -19,20 +19,6 @@ type SearchParams = Record<string, string | string[] | undefined>;
 const shellBodyStyle = {
   display: 'grid',
   gap: '18px',
-} satisfies React.CSSProperties;
-
-const toolbarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '16px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const backLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 const heroCardStyle = {
@@ -90,9 +76,6 @@ export default async function AppNewSalesOrderPage({
         <section style={formPanelStyle}>
           <h2>无权限创建正式销售单</h2>
           <p>请切换到销售、销售主管、老板或管理员账号后再创建销售单。</p>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
         </section>
       </AppShell>
     );
@@ -113,20 +96,6 @@ export default async function AppNewSalesOrderPage({
       session={session}
     >
       <section style={shellBodyStyle}>
-        <div style={toolbarStyle}>
-          <Link
-            href="/app/sales/orders"
-            style={backLinkStyle}
-          >
-            返回正式销售单列表
-          </Link>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
-          <Link href="/app/sales" style={backLinkStyle}>
-            返回销售中心
-          </Link>
-        </div>
 
         <article style={heroCardStyle}>
           <h3 style={titleStyle}>直接新建销售单 / Direct Sales Order</h3>

@@ -1,5 +1,6 @@
 'use client';
 
+import { FilterPanel } from '../../_components/filter-panel';
 import { useEffect, useRef, useState } from 'react';
 import {
   CreateProductForm,
@@ -97,11 +98,6 @@ const sectionStyle = {
 
 const sectionHeadingStyle = {
   marginTop: 0,
-} satisfies React.CSSProperties;
-
-const filterHeadingStyle = {
-  margin: '0 0 16px',
-  fontSize: '18px',
 } satisfies React.CSSProperties;
 
 const metricsGridStyle = {
@@ -512,9 +508,8 @@ export function ProductMasterDataClient({
         <button ref={openCreateRef} type="button" className="erp-button erp-button--primary" onClick={() => { setCreateNotice(null); setHasOpenedCreate(true); setIsCreateOpen(true); }}>新增</button>
       </div> : null}
 
-      <section style={sectionStyle}>
+      <FilterPanel title="筛选商品">
         <form onSubmit={handleFilterSubmit} className="erp-filter-form">
-          <h3 style={filterHeadingStyle}>筛选商品</h3>
           <div className="erp-form-grid">
             <label className="erp-form-field">
               关键词 Keyword
@@ -607,7 +602,7 @@ export function ProductMasterDataClient({
           </div>
           {loadError ? <p style={{ margin: 0, color: '#b91c1c' }}>{loadError}</p> : null}
         </form>
-      </section>
+      </FilterPanel>
 
       <section style={sectionStyle}>
         <h3 style={{ marginTop: 0 }}>商品列表</h3>

@@ -59,10 +59,7 @@ describe('formal operations pages', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式采购单' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute(
-      'href',
-      '/app',
-    );
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: '分配采购负责人' }),
     ).toHaveAttribute('href', '/app/purchase-orders/assignments');
@@ -185,10 +182,7 @@ describe('formal operations pages', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式发货批次' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute(
-      'href',
-      '/app',
-    );
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新建发货批次' })).toHaveAttribute(
       'href',
       '/app/shipment-batches/new',
@@ -326,10 +320,7 @@ describe('formal operations pages', () => {
     render(<>{await AppAfterSalesPage({ searchParams: Promise.resolve({}) })}</>);
 
     expect(screen.getByRole('heading', { name: '正式售后单' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute(
-      'href',
-      '/app',
-    );
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新建售后单' })).toHaveAttribute(
       'href',
       '/app/after-sales/new',

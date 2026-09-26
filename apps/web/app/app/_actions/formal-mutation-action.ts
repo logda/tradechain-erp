@@ -14,6 +14,7 @@ import {
 import { resolveFormalActionSessionFromHeaders } from '../_lib/formal-action-session';
 import { resolveFormalActionSessionFromForm } from '../_lib/formal-action-session';
 import type { DemoSession } from '../_lib/demo-session';
+import { logServerRequestFailure } from '../_lib/server-diagnostics';
 
 type MutationActionResult =
   | { ok: true; result: unknown }
@@ -128,12 +129,15 @@ export async function submitFormalJsonMutationAction(
       body: JSON.stringify(payload),
       cache: 'no-store',
     });
-  } catch {
+  } catch (error) {
+    logServerRequestFailure(method, endpoint, error);
     return { ok: false, error: FORMAL_MUTATION_NETWORK_ERROR };
   }
 
   if (!response.ok) {
-    return { ok: false, error: await readApiError(response) };
+    const error = await readApiError(response);
+    logServerRequestFailure(method, endpoint, `HTTP ${response.status}: ${error}`);
+    return { ok: false, error };
   }
 
   return {
@@ -167,12 +171,15 @@ export async function submitFormalMutationAction(
       body: JSON.stringify(payload),
       cache: 'no-store',
     });
-  } catch {
+  } catch (error) {
+    logServerRequestFailure('POST', endpoint, error);
     return { ok: false, error: FORMAL_MUTATION_NETWORK_ERROR };
   }
 
   if (!response.ok) {
-    return { ok: false, error: await readApiError(response) };
+    const error = await readApiError(response);
+    logServerRequestFailure('POST', endpoint, `HTTP ${response.status}: ${error}`);
+    return { ok: false, error };
   }
 
   return {

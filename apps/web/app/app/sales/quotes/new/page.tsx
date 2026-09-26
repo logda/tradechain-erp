@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { AppShell } from '../../../_components/app-shell';
 import { resolveDemoSession } from '../../../_lib/demo-session';
 import { loadActiveCounterpartyOptions } from '../../../_lib/counterparty-options';
@@ -15,20 +14,6 @@ type SearchParams = Record<string, string | string[] | undefined>;
 const shellBodyStyle = {
   display: 'grid',
   gap: '18px',
-} satisfies React.CSSProperties;
-
-const toolbarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '16px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const backLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 const heroCardStyle = {
@@ -86,9 +71,6 @@ export default async function AppNewFormalQuotePage({
         <section style={formPanelStyle}>
           <h2>无权限创建正式需求和报价</h2>
           <p>请切换到销售、销售主管、老板或管理员账号后再创建单据。</p>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
         </section>
       </AppShell>
     );
@@ -107,20 +89,6 @@ export default async function AppNewFormalQuotePage({
       session={session}
     >
       <section style={shellBodyStyle}>
-        <div style={toolbarStyle}>
-          <Link
-            href="/app/sales/quotes"
-            style={backLinkStyle}
-          >
-            返回正式需求和报价列表
-          </Link>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
-          <Link href="/app/sales" style={backLinkStyle}>
-            返回销售中心
-          </Link>
-        </div>
 
         <article style={heroCardStyle}>
           <h3 style={titleStyle}>正式需求和报价创建 / Formal Quote Create</h3>

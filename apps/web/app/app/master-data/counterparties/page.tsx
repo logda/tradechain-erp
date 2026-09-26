@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import { AuditLogTable } from '../../_components/audit-log-table';
 import {
@@ -70,15 +69,6 @@ const toolbarStyle = {
   border: '1px solid #d8e1ea',
   borderRadius: '18px',
   background: 'rgba(255,255,255,0.78)',
-} satisfies React.CSSProperties;
-
-const linkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '8px',
 } satisfies React.CSSProperties;
 
 const filterStyle = {
@@ -348,9 +338,6 @@ export default async function AppCounterpartiesPage({
       session={session}
     >
       <div style={toolbarStyle}>
-        <Link href="/app" style={linkStyle}>
-          返回正式首页
-        </Link>
         <span style={{ color: '#475569', fontSize: '13px', fontWeight: 600 }}>
           当前角色默认查看：{describeDefaultType(query.type)}
         </span>

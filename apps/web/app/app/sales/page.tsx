@@ -275,15 +275,6 @@ export default async function AppSalesPage({
             </li>
           ))}
         </ul>
-        <p>
-          <Link href="/app/sales/quotes">
-            进入需求/报价模块
-          </Link>
-          {' / '}
-          <Link href="/app/sales/orders">
-            进入销售单模块
-          </Link>
-        </p>
         <div style={quickActionStyle}>
           {canCreateSalesOrder ? (
             <Link

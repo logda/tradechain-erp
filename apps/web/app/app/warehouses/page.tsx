@@ -274,9 +274,6 @@ export default async function AppWarehousesPage({
             这一页用于老板演示正式版仓储主数据基础盘点。仓库定义稳定后，收货、出库和库存台账会基于这里的仓库与库位进行归集。
           </p>
           <div style={quickActionStyle}>
-            <Link href="/app/inventory" style={quickActionLinkStyle}>
-              查看库存中心
-            </Link>
             <Link href="/app/purchase-orders" style={quickActionLinkStyle}>
               回到正式采购单
             </Link>

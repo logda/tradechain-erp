@@ -502,6 +502,21 @@ textarea.erp-control {
   gap: 4px;
 }
 
+summary.erp-filter-panel__heading {
+  cursor: pointer;
+  display: list-item;
+  color: #0f172a;
+}
+
+summary.erp-filter-panel__heading .erp-filter-panel__title {
+  display: inline;
+}
+
+.erp-filter-panel__content {
+  display: grid;
+  gap: 16px;
+}
+
 .erp-filter-panel__title,
 .erp-data-table__title {
   margin: 0;

@@ -193,12 +193,6 @@ const secondaryLinkStyle = {
   fontWeight: 700,
 } satisfies React.CSSProperties;
 
-const mutedLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const filterFormStyle = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -518,12 +512,6 @@ export default async function AppSalesOrdersPage({
       session={session}
     >
       <div style={toolbarStyle}>
-        <Link href="/app" style={mutedLinkStyle}>
-          返回正式首页
-        </Link>
-        <Link href="/app/sales" style={mutedLinkStyle}>
-          返回工作台
-        </Link>
         <div style={actionWrapStyle}>
           <Link
             href="/app/sales/quotes"

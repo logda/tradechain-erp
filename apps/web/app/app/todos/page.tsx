@@ -21,7 +21,6 @@ export default async function AppTodosPage({ searchParams }: { searchParams?: Pr
   return (
     <AppShell title="正式待办中心" session={session} todoCountOverride={todos.length}>
       <div className="erp-todo-links">
-        <Link href="/app">返回正式首页</Link>
         {canViewFormalModule(session, 'boss') ? <Link href="/app/dashboard/boss">去经营驾驶舱</Link> : null}
       </div>
       <StatStrip items={[

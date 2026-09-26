@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { ConsoleExceptionFilter } from './common/console-diagnostics';
 import { AfterSalesController } from './after-sales/after-sales.controller';
 import { AfterSalesService } from './after-sales/after-sales.service';
 import { AuditController } from './audit/audit.controller';
@@ -82,6 +83,7 @@ import { IdempotencyService } from './idempotency/idempotency.service';
     WarehouseController,
   ],
   providers: [
+    { provide: APP_FILTER, useClass: ConsoleExceptionFilter },
     IdempotencyService,
     { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     AfterSalesService,

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import { canViewFormalModule, resolveDemoSession } from '../../_lib/demo-session';
 import { canUseFormalProductActions } from '../../_lib/formal-access';
@@ -22,12 +21,6 @@ const sectionStyle = {
   padding: '24px',
   display: 'grid',
   gap: '16px',
-} satisfies React.CSSProperties;
-
-const linkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 function getProductApiBaseUrl() {
@@ -120,9 +113,6 @@ export default async function AppProductCodeRulePage({
       session={session}
     >
       <section style={sectionStyle}>
-        <Link href="/app/master-data/products" style={linkStyle}>
-          返回产品库
-        </Link>
         {canManageMasterData ? (
           <ProductCodeRulePageClient
             endpointBase={`${getProductApiBaseUrl()}/products/code-rules`}

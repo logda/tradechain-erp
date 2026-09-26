@@ -103,20 +103,6 @@ async function loadSampleAuditLogs(session: { role: string; user: string }) {
   }
 }
 
-const toolbarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '14px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const mutedLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const fieldGridStyle = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
@@ -293,14 +279,6 @@ export default async function AppSampleOrdersPage({
       subtitle="正式样品页承接确认报价版本后的样品申请、替代版本和取消留痕。"
       session={session}
     >
-      <div style={toolbarStyle}>
-        <Link href="/app" style={mutedLinkStyle}>
-          返回正式首页
-        </Link>
-        <Link href={sampleBoardHref} style={mutedLinkStyle}>
-          返回工作台
-        </Link>
-      </div>
 
       <StatStrip
         items={[

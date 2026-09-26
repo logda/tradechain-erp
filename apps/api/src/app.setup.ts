@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { resolveUploadRoot } from './file-storage/file-storage.config';
+import { logHttpRequest } from './common/console-diagnostics';
 
 const { json, urlencoded, static: serveStatic } = require('express') as {
   json: (options: { limit: string }) => unknown;
@@ -40,6 +41,7 @@ function assertFormalSessionSecret() {
 
 export function setupApp(app: INestApplication) {
   assertFormalSessionSecret();
+  app.use(logHttpRequest);
   app.use(json({ limit: '500mb' }));
   app.use(urlencoded({ extended: true, limit: '500mb' }));
   app.use('/uploads', serveStatic(resolveUploadRoot()));

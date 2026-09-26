@@ -111,14 +111,6 @@ async function loadAfterSalesAuditLogs(session: { role: string; user: string }) 
   }
 }
 
-const actionBarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '14px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
 const backLinkStyle = {
   color: '#0f172a',
   textDecoration: 'none',
@@ -284,12 +276,6 @@ export default async function AppAfterSalesDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link
-            href="/app/after-sales"
-            style={backLinkStyle}
-          >
-            返回正式售后单列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>
               {getFormalDetailAccessDeniedLabel('after_sales')}
@@ -315,12 +301,6 @@ export default async function AppAfterSalesDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link
-            href="/app/after-sales"
-            style={backLinkStyle}
-          >
-            返回正式售后单列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>售后单详情加载失败</h3>
             <p style={heroSubStyle}>请返回正式售后单列表后重试。</p>
@@ -338,12 +318,6 @@ export default async function AppAfterSalesDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link
-            href="/app/after-sales"
-            style={backLinkStyle}
-          >
-            返回正式售后单列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>
               {getFormalDetailAccessDeniedLabel('after_sales')}
@@ -366,17 +340,6 @@ export default async function AppAfterSalesDetailPage({
       session={session}
     >
       <section style={detailLayoutStyle}>
-        <div style={actionBarStyle}>
-          <Link
-            href="/app/after-sales"
-            style={backLinkStyle}
-          >
-            返回正式售后单列表
-          </Link>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
-        </div>
 
         <article style={heroCardStyle}>
           <p style={heroEyebrowStyle}>After-sales Detail / 售后单详情</p>

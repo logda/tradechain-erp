@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import { canViewFormalModule, resolveDemoSession } from '../../_lib/demo-session';
 import { canUseFormalMasterDataActions } from '../../_lib/formal-access';
@@ -20,12 +19,6 @@ const sectionStyle = {
   padding: '24px',
   display: 'grid',
   gap: '16px',
-} satisfies React.CSSProperties;
-
-const linkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 function getApiBaseUrl() {
@@ -122,9 +115,6 @@ export default async function AppDocumentCodeRulePage({
       session={session}
     >
       <section style={sectionStyle}>
-        <Link href="/app/master-data" style={linkStyle}>
-          返回主数据中心
-        </Link>
         {canManageMasterData ? (
           <DocumentCodeRulePageClient
             endpoint={`${getApiBaseUrl()}/document-code-rules`}

@@ -1,5 +1,6 @@
 'use client';
 
+import { FilterPanel } from '../../_components/filter-panel';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { FormalPagination } from '../../_components/formal-pagination';
@@ -111,15 +112,6 @@ const listHeaderStyle = {
   alignItems: 'center',
   flexWrap: 'wrap' as const,
   marginBottom: '14px',
-} satisfies React.CSSProperties;
-
-const listFilterPanelStyle = {
-  display: 'grid',
-  gap: '12px',
-  marginBottom: '18px',
-  padding: '16px 0 18px',
-  borderTop: '1px solid #e2e8f0',
-  borderBottom: '1px solid #e2e8f0',
 } satisfies React.CSSProperties;
 
 function matchesCounterpartyFilters(
@@ -236,6 +228,8 @@ export function CounterpartyMasterDataClient({
         />
       ) : null}
 
+      {filterSlot ? <FilterPanel title="查询筛选">{filterSlot}</FilterPanel> : null}
+
       <section style={sectionStyle}>
         <div style={listHeaderStyle}>
           <h3 style={{ margin: 0 }}>往来单位列表</h3>
@@ -243,12 +237,6 @@ export function CounterpartyMasterDataClient({
             共 {total} 条
           </span>
         </div>
-        {filterSlot ? (
-          <div style={listFilterPanelStyle}>
-            <h4 style={{ margin: 0, color: '#0f172a' }}>查询筛选</h4>
-            {filterSlot}
-          </div>
-        ) : null}
         <div style={tableWrapStyle}>
           <table style={tableStyle}>
             <thead>

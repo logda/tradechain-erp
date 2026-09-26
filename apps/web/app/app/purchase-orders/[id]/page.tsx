@@ -572,20 +572,6 @@ function buildResubmitPurchaseOrderDraft(
   };
 }
 
-const actionBarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '14px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const backLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const detailLayoutStyle = {
   display: 'grid',
   gap: '18px',
@@ -732,9 +718,6 @@ export default async function AppPurchaseOrderDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link href="/app/purchase-orders" style={backLinkStyle}>
-            返回正式采购单列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>{getFormalDetailAccessDeniedLabel('purchase_order')}</h3>
             <p style={heroSubStyle}>当前登录账号没有权限查看这张采购单。</p>
@@ -761,12 +744,6 @@ export default async function AppPurchaseOrderDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link
-            href="/app/purchase-orders"
-            style={backLinkStyle}
-          >
-            返回正式采购单列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>采购单详情加载失败</h3>
             <p style={heroSubStyle}>请返回正式采购单列表后重试。</p>
@@ -784,9 +761,6 @@ export default async function AppPurchaseOrderDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link href="/app/purchase-orders" style={backLinkStyle}>
-            返回正式采购单列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>{getFormalDetailAccessDeniedLabel('purchase_order')}</h3>
             <p style={heroSubStyle}>当前登录账号没有权限查看这张采购单。</p>
@@ -880,25 +854,6 @@ export default async function AppPurchaseOrderDetailPage({
       session={session}
     >
       <section style={detailLayoutStyle}>
-        <div style={actionBarStyle}>
-          <Link
-            href="/app/purchase-orders"
-            style={backLinkStyle}
-          >
-            返回正式采购单列表
-          </Link>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
-          {canOpenSourceSalesOrder ? (
-            <Link
-              href={`/app/sales/orders/${purchaseOrder.sourceSalesOrderId}`}
-              style={backLinkStyle}
-            >
-              返回对应销售单
-            </Link>
-          ) : null}
-        </div>
 
         <article style={heroCardStyle}>
           <p style={heroEyebrowStyle}>Purchase Order Detail / 采购单详情</p>

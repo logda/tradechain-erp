@@ -103,23 +103,6 @@ const introMetaStyle = {
   lineHeight: 1.7,
 } satisfies React.CSSProperties;
 
-const actionWrapStyle = {
-  display: 'flex',
-  gap: '12px',
-  flexWrap: 'wrap' as const,
-  marginTop: '16px',
-} satisfies React.CSSProperties;
-
-const actionLinkStyle = {
-  border: '1px solid #d7e0ea',
-  borderRadius: '12px',
-  padding: '10px 14px',
-  color: '#0f172a',
-  background: '#ffffff',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const tableStyle = {
   width: '100%',
   borderCollapse: 'collapse' as const,
@@ -299,17 +282,6 @@ export default async function AppStockOutPage({
           <p style={introMetaStyle}>
             当前出库单已经接入正式 API，可用于展示销售发货、库存扣减和仓储执行之间的动作闭环。
           </p>
-          <div style={actionWrapStyle}>
-            <Link href="/app/shipment-batches" style={actionLinkStyle}>
-              返回正式发货批次
-            </Link>
-            <Link href="/app/inventory" style={actionLinkStyle}>
-              查看库存中心
-            </Link>
-            <Link href="/app/warehouses" style={actionLinkStyle}>
-              查看仓库中心
-            </Link>
-          </div>
         </section>
 
         <FormalDataTable title="出库单列表" total={stockOutResult.total}>

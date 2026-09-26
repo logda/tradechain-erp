@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import type { FormalTodoItem } from '../_lib/formal-todos';
+import { FilterPanel } from './filter-panel';
 import { TodoGroup } from './todo-group';
 
 type Filters = { keyword: string; domain: string; status: string };
@@ -38,6 +39,7 @@ export function FormalTodoCenter({ todos }: { todos: FormalTodoItem[] }) {
   }
 
   return <>
+    <FilterPanel title="待办筛选">
     <form className="erp-todo-filters" onSubmit={query}>
       <label>关键词<input aria-label="关键词" value={draft.keyword} onChange={(event) => setDraft({ ...draft, keyword: event.target.value })} placeholder="单号、产品、客户、供应商或负责人" /></label>
       <label>业务范围<select aria-label="业务范围" value={draft.domain} onChange={(event) => setDraft({ ...draft, domain: event.target.value })}>
@@ -48,6 +50,7 @@ export function FormalTodoCenter({ todos }: { todos: FormalTodoItem[] }) {
       </select></label>
       <div className="erp-todo-filters__actions"><button type="submit" className="erp-todo-button erp-todo-button--primary">查询</button><button type="button" className="erp-todo-button" onClick={reset}>重置</button></div>
     </form>
+    </FilterPanel>
     <p className="erp-todo-result-count">查询结果：共 {filtered.length} 条</p>
     <div className="erp-home-todo-groups">
       <TodoGroup key={`purchase-${groupKey}`} title="采购与运营待办" todos={filtered.filter((todo) => todo.domain === 'purchase' || todo.domain === 'operations')} />

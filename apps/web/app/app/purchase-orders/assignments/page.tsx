@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import { MutationActionForm } from '../../_components/mutation-action-form';
 import { canViewFormalModule, resolveDemoSession } from '../../_lib/demo-session';
@@ -45,7 +44,6 @@ export default async function PurchaseAssignmentsPage({
   return (
     <AppShell title="采购负责人分配" subtitle="销售单审批后，先明确采购负责人，再生成采购单。" session={session}>
       <section style={{ display: 'grid', gap: 16 }}>
-        <Link href="/app/purchase-orders">返回采购单列表</Link>
         {!canAssign ? <p>当前角色无权分配采购负责人。</p> : null}
         {canAssign && loadFailed ? <p>待分配数据加载失败，请稍后刷新重试。</p> : null}
         {canAssign && !loadFailed && assignments.length === 0 ? <p>当前没有待分配的销售单。</p> : null}

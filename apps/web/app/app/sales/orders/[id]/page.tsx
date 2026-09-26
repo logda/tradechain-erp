@@ -268,14 +268,6 @@ async function loadSalesOrderAuditLogs(session: { role: string; user: string }) 
   }
 }
 
-const actionBarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '14px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
 const backLinkStyle = {
   color: '#0f172a',
   textDecoration: 'none',
@@ -636,9 +628,6 @@ export default async function AppSalesOrderDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link href="/app/sales/orders" style={backLinkStyle}>
-            返回正式销售单列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>{getFormalDetailAccessDeniedLabel('sales_order')}</h3>
             <p style={heroSubStyle}>当前登录账号没有权限查看这张销售单。</p>
@@ -663,12 +652,6 @@ export default async function AppSalesOrderDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link
-            href="/app/sales/orders"
-            style={backLinkStyle}
-          >
-            返回正式销售单列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>销售订单详情加载失败</h3>
             <p style={heroSubStyle}>请返回正式销售单列表后重试。</p>
@@ -686,9 +669,6 @@ export default async function AppSalesOrderDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link href="/app/sales/orders" style={backLinkStyle}>
-            返回正式销售单列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>{getFormalDetailAccessDeniedLabel('sales_order')}</h3>
             <p style={heroSubStyle}>当前登录账号没有权限查看这张销售单。</p>
@@ -770,20 +750,6 @@ export default async function AppSalesOrderDetailPage({
       session={session}
     >
       <section style={detailLayoutStyle}>
-        <div style={actionBarStyle}>
-          <Link
-            href="/app/sales/orders"
-            style={backLinkStyle}
-          >
-            返回正式销售单列表
-          </Link>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
-          <Link href="/app/sales" style={backLinkStyle}>
-            返回销售中心
-          </Link>
-        </div>
 
         <article style={heroCardStyle}>
           <p style={heroEyebrowStyle}>Sales Order Detail / 销售单详情</p>

@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import { AppShell } from '../_components/app-shell';
+import { FilterPanel } from '../_components/filter-panel';
 import { AuditLogTable } from '../_components/audit-log-table';
-import { FormalDataTable } from '../_components/formal-data-table';
 import { FormalPagination } from '../_components/formal-pagination';
-import { StatStrip } from '../_components/stat-strip';
 import {
   canViewFormalAuditCenter,
   resolveDemoSession,
@@ -17,6 +16,7 @@ import {
 } from '../_lib/audit-log';
 import { buildFormalRequestHeaders } from '../_lib/formal-request-headers';
 import { buildSignedFormalRequestHeaders } from '../_lib/formal-request-signature';
+import { logServerRequestFailure } from '../_lib/server-diagnostics';
 import { normalizePageNumber } from '../_lib/formal-pagination';
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -55,39 +55,39 @@ function readParam(value: string | string[] | undefined) {
 }
 
 const auditModules: AuditModuleConfig[] = [
-  { key: 'quotes', label: '报价 Quote', endpoint: '/quotes/audit-logs' },
+  { key: 'quotes', label: '需求/报价', endpoint: '/quotes/audit-logs' },
   {
     key: 'quote-inquiries',
-    label: '询价 Inquiry',
+    label: '询价',
     endpoint: '/quote-inquiries/audit-logs',
   },
-  { key: 'samples', label: '样品 Sample', endpoint: '/samples/audit-logs' },
+  { key: 'samples', label: '样品', endpoint: '/samples/audit-logs' },
   {
     key: 'sales-orders',
-    label: '销售单 Sales Order',
+    label: '销售单',
     endpoint: '/sales-orders/audit-logs',
   },
   {
     key: 'purchase-orders',
-    label: '采购单 Purchase Order',
+    label: '采购单',
     endpoint: '/purchase-orders/audit-logs',
   },
   {
     key: 'shipment-batches',
-    label: '发货批次 Shipment',
+    label: '发货批次',
     endpoint: '/shipment-batches/audit-logs',
   },
   {
     key: 'after-sales',
-    label: '售后 After-sales',
+    label: '售后',
     endpoint: '/after-sales/audit-logs',
   },
   {
     key: 'counterparties',
-    label: '往来单位 Counterparty',
+    label: '往来单位',
     endpoint: '/counterparties/audit-logs',
   },
-  { key: 'products', label: '商品 Product', endpoint: '/products/audit-logs' },
+  { key: 'products', label: '产品', endpoint: '/products/audit-logs' },
 ];
 
 function getAuditApiBaseUrl() {
@@ -108,11 +108,13 @@ async function loadAuditModule(
     });
 
     if (!response.ok) {
+      logServerRequestFailure('GET', module.endpoint, `HTTP ${response.status}`);
       return { key: module.key, label: module.label, count: 0, items: [], failed: true };
     }
 
     const result = (await response.json().catch(() => null)) as unknown;
     if (!hasValidAuditLogResponse(result)) {
+      logServerRequestFailure('GET', module.endpoint, '审计响应格式无效');
       return { key: module.key, label: module.label, count: 0, items: [], failed: true };
     }
 
@@ -129,7 +131,8 @@ async function loadAuditModule(
       failed: false,
       items,
     };
-  } catch {
+  } catch (error) {
+    logServerRequestFailure('GET', module.endpoint, error);
     return { key: module.key, label: module.label, count: 0, items: [], failed: true };
   }
 }
@@ -147,11 +150,13 @@ async function loadUnifiedAuditCenter(
     });
 
     if (!response.ok) {
+      logServerRequestFailure('GET', '/audit-logs', `HTTP ${response.status}`);
       return null;
     }
 
     const result = (await response.json().catch(() => null)) as unknown;
     if (!hasValidUnifiedAuditLogResponse(result)) {
+      logServerRequestFailure('GET', '/audit-logs', '审计响应格式无效');
       return null;
     }
 
@@ -159,7 +164,7 @@ async function loadUnifiedAuditCenter(
       mode: 'unified',
       modules: result.modules.map((module) => ({
         key: module.key,
-        label: module.label,
+        label: auditModules.find((entry) => entry.key === module.key)?.label ?? module.label,
         count: module.count,
         failed: module.failed,
         items: result.items
@@ -170,7 +175,8 @@ async function loadUnifiedAuditCenter(
         .map(toAggregatedAuditLogItem)
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     };
-  } catch {
+  } catch (error) {
+    logServerRequestFailure('GET', '/audit-logs', error);
     return null;
   }
 }
@@ -201,12 +207,6 @@ function toAggregatedAuditLogItem(item: UnifiedAuditLogItem): AggregatedAuditLog
 const layoutStyle = {
   display: 'grid',
   gap: '18px',
-} satisfies React.CSSProperties;
-
-const backLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 const heroCardStyle = {
@@ -255,37 +255,6 @@ const moduleFilterActiveStyle = {
   color: '#0f766e',
 } satisfies React.CSSProperties;
 
-const tableStyle = {
-  width: '100%',
-  minWidth: '980px',
-  borderCollapse: 'collapse' as const,
-} satisfies React.CSSProperties;
-
-const tableWrapStyle = {
-  overflowX: 'auto' as const,
-  border: '1px solid #d8e1ea',
-  borderRadius: '6px',
-} satisfies React.CSSProperties;
-
-const headCellStyle = {
-  textAlign: 'left' as const,
-  fontSize: '12px',
-  color: '#334155',
-  background: '#eef3f8',
-  borderBottom: '1px solid #cfd8e3',
-  borderRight: '1px solid #d8e1ea',
-  padding: '10px',
-} satisfies React.CSSProperties;
-
-const cellStyle = {
-  padding: '12px 10px',
-  borderBottom: '1px solid #e5ebf2',
-  borderRight: '1px solid #e5ebf2',
-  fontSize: '13px',
-  color: '#0f172a',
-  verticalAlign: 'top' as const,
-} satisfies React.CSSProperties;
-
 export default async function AppAuditPage({ searchParams }: AppAuditPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = resolveDemoSession(resolvedSearchParams);
@@ -298,9 +267,6 @@ export default async function AppAuditPage({ searchParams }: AppAuditPageProps) 
         session={session}
       >
         <section style={layoutStyle}>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
           <article style={heroCardStyle}>
             <h3 style={heroTitleStyle}>无权限访问正式日志中心</h3>
             <p style={heroSubStyle}>
@@ -359,34 +325,19 @@ export default async function AppAuditPage({ searchParams }: AppAuditPageProps) 
       session={session}
     >
       <section style={layoutStyle}>
-        <Link href="/app" style={backLinkStyle}>
-          返回正式首页
-        </Link>
 
-        <article style={heroCardStyle}>
-          <h3 style={heroTitleStyle}>全链路操作追溯</h3>
-          <p style={heroSubStyle}>
-            {loadedAuditCenter.mode === 'unified'
-              ? '统一审计 API 已接入，可按板块筛选并追溯最新操作日志。'
-              : '统一审计 API 暂不可用，页面已降级为前端聚合各模块日志接口。'}
-          </p>
-        </article>
+        <p style={heroSubStyle}>按模块查看操作记录，字段变更显示原值 → 新值。</p>
+        {failedModules.length > 0 ? (
+          <p role="status" style={heroSubStyle}>部分操作记录暂时无法加载：{failedModules.map((module) => module.label).join('、')}。请稍后重试。</p>
+        ) : null}
 
-        <StatStrip
-          items={[
-            { label: '聚合模块', value: modules.length },
-            { label: '审计总数', value: allItems.length },
-            { label: '当前筛选', value: visibleItems.length },
-            { label: '加载异常模块', value: failedModules.length },
-          ]}
-        />
-
+        <FilterPanel title="日志筛选">
         <section style={moduleFilterStyle} aria-label="日志模块筛选">
           <Link
             href={buildModuleHref('all')}
             style={selectedModuleKey === 'all' ? moduleFilterActiveStyle : moduleFilterLinkStyle}
           >
-            全部模块 All ({allItems.length})
+            全部模块 ({allItems.length})
           </Link>
           {modules.map((module) => (
             <Link
@@ -402,35 +353,13 @@ export default async function AppAuditPage({ searchParams }: AppAuditPageProps) 
             </Link>
           ))}
         </section>
-
-        <FormalDataTable title="模块审计概览" total={modules.length}>
-          <div style={tableWrapStyle}>
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={headCellStyle}>模块 Module</th>
-                  <th style={headCellStyle}>日志数量 Count</th>
-                  <th style={headCellStyle}>加载状态 Load Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {modules.map((module) => (
-                  <tr key={module.key}>
-                    <td style={cellStyle}>{module.label}</td>
-                    <td style={cellStyle}>{module.count}</td>
-                    <td style={cellStyle}>{module.failed ? '加载失败' : '正常'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </FormalDataTable>
+        </FilterPanel>
 
         <AuditLogTable session={session}
           items={pagedVisibleItems}
-          title={`${selectedModuleLabel}最新日志`}
+          title={`${selectedModuleLabel}操作记录`}
           limit={logPageSize}
-          showModule
+          compact
           total={visibleItems.length}
         />
         <FormalPagination

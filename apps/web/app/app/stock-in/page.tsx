@@ -103,23 +103,6 @@ const introMetaStyle = {
   lineHeight: 1.7,
 } satisfies React.CSSProperties;
 
-const actionWrapStyle = {
-  display: 'flex',
-  gap: '12px',
-  flexWrap: 'wrap' as const,
-  marginTop: '16px',
-} satisfies React.CSSProperties;
-
-const actionLinkStyle = {
-  border: '1px solid #d7e0ea',
-  borderRadius: '12px',
-  padding: '10px 14px',
-  color: '#0f172a',
-  background: '#ffffff',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const tableStyle = {
   width: '100%',
   borderCollapse: 'collapse' as const,
@@ -301,17 +284,6 @@ export default async function AppStockInPage({
           <p style={introMetaStyle}>
             当前收货单已经接入正式 API，可用于展示采购到货、仓库库位和库存增加之间的闭环关系。
           </p>
-          <div style={actionWrapStyle}>
-            <Link href="/app/purchase-orders" style={actionLinkStyle}>
-              返回正式采购单
-            </Link>
-            <Link href="/app/warehouses" style={actionLinkStyle}>
-              查看仓库中心
-            </Link>
-            <Link href="/app/inventory" style={actionLinkStyle}>
-              查看库存中心
-            </Link>
-          </div>
         </section>
 
         <FormalDataTable title="收货单列表" total={stockInResult.total}>

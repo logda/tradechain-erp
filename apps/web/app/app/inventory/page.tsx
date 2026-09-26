@@ -360,9 +360,6 @@ export default async function AppInventoryPage({
             当前库存中心已经接通余额与台账接口，适合作为正式版仓储可视化入口。后续收货单、出库单确认后，可直接回写这里的数量与流水。
           </p>
           <div style={actionWrapStyle}>
-            <Link href="/app/warehouses" style={actionLinkStyle}>
-              查看仓库中心
-            </Link>
             <Link href="/app/purchase-orders" style={actionLinkStyle}>
               回到正式采购单
             </Link>

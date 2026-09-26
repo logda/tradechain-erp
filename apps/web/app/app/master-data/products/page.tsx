@@ -569,9 +569,6 @@ export default async function AppProductsPage({
             </p>
           </div>
           <div style={heroActionWrapStyle}>
-            <Link href="/app" style={linkStyle}>
-              返回正式首页
-            </Link>
             {canManageMasterData ? <Link href="/app/master-data/product-code-rule" style={linkStyle}>产品编码规则设置</Link> : null}
             <span style={heroMetaBadgeStyle}>{canManageMasterData ? '可维护产品' : '产品只读'}</span>
           </div>

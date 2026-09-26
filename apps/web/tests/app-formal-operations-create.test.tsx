@@ -133,9 +133,7 @@ describe('formal operations create pages', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式新建发货批次' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式发货批次列表' }),
-    ).toHaveAttribute('href', '/app/shipment-batches');
+    expect(screen.queryByRole('link', { name: '返回正式发货批次列表' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('销售单 ID Sales Order')).toHaveValue(88);
     expect(screen.getByLabelText('采购单 ID Purchase Order')).toHaveValue(101);
     expect(screen.getByLabelText('订单号 Order No')).toHaveValue('S202607080001');
@@ -167,7 +165,7 @@ describe('formal operations create pages', () => {
 
     expect(screen.getByRole('heading', { name: '正式新建发货批次' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '无权限创建正式发货批次' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute('href', '/app');
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '创建发货批次' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('发货数量 Shipped Qty')).not.toBeInTheDocument();
   });
@@ -327,9 +325,7 @@ describe('formal operations create pages', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式新建售后单' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式售后单列表' }),
-    ).toHaveAttribute('href', '/app/after-sales');
+    expect(screen.queryByRole('link', { name: '返回正式售后单列表' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('客户 Customer')).toHaveValue(
       'CUST-ACME / Acme Trading / 星河贸易',
     );
@@ -361,7 +357,7 @@ describe('formal operations create pages', () => {
 
     expect(screen.getByRole('heading', { name: '正式新建售后单' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '无权限创建正式售后单' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute('href', '/app');
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '创建售后单' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('问题描述 Issue')).not.toBeInTheDocument();
   });

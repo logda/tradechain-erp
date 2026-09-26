@@ -24,7 +24,7 @@ describe('formal shared UI components', () => {
       </>,
     );
 
-    expect(screen.getByRole('region', { name: '当前筛选' })).toHaveClass(
+    expect(screen.getByRole('group', { name: '当前筛选' })).toHaveClass(
       'erp-card',
       'erp-filter-panel',
     );

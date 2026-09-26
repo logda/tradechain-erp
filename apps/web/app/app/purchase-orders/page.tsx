@@ -308,9 +308,6 @@ export default async function AppPurchaseOrdersPage({
       session={session}
     >
       <div style={toolbarStyle}>
-        <Link href="/app" style={mutedLinkStyle}>
-          返回正式首页
-        </Link>
         {['admin', 'boss', 'purchase_manager'].includes(session.role) &&
           canViewFormalModule(session, 'purchase') &&
           session.accessScopes?.actions?.includes('purchase.order.approve') !== false ? (

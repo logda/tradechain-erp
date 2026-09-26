@@ -10,12 +10,14 @@ export function FilterPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="erp-card erp-filter-panel" aria-label={title}>
-      <div className="erp-filter-panel__heading">
+    <details className="erp-card erp-filter-panel" aria-label={title}>
+      <summary className="erp-filter-panel__heading">
         <h2 className="erp-filter-panel__title">{title}</h2>
+      </summary>
+      <div className="erp-filter-panel__content">
         {subtitle ? <p className="erp-filter-panel__subtitle">{subtitle}</p> : null}
+        {children}
       </div>
-      {children}
-    </section>
+    </details>
   );
 }

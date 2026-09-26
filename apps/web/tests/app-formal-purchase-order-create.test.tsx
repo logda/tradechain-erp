@@ -161,9 +161,7 @@ describe('formal purchase order create page', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式转采购单' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式采购单列表' }),
-    ).toHaveAttribute('href', '/app/purchase-orders');
+    expect(screen.queryByRole('link', { name: '返回正式采购单列表' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('销售单 ID Sales Order')).toHaveValue(101);
     expect(screen.getByRole('heading', { name: '销售单 S202607080101' })).toBeInTheDocument();
     expect(screen.getByText('采购拆单预览')).toBeInTheDocument();
@@ -247,7 +245,7 @@ describe('formal purchase order create page', () => {
 
     expect(screen.getByRole('heading', { name: '正式转采购单' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '无权限创建正式采购单' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute('href', '/app');
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '生成采购单' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('销售单 ID Sales Order')).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();

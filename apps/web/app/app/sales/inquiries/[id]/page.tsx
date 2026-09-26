@@ -4,7 +4,7 @@ import { AuditLogTable } from '../../../_components/audit-log-table';
 import { ActionPermissionNote } from '../../../_components/action-permission-note';
 import { ImagePreviewGallery } from '../../../_components/image-preview-gallery';
 import { MutationActionForm } from '../../../_components/mutation-action-form';
-import { canViewFormalModule, resolveDemoSession } from '../../../_lib/demo-session';
+import { resolveDemoSession } from '../../../_lib/demo-session';
 import {
   canUseFormalInquiryBossConfirmAction,
   canUseFormalInquirySubmitAction,
@@ -584,9 +584,6 @@ export default async function AppFormalInquiryDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link href="/app/sales/inquiries" style={backLinkStyle}>
-            返回正式询价列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>询价详情加载失败</h3>
             <p style={heroSubStyle}>请返回正式询价列表后重试。</p>
@@ -604,9 +601,6 @@ export default async function AppFormalInquiryDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link href="/app/sales/inquiries" style={backLinkStyle}>
-            返回正式询价列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>无权限访问正式询价单</h3>
             <p style={heroSubStyle}>当前登录账号没有权限查看这张询价单。</p>
@@ -634,27 +628,16 @@ export default async function AppFormalInquiryDetailPage({
       session={session}
     >
       <section style={detailLayoutStyle}>
-        <div style={toolbarStyle}>
-          <Link href="/app/sales/inquiries" style={backLinkStyle}>
-            返回正式询价列表
-          </Link>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
-          {canViewFormalModule(session, 'sales') ? (
-            <Link href="/app/sales" style={backLinkStyle}>
-              返回销售中心
-            </Link>
-          ) : null}
-          {canBossConfirmInquiry && !sourceIsDemand ? (
+        {canBossConfirmInquiry && !sourceIsDemand ? (
+          <div style={toolbarStyle}>
             <Link
               href={buildQuoteFromInquiryHref(inquiry.quoteOrderId, inquiry.id)}
               style={backLinkStyle}
             >
               打开源报价详情
             </Link>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
 
         <article style={heroCardStyle}>
           <p style={{ margin: 0, fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#64748b' }}>

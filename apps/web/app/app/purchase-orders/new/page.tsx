@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import { MutationActionForm } from '../../_components/mutation-action-form';
 import { resolveDemoSession } from '../../_lib/demo-session';
@@ -145,20 +144,6 @@ const shellBodyStyle = {
   gap: '18px',
 } satisfies React.CSSProperties;
 
-const toolbarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '16px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const backLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const heroCardStyle = {
   border: '1px solid #d8e1ea',
   borderRadius: '20px',
@@ -300,9 +285,6 @@ export default async function AppNewPurchaseOrderPage({
         <section style={deniedStyle}>
           <h2>无权限创建正式采购单</h2>
           <p>请切换到采购、采购主管或管理员账号后再创建采购单。</p>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
         </section>
       </AppShell>
     );
@@ -329,14 +311,6 @@ export default async function AppNewPurchaseOrderPage({
       session={session}
     >
       <section style={shellBodyStyle}>
-        <div style={toolbarStyle}>
-          <Link href="/app/purchase-orders" style={backLinkStyle}>
-            返回正式采购单列表
-          </Link>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
-        </div>
 
         <article style={heroCardStyle}>
           <h3 style={titleStyle}>销售转采购 / Sales to Purchase</h3>

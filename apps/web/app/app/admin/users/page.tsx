@@ -387,9 +387,6 @@ export default async function AppAdminUsersPage({
       session={session}
     >
       <div style={toolbarStyle}>
-        <Link href="/app" style={backLinkStyle}>
-          返回正式首页
-        </Link>
         <Link
           href="/app/dashboard/boss"
           style={backLinkStyle}

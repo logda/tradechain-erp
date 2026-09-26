@@ -166,12 +166,8 @@ describe('formal operations detail pages', () => {
     expect(
       screen.getByRole('heading', { name: '正式采购单详情' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式采购单列表' }),
-    ).toHaveAttribute('href', '/app/purchase-orders');
-    expect(
-      screen.getByRole('link', { name: '返回对应销售单' }),
-    ).toHaveAttribute('href', '/app/sales/orders/88');
+    expect(screen.queryByRole('link', { name: '返回正式采购单列表' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回对应销售单' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '采购单 P202607080101' }),
     ).toBeInTheDocument();
@@ -1130,9 +1126,7 @@ describe('formal operations detail pages', () => {
     expect(
       screen.getByRole('heading', { name: '正式发货批次详情' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式发货批次列表' }),
-    ).toHaveAttribute('href', '/app/shipment-batches');
+    expect(screen.queryByRole('link', { name: '返回正式发货批次列表' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '发货批次 SH202607080101' }),
     ).toBeInTheDocument();
@@ -1398,9 +1392,7 @@ describe('formal operations detail pages', () => {
     expect(
       screen.getByRole('heading', { name: '正式售后单详情' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式售后单列表' }),
-    ).toHaveAttribute('href', '/app/after-sales');
+    expect(screen.queryByRole('link', { name: '返回正式售后单列表' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '售后单 AS202607080101' }),
     ).toBeInTheDocument();

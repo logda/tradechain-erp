@@ -215,9 +215,6 @@ export default async function AppStockOutDetailPage({
       session={session}
     >
       <section style={sectionStyle}>
-        <Link href="/app/stock-out" style={backLinkStyle}>
-          返回正式出库单列表
-        </Link>
         <h2 style={sectionTitleStyle}>出库单 {detail.docNo}</h2>
         <div style={metaGridStyle}>
           <article style={metaItemStyle}>

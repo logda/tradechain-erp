@@ -10,6 +10,35 @@ import {
 } from '../app/app/_lib/audit-log';
 
 describe('audit log helpers', () => {
+  it('keeps product text unchanged and formats only status codes as Chinese', () => {
+    const summary = buildAuditChangeSummary({ id: 1, bizType: 'sales_order', bizId: 1, operationType: 'update', operatorId: 1, createdAt: '2026-09-26T00:00:00Z',
+      beforeData: { productName: 'active', status: 'pending_sales_manager_approval', syncSource: null },
+      afterData: { productName: 'done', status: 'pending_purchase_assignment', syncSource: 'purchase_order' } }, true);
+    expect(summary.rows).toEqual([
+      { field: '商品名称', before: 'active', after: 'done' },
+      { field: '状态', before: '待销售主管审批', after: '待分配采购负责人' },
+      { field: '同步来源', before: '-', after: '采购单' },
+    ]);
+  });
+
+  it('retains all detailed changes and hides credential fields', () => {
+    const summary = buildAuditChangeSummary({ id: 1, bizType: 'product', bizId: 1, operationType: 'create', operatorId: 1, createdAt: '2026-09-26T00:00:00Z',
+      afterData: { productName: '风扇', nameCn: '风扇', sku: 'FAN', unit: '个', quantity: 1, salePrice: 8, purchasePrice: 5, password: 'private', sessionToken: 'private' } }, true);
+    expect(summary.rows).toHaveLength(7);
+    expect(JSON.stringify(summary)).not.toContain('private');
+    expect(summary.rows.at(-1)?.field).toBe('采购价');
+  });
+
+  it('shows concrete line changes with Chinese labels in the audit center', () => {
+    const item = { id: 1, bizType: 'purchase_order', bizId: 1, operationType: 'assign_purchase_owner', operatorId: 1,
+      createdAt: '2026-09-26T01:00:00Z', beforeData: { items: [{ productName: '风扇', quantity: 2, unitPrice: 8 }] },
+      afterData: { items: [{ productName: '风扇', quantity: 3, unitPrice: 9 }] } };
+    expect(formatAuditOperationType(item.operationType, true)).toBe('分配采购负责人');
+    expect(buildAuditChangeSummary(item, true).rows).toEqual([
+      { field: '明细行第1行·数量', before: '2', after: '3' },
+      { field: '明细行第1行·单价', before: '8', after: '9' },
+    ]);
+  });
   it('shows quote audit statuses bilingually without changing stored snapshots or other modules', () => {
     const item = {
       id: 1, bizType: 'quote', bizId: 810, operationType: 'approve_demand',

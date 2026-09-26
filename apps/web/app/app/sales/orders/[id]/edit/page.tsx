@@ -1,5 +1,5 @@
 import React from 'react';
-import Link from 'next/link';
+
 import { AppShell } from '../../../../_components/app-shell';
 import {
   canUseFormalSalesOrderActions,
@@ -41,20 +41,6 @@ type SalesOrderEditDetail = InitialSalesOrderFormValue & {
 const shellBodyStyle = {
   display: 'grid',
   gap: '18px',
-} satisfies React.CSSProperties;
-
-const toolbarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '16px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const backLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 const heroCardStyle = {
@@ -155,9 +141,6 @@ export default async function AppEditSalesOrderDraftPage({
         <section style={formPanelStyle}>
           <h2>{getFormalDetailAccessDeniedLabel('sales_order')}</h2>
           <p>当前登录账号没有权限编辑这张销售单。</p>
-          <Link href={`/app/sales/orders/${id}`} style={backLinkStyle}>
-            返回销售单详情
-          </Link>
         </section>
       </AppShell>
     );
@@ -174,9 +157,6 @@ export default async function AppEditSalesOrderDraftPage({
         <section style={formPanelStyle}>
           <h2>{getFormalDetailAccessDeniedLabel('sales_order')}</h2>
           <p>当前登录账号没有权限编辑这张销售单，或销售单不存在。</p>
-          <Link href="/app/sales/orders" style={backLinkStyle}>
-            返回正式销售单列表
-          </Link>
         </section>
       </AppShell>
     );
@@ -192,9 +172,6 @@ export default async function AppEditSalesOrderDraftPage({
         <section style={formPanelStyle}>
           <h2>当前销售单不可编辑</h2>
           <p>只有 draft / 草稿或 rejected / 已驳回状态可以继续编辑并保存草稿。</p>
-          <Link href={`/app/sales/orders/${salesOrder.id}`} style={backLinkStyle}>
-            返回销售单详情
-          </Link>
         </section>
       </AppShell>
     );
@@ -215,17 +192,6 @@ export default async function AppEditSalesOrderDraftPage({
       session={session}
     >
       <section style={shellBodyStyle}>
-        <div style={toolbarStyle}>
-          <Link
-            href={`/app/sales/orders/${salesOrder.id}`}
-            style={backLinkStyle}
-          >
-            返回销售单详情
-          </Link>
-          <Link href="/app/sales/orders" style={backLinkStyle}>
-            返回正式销售单列表
-          </Link>
-        </div>
 
         <article style={heroCardStyle}>
           <h3 style={titleStyle}>{`编辑草稿 ${salesOrder.salesNo}`}</h3>

@@ -21,10 +21,11 @@ describe('HealthController', () => {
       setGlobalPrefix,
     } as unknown as Parameters<typeof setupApp>[0]);
 
-    expect(use).toHaveBeenCalledTimes(3);
+    expect(use).toHaveBeenCalledTimes(4);
     expect(use).toHaveBeenNthCalledWith(1, expect.any(Function));
     expect(use).toHaveBeenNthCalledWith(2, expect.any(Function));
-    expect(use).toHaveBeenNthCalledWith(3, '/uploads', expect.any(Function));
+    expect(use).toHaveBeenNthCalledWith(3, expect.any(Function));
+    expect(use).toHaveBeenNthCalledWith(4, '/uploads', expect.any(Function));
     expect(enableCors).toHaveBeenCalledWith({
       origin: [
         'http://127.0.0.1:3000',

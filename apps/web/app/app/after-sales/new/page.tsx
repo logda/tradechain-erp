@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import { loadActiveCounterpartyOptions } from '../../_lib/counterparty-options';
 import { resolveDemoSession } from '../../_lib/demo-session';
@@ -14,20 +13,6 @@ function readParam(value: string | string[] | undefined) {
 const shellBodyStyle = {
   display: 'grid',
   gap: '18px',
-} satisfies React.CSSProperties;
-
-const toolbarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '16px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const backLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 const heroCardStyle = {
@@ -105,9 +90,6 @@ export default async function AppNewFormalAfterSalesPage({
         <section style={deniedStyle}>
           <h2>无权限创建正式售后单</h2>
           <p>请切换到采购、采购主管或管理员账号后再创建售后单。</p>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
         </section>
       </AppShell>
     );
@@ -123,17 +105,6 @@ export default async function AppNewFormalAfterSalesPage({
       session={session}
     >
       <section style={shellBodyStyle}>
-        <div style={toolbarStyle}>
-          <Link
-            href="/app/after-sales"
-            style={backLinkStyle}
-          >
-            返回正式售后单列表
-          </Link>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
-        </div>
 
         <article style={heroCardStyle}>
           <h3 style={titleStyle}>正式创建售后单 / Formal After-sales Create</h3>

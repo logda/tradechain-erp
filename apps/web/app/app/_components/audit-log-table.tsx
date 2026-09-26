@@ -64,7 +64,7 @@ const operatorTextStyle = {
 
 const timeTextStyle = {
   color: '#475569',
-  whiteSpace: 'nowrap' as const,
+  overflowWrap: 'anywhere' as const,
 } satisfies React.CSSProperties;
 
 const summaryWrapStyle = {
@@ -110,26 +110,34 @@ const emptyStyle = {
   lineHeight: 1.7,
 } satisfies React.CSSProperties;
 
-function ChangeSummary({ item }: { item: AuditLogItem }) {
-  const summary = buildAuditChangeSummary(item);
+function ChangeSummary({ item, compact }: { item: AuditLogItem; compact: boolean }) {
+  const summary = buildAuditChangeSummary(item, compact);
 
+  const renderRow = (row: typeof summary.rows[number], index: number) => (
+    <div key={`${index}-${row.field}`} style={changeRowStyle}>
+      <span style={fieldLabelStyle}>{row.field}</span>
+      <span style={changeValueStyle}>
+        {row.before}<span style={arrowStyle}>→</span>{row.after}
+      </span>
+    </div>
+  );
+  const previewCount = compact ? 6 : summary.rows.length;
   return (
     <div style={summaryWrapStyle}>
-      <p style={summaryTitleStyle}>{summary.title}</p>
-      {summary.rows.length > 0 ? (
-        summary.rows.map((row) => (
-          <div key={`${row.field}-${row.before}-${row.after}`} style={changeRowStyle}>
-            <span style={fieldLabelStyle}>{row.field}</span>
-            <span style={changeValueStyle}>
-              {row.before}
-              <span style={arrowStyle}>→</span>
-              {row.after}
-            </span>
-          </div>
-        ))
-      ) : (
+      {!compact || !summary.rows.length ? <p style={summaryTitleStyle}>{summary.title}</p> : null}
+      {summary.rows.length > 0 ? summary.rows.slice(0, previewCount).map(renderRow) : !compact ? (
         <span style={emptyStyle}>暂无可展示的字段变化</span>
-      )}
+      ) : null}
+      {summary.rows.length > previewCount ? (
+        <details>
+          <summary style={{ color: '#1d4ed8', cursor: 'pointer', fontSize: '13px' }}>
+            展开其余 {summary.rows.length - previewCount} 项变更
+          </summary>
+          <div style={{ ...summaryWrapStyle, marginTop: '8px' }}>
+            {summary.rows.slice(previewCount).map(renderRow)}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -140,6 +148,7 @@ export function AuditLogTable({
   title = '审计日志',
   limit = 8,
   showModule = false,
+  compact = false,
   total,
 }: {
   items: Array<AuditLogItem & { moduleLabel?: string }>;
@@ -147,6 +156,7 @@ export function AuditLogTable({
   title?: string;
   limit?: number;
   showModule?: boolean;
+  compact?: boolean;
   total?: number;
 }) {
   if (!canViewFormalAuditCenter(session)) return null;
@@ -158,7 +168,9 @@ export function AuditLogTable({
   return (
     <FormalDataTable title={title} total={total ?? items.length}>
       <table style={tableStyle}>
-        {showModule ? (
+        {compact ? (
+          <colgroup><col style={{ width: '18%' }} /><col style={{ width: '14%' }} /><col style={{ width: '48%' }} /><col style={{ width: '20%' }} /></colgroup>
+        ) : showModule ? (
           <colgroup>
             <col style={{ width: '14%' }} />
             <col style={{ width: '17%' }} />
@@ -178,45 +190,45 @@ export function AuditLogTable({
         )}
         <thead>
           <tr>
-            {showModule ? <th style={tableHeadCellStyle}>模块 Module</th> : null}
-            <th style={tableHeadCellStyle}>动作 Operation</th>
-            <th style={tableHeadCellStyle}>对象 Object</th>
-            <th style={tableHeadCellStyle}>操作人 Operator</th>
-            <th style={tableHeadCellStyle}>变更摘要 Change</th>
-            <th style={tableHeadCellStyle}>时间 Time</th>
+            {showModule && !compact ? <th style={tableHeadCellStyle}>模块 Module</th> : null}
+            <th style={tableHeadCellStyle}>{compact ? '动作' : '动作 Operation'}</th>
+            {!compact ? <th style={tableHeadCellStyle}>对象 Object</th> : null}
+            <th style={tableHeadCellStyle}>{compact ? '操作人' : '操作人 Operator'}</th>
+            <th style={tableHeadCellStyle}>{compact ? '字段变更' : '变更摘要 Change'}</th>
+            <th style={tableHeadCellStyle}>{compact ? '操作时间' : '时间 Time'}</th>
           </tr>
         </thead>
         <tbody>
           {items.length > 0 ? (
             visibleItems.map((item) => (
               <tr key={`${item.bizType}-${item.bizId}-${item.id}-${item.createdAt}`}>
-                {showModule ? (
+                {showModule && !compact ? (
                   <td style={tableCellStyle}>
                     <span style={objectTextStyle}>{item.moduleLabel ?? '-'}</span>
                   </td>
                 ) : null}
                 <td style={tableCellStyle}>
                   <span style={operationBadgeStyle}>
-                    {formatAuditOperationType(item.operationType)}
+                    {formatAuditOperationType(item.operationType, compact)}
                   </span>
                 </td>
-                <td style={tableCellStyle}>
+                {!compact ? <td style={tableCellStyle}>
                   <span style={objectTextStyle}>{formatAuditBizObject(item)}</span>
-                </td>
+                </td> : null}
                 <td style={tableCellStyle}>
                   <span style={operatorTextStyle}>{formatAuditOperator(item)}</span>
                 </td>
                 <td style={tableCellStyle}>
-                  <ChangeSummary item={item} />
+                  <ChangeSummary item={item} compact={compact} />
                 </td>
                 <td style={tableCellStyle}>
-                  <span style={timeTextStyle}>{formatAuditCreatedAt(item.createdAt)}</span>
+                  <span style={timeTextStyle}>{formatAuditCreatedAt(item.createdAt, compact)}</span>
                 </td>
               </tr>
             ))
           ) : (
             <tr>
-              <td style={tableCellStyle} colSpan={showModule ? 6 : 5}>
+              <td style={tableCellStyle} colSpan={compact ? 4 : showModule ? 6 : 5}>
                 暂无审计记录
               </td>
             </tr>

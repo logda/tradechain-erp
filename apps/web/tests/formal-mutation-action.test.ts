@@ -67,6 +67,7 @@ describe('formal mutation actions', () => {
   });
 
   it('returns a structured error when json mutation fetch fails before a response is received', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
 
     await expect(
@@ -83,6 +84,8 @@ describe('formal mutation actions', () => {
       ok: false,
       error: '网络请求失败，请确认服务已启动',
     });
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('POST /api/products'), expect.stringContaining('network down'));
+    consoleError.mockRestore();
   });
 
   it('returns a structured error when form mutation fetch fails before a response is received', async () => {

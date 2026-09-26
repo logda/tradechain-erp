@@ -127,30 +127,6 @@ async function loadInquiryAuditLogs(session: { role: string; user: string }) {
   }
 }
 
-const toolbarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '14px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const actionLinkStyle = {
-  border: '1px solid #0f172a',
-  borderRadius: '12px',
-  padding: '10px 14px',
-  color: '#ffffff',
-  background: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
-const mutedLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const chipWrapStyle = {
   display: 'flex',
   gap: '10px',
@@ -299,21 +275,6 @@ export default async function AppFormalInquiryPage({
       subtitle="询价单承接供应商比价和老板确认，是报价和销售转单的中间环节。"
       session={session}
     >
-      <div style={toolbarStyle}>
-        <Link href="/app" style={mutedLinkStyle}>
-          返回正式首页
-        </Link>
-        {canViewFormalModule(session, 'sales') ? (
-          <Link href="/app/sales" style={mutedLinkStyle}>
-            返回销售中心
-          </Link>
-        ) : null}
-        {canViewFormalModule(session, 'sales') ? (
-          <Link href="/app/sales/quotes" style={actionLinkStyle}>
-            进入需求/报价模块
-          </Link>
-        ) : null}
-      </div>
 
       <StatStrip
         items={[
@@ -369,11 +330,9 @@ export default async function AppFormalInquiryPage({
             <Link className="erp-button erp-button--secondary" href="/app/sales/inquiries">重置</Link>
           </div>
         </form>
-      </FilterPanel>
-
       {appliedFilters.length > 0 ? (
         <section>
-          <h2>当前筛选</h2>
+          <h3>已选条件</h3>
           <div style={chipWrapStyle}>
             {appliedFilters.map(([key, value]) => (
               <span key={key} style={chipStyle}>
@@ -383,6 +342,7 @@ export default async function AppFormalInquiryPage({
           </div>
         </section>
       ) : null}
+      </FilterPanel>
 
       <FormalDataTable title="查询结果" total={result.total}>
         {result.items.length === 0 ? (

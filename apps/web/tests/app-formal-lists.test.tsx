@@ -92,10 +92,7 @@ describe('formal sales list pages', () => {
       }),
     );
     expect(screen.getByRole('heading', { name: '正式需求和报价' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回工作台' })).toHaveAttribute(
-      'href',
-      '/app/sales',
-    );
+    expect(screen.queryByRole('link', { name: '返回工作台' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新建需求/报价' })).toHaveAttribute(
       'href',
       '/app/sales/quotes/new',
@@ -402,10 +399,7 @@ describe('formal sales list pages', () => {
       }),
     );
     expect(screen.getByRole('heading', { name: '正式销售单' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回工作台' })).toHaveAttribute(
-      'href',
-      '/app/sales',
-    );
+    expect(screen.queryByRole('link', { name: '返回工作台' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新建销售单' })).toHaveAttribute(
       'href',
       '/app/sales/orders/new',
@@ -604,14 +598,8 @@ describe('formal sales list pages', () => {
       }),
     );
     expect(screen.getByRole('heading', { name: '正式样品单' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute(
-      'href',
-      '/app',
-    );
-    expect(screen.getByRole('link', { name: '返回工作台' })).toHaveAttribute(
-      'href',
-      '/app/sales',
-    );
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回工作台' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: '查看演示样品页' }),
     ).not.toBeInTheDocument();
@@ -692,10 +680,7 @@ describe('formal sales list pages', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式样品单' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回工作台' })).toHaveAttribute(
-      'href',
-      '/app/purchase',
-    );
+    expect(screen.queryByRole('link', { name: '返回工作台' })).not.toBeInTheDocument();
     expect(screen.getByText('SP-PURCHASE-001')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: '查看详情 SP-PURCHASE-001' }),

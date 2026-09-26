@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import { canViewFormalModule, resolveDemoSession } from '../../_lib/demo-session';
 import { canUseFormalMasterDataActions } from '../../_lib/formal-access';
@@ -14,12 +13,6 @@ const sectionStyle = {
   padding: '24px',
   display: 'grid',
   gap: '16px',
-} satisfies React.CSSProperties;
-
-const linkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 function getApiBaseUrl() {
@@ -55,9 +48,6 @@ export default async function AppQuoteSourcePage({
       session={session}
     >
       <section style={sectionStyle}>
-        <Link href="/app/master-data" style={linkStyle}>
-          返回主数据中心
-        </Link>
         <div>
           <h2 style={{ margin: '0 0 10px' }}>来源维护说明</h2>
           <p style={{ margin: 0, color: '#475569', lineHeight: 1.8 }}>

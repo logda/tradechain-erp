@@ -160,12 +160,6 @@ const buttonLinkStyle = {
   fontWeight: 700,
 } satisfies React.CSSProperties;
 
-const mutedLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const chipWrapStyle = {
   display: 'flex',
   gap: '10px',
@@ -360,22 +354,16 @@ export default async function AppQuoteListPage({
       subtitle="复用当前单据数据口径，以正式工作台样式承载筛选、摘要与列表。"
       session={session}
     >
-      <div style={toolbarStyle}>
-        <Link href="/app" style={mutedLinkStyle}>
-          返回正式首页
-        </Link>
-        <Link href="/app/sales" style={mutedLinkStyle}>
-          返回工作台
-        </Link>
-        {canCreateQuote ? (
+      {canCreateQuote ? (
+        <div style={toolbarStyle}>
           <Link
             href="/app/sales/quotes/new"
             style={buttonLinkStyle}
           >
             新建需求/报价
           </Link>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <StatStrip
         items={[

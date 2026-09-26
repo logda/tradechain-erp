@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('AppAuditPage', () => {
@@ -61,30 +61,20 @@ describe('AppAuditPage', () => {
     render(<>{await AppAuditPage({ searchParams: Promise.resolve({ role: 'admin', user: 'Admin' }) })}</>);
 
     expect(screen.getByRole('heading', { name: '正式日志中心' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute(
-      'href',
-      '/app',
-    );
-    expect(screen.getByText('统一审计 API 已接入，可按板块筛选并追溯最新操作日志。')).toBeInTheDocument();
-    expect(screen.getByText('聚合模块')).toBeInTheDocument();
-    expect(screen.getByText('审计总数')).toBeInTheDocument();
-    expect(screen.getByText('当前筛选')).toBeInTheDocument();
-    expect(screen.getByText('加载异常模块')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '全部模块 All (2)' })).toHaveAttribute(
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '全部模块 (2)' })).toHaveAttribute(
       'href',
       '/app/logs',
     );
-    expect(screen.getByRole('link', { name: '销售单 Sales Order (1)' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '销售单 (1)' })).toHaveAttribute(
       'href',
       '/app/logs?module=sales-orders',
     );
-    expect(screen.getAllByText('报价 Quote').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('销售单 Sales Order').length).toBeGreaterThan(0);
-    expect(screen.getByText('Submit / submit')).toBeInTheDocument();
-    expect(screen.getByText('财务确认 / finance_confirm')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['动作', '操作人', '字段变更', '操作时间']);
+    expect(screen.getByText('提交记录')).toBeInTheDocument();
+    expect(screen.getByText('财务确认')).toBeInTheDocument();
     expect(screen.getByText('Mia #9000')).toBeInTheDocument();
-    expect(screen.getByText('需求单 / 报价单 #101')).toBeInTheDocument();
-    expect(screen.getByText('销售单 #201')).toBeInTheDocument();
+    expect(screen.queryByText('模块审计概览')).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3001/api/audit-logs',
       expect.objectContaining({
@@ -161,20 +151,9 @@ describe('AppAuditPage', () => {
     render(<>{await AppAuditPage({ searchParams: Promise.resolve({ role: 'admin', user: 'Admin' }) })}</>);
 
     expect(screen.getByRole('heading', { name: '正式日志中心' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '返回正式首页' })).toHaveAttribute(
-      'href',
-      '/app',
-    );
-    expect(screen.getByText('聚合模块')).toBeInTheDocument();
-    expect(screen.getByText('审计总数')).toBeInTheDocument();
-    expect(screen.getByText('加载异常模块')).toBeInTheDocument();
-    expect(screen.getAllByText('报价 Quote').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('销售单 Sales Order').length).toBeGreaterThan(0);
-    expect(screen.getByText('Submit / submit')).toBeInTheDocument();
-    expect(screen.getByText('财务确认 / finance_confirm')).toBeInTheDocument();
-    expect(screen.getByText('需求单 / 报价单 #101')).toBeInTheDocument();
-    expect(screen.getByText('销售单 #201')).toBeInTheDocument();
-    expect(screen.getByText('统一审计 API 暂不可用，页面已降级为前端聚合各模块日志接口。')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
+    expect(screen.getByText('提交记录')).toBeInTheDocument();
+    expect(screen.getByText('财务确认')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3001/api/audit-logs',
       expect.objectContaining({
@@ -249,8 +228,8 @@ describe('AppAuditPage', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '销售单 Sales Order最新日志' })).toBeInTheDocument();
-    expect(screen.getByText('销售单 #201')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '销售单操作记录' })).toBeInTheDocument();
+    expect(screen.getByText('财务确认')).toBeInTheDocument();
     expect(screen.queryByText('报价单 #101')).not.toBeInTheDocument();
   });
 

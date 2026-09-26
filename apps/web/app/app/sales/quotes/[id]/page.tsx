@@ -259,14 +259,6 @@ async function loadSourceQuoteSampleSummary(
   }
 }
 
-const actionBarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '14px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
 const backLinkStyle = {
   color: '#0f172a',
   textDecoration: 'none',
@@ -479,9 +471,6 @@ export default async function AppQuoteDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link href="/app/sales/quotes" style={backLinkStyle}>
-            返回正式需求和报价列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>{getFormalDetailAccessDeniedLabel('quote')}</h3>
             <p style={heroSubStyle}>当前登录账号没有权限查看这张单据。</p>
@@ -537,12 +526,6 @@ export default async function AppQuoteDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link
-            href="/app/sales/quotes"
-            style={backLinkStyle}
-          >
-            返回正式需求和报价列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>单据详情加载失败</h3>
             <p style={heroSubStyle}>请返回正式需求和报价列表后重试。</p>
@@ -560,9 +543,6 @@ export default async function AppQuoteDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link href="/app/sales/quotes" style={backLinkStyle}>
-            返回正式需求和报价列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>{getFormalDetailAccessDeniedLabel('quote')}</h3>
             <p style={heroSubStyle}>当前登录账号没有权限查看这张单据。</p>
@@ -581,20 +561,6 @@ export default async function AppQuoteDetailPage({
       session={session}
     >
       <section style={detailLayoutStyle}>
-        <div style={actionBarStyle}>
-          <Link
-            href="/app/sales/quotes"
-            style={backLinkStyle}
-          >
-            返回正式需求和报价列表
-          </Link>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
-          <Link href="/app/sales" style={backLinkStyle}>
-            返回销售中心
-          </Link>
-        </div>
 
         <article style={heroCardStyle}>
           <p style={heroEyebrowStyle}>Quote Detail / 单据详情</p>

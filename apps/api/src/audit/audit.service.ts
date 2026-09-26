@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { AfterSalesService } from '../after-sales/after-sales.service';
 import { CounterpartyService } from '../counterparty/counterparty.service';
 import { InquiryService } from '../inquiry/inquiry.service';
@@ -46,6 +46,7 @@ type AuditModuleConfig = {
 
 @Injectable()
 export class AuditService {
+  private readonly logger = new Logger(AuditService.name);
   constructor(
     @Inject(QuoteService)
     private readonly quoteService: QuoteService,
@@ -90,7 +91,8 @@ export class AuditService {
             failed: false,
             items,
           };
-        } catch {
+        } catch (error) {
+          this.logger.error(`审计模块 ${module.key} 加载失败`, error instanceof Error ? error.stack : String(error));
           return {
             key: module.key,
             label: module.label,
@@ -157,7 +159,8 @@ export class AuditService {
           user.realName?.trim() || user.username || `操作人 #${user.id}`,
         ]),
       );
-    } catch {
+    } catch (error) {
+      this.logger.error("审计操作人目录加载失败", error instanceof Error ? error.stack : String(error));
       return new Map<number, string>();
     }
   }

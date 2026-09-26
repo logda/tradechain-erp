@@ -156,12 +156,8 @@ describe('formal detail pages', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式需求和报价详情' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式需求和报价列表' }),
-    ).toHaveAttribute('href', '/app/sales/quotes');
-    expect(
-      screen.getByRole('link', { name: '返回正式首页' }),
-    ).toHaveAttribute('href', '/app');
+    expect(screen.queryByRole('link', { name: '返回正式需求和报价列表' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回询价单详情' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '报价单 Q202607080101' }),
@@ -725,15 +721,9 @@ describe('formal detail pages', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式销售单详情' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式销售单列表' }),
-    ).toHaveAttribute('href', '/app/sales/orders');
-    expect(
-      screen.getByRole('link', { name: '返回正式首页' }),
-    ).toHaveAttribute('href', '/app');
-    expect(
-      screen.getByRole('link', { name: '返回销售中心' }),
-    ).toHaveAttribute('href', '/app/sales');
+    expect(screen.queryByRole('link', { name: '返回正式销售单列表' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回销售中心' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '销售订单 S202607080001' }),
     ).toBeInTheDocument();
@@ -1612,12 +1602,8 @@ describe('formal detail pages', () => {
     );
 
     expect(screen.getByRole('heading', { name: '正式样品单详情' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式样品单列表' }),
-    ).toHaveAttribute('href', '/app/sales/samples');
-    expect(
-      screen.getByRole('link', { name: '返回正式首页' }),
-    ).toHaveAttribute('href', '/app');
+    expect(screen.queryByRole('link', { name: '返回正式样品单列表' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '样品单 SP202607080101' }),
     ).toBeInTheDocument();

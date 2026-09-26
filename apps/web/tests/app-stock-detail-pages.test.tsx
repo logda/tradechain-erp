@@ -54,9 +54,7 @@ describe('formal stock detail pages', () => {
     expect(
       screen.getByRole('heading', { name: '正式收货单详情' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式收货单列表' }),
-    ).toHaveAttribute('href', '/app/stock-in');
+    expect(screen.queryByRole('link', { name: '返回正式收货单列表' })).not.toBeInTheDocument();
     expect(screen.getByText('收货单 SI202607140601')).toBeInTheDocument();
     expect(screen.getByText('来源单号：P202607110100')).toBeInTheDocument();
     expect(screen.getByText('SKU-LED-001')).toBeInTheDocument();
@@ -110,9 +108,7 @@ describe('formal stock detail pages', () => {
     expect(
       screen.getByRole('heading', { name: '正式出库单详情' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '返回正式出库单列表' }),
-    ).toHaveAttribute('href', '/app/stock-out');
+    expect(screen.queryByRole('link', { name: '返回正式出库单列表' })).not.toBeInTheDocument();
     expect(screen.getByText('出库单 SO202607140701')).toBeInTheDocument();
     expect(screen.getByText('来源单号：S202607080088')).toBeInTheDocument();
     expect(screen.getByText('智能 LED 灯带')).toBeInTheDocument();

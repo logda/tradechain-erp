@@ -110,12 +110,6 @@ const toolbarStyle = {
   flexWrap: 'wrap' as const,
 } satisfies React.CSSProperties;
 
-const mutedLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const primaryLinkStyle = {
   color: '#ffffff',
   textDecoration: 'none',
@@ -299,9 +293,6 @@ export default async function AppAfterSalesPage({
       session={session}
     >
       <div style={toolbarStyle}>
-        <Link href="/app" style={mutedLinkStyle}>
-          返回正式首页
-        </Link>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           {canProcessAfterSales ? (
             <Link

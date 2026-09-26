@@ -221,20 +221,6 @@ function buildReceiptDraft(shipmentBatch: ShipmentBatchDetail, createdBy: number
   };
 }
 
-const actionBarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '14px',
-  alignItems: 'center',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const backLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const detailLayoutStyle = {
   display: 'grid',
   gap: '18px',
@@ -411,12 +397,6 @@ export default async function AppShipmentBatchDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link
-            href="/app/shipment-batches"
-            style={backLinkStyle}
-          >
-            返回正式发货批次列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>
               {getFormalDetailAccessDeniedLabel('shipment_batch')}
@@ -446,12 +426,6 @@ export default async function AppShipmentBatchDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link
-            href="/app/shipment-batches"
-            style={backLinkStyle}
-          >
-            返回正式发货批次列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>发货批次详情加载失败</h3>
             <p style={heroSubStyle}>请返回正式发货批次列表后重试。</p>
@@ -469,12 +443,6 @@ export default async function AppShipmentBatchDetailPage({
         session={session}
       >
         <section style={detailLayoutStyle}>
-          <Link
-            href="/app/shipment-batches"
-            style={backLinkStyle}
-          >
-            返回正式发货批次列表
-          </Link>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>
               {getFormalDetailAccessDeniedLabel('shipment_batch')}
@@ -500,17 +468,6 @@ export default async function AppShipmentBatchDetailPage({
       session={session}
     >
       <section style={detailLayoutStyle}>
-        <div style={actionBarStyle}>
-          <Link
-            href="/app/shipment-batches"
-            style={backLinkStyle}
-          >
-            返回正式发货批次列表
-          </Link>
-          <Link href="/app" style={backLinkStyle}>
-            返回正式首页
-          </Link>
-        </div>
 
         <article style={heroCardStyle}>
           <p style={heroEyebrowStyle}>Shipment Batch Detail / 发货批次详情</p>
