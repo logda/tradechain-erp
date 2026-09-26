@@ -74,7 +74,7 @@ describe('AppHomePage', () => {
     expect(
       screen.getByRole('heading', { name: 'ERP 正式工作台' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('正式工作台')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '系统工作区页签' })).toBeInTheDocument();
     expect(screen.getByText('消息待办 Todo: 03')).toBeInTheDocument();
     expect(screen.getByText('首页待办摘要')).toBeInTheDocument();
     expect(screen.getAllByText('销售待办').length).toBeGreaterThan(0);

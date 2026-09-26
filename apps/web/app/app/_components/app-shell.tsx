@@ -5,7 +5,6 @@ import {
   canViewFormalModule,
   type DemoSession,
   type FormalModule,
-  getDemoAccessScopeLabel,
   getDemoRoleLabel,
 } from '../_lib/demo-session';
 import { getFormalTodoCount } from '../_lib/formal-todos';
@@ -52,7 +51,6 @@ const navEntries: Array<{
 
 export function AppShell({
   title,
-  subtitle,
   children,
   session = {
     role: 'boss',
@@ -67,7 +65,6 @@ export function AppShell({
   todoCountOverride?: number;
 }) {
   const roleLabel = getDemoRoleLabel(session.role);
-  const accessScopeLabel = getDemoAccessScopeLabel(session);
   const todoCount = String(
     todoCountOverride ?? getFormalTodoCount(session),
   ).padStart(2, '0');
@@ -100,6 +97,19 @@ export function AppShell({
             </p>
           </div>
 
+          <div className="erp-shell__account" aria-label="当前账号">
+            <div className="erp-shell__account-identity">
+              <span>{`用户 User: ${session.user}`}</span>
+              <span>{`角色 Role: ${roleLabel}`}</span>
+            </div>
+            <Link href="/app/todos" className="erp-shell__account-link">
+              消息待办 Todo: {todoCount}
+            </Link>
+            <a href="/app/logout" className="erp-shell__account-link erp-shell__account-logout">
+              退出登录
+            </a>
+          </div>
+
           <nav className="erp-shell__nav" aria-label="formal-app-nav">
             {visibleNavEntries.map((entry) => (
               <Link
@@ -112,39 +122,10 @@ export function AppShell({
             ))}
           </nav>
 
-          <div className="erp-shell__meta">
-            当前角色：{roleLabel}
-            <br />
-            当前用户：{session.user}
-            <br />
-            当前权限：{accessScopeLabel}
-          </div>
         </aside>
 
         <section className="erp-shell__content">
-          <header className="erp-shell__topbar" data-backdrop>
-            <div className="erp-shell__title-wrap">
-              <p className="erp-shell__eyebrow">正式工作台</p>
-              <h2 className="erp-shell__title">{title}</h2>
-              {subtitle ? <p className="erp-shell__subtitle">{subtitle}</p> : null}
-            </div>
-
-            <div className="erp-shell__user-panel">
-              <div className="erp-shell__meta-grid">
-                <span className="erp-shell__pill">{`角色 Role: ${roleLabel}`}</span>
-                <span className="erp-shell__pill">{`用户 User: ${session.user}`}</span>
-                <span className="erp-shell__pill">{`权限 Scope: ${accessScopeLabel}`}</span>
-                <span className="erp-shell__pill">消息待办 Todo: {todoCount}</span>
-              </div>
-              <a
-                href="/app/logout"
-                className="erp-button erp-button--secondary erp-shell__logout"
-              >
-                退出登录
-              </a>
-            </div>
-          </header>
-
+          <h2 className="erp-shell__visually-hidden">{title}</h2>
           <WorkspaceTabs title={title} sessionKey={`${session.username ?? session.user}:${session.role}`} />
           <div className="erp-shell__body">{children}</div>
         </section>
