@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AppHomePage from '../app/app/page';
 
@@ -180,5 +180,25 @@ describe('AppHomePage', () => {
     expect(
       screen.queryByRole('link', { name: '日志中心' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('collapses a group and pages its rows without changing the total', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      items: Array.from({ length: 7 }, (_, index) => ({
+        id: `purchase-${index}`, docNo: `P-${index + 1}`, title: `采购待办 ${index + 1}`,
+        domain: 'purchase', moduleLabel: '采购单', statusLabel: '待处理', ownerName: 'Leo',
+        href: `/app/purchase/orders/${index + 1}`, priority: 'high', description: '待处理',
+      })), total: 7, closedTotal: 0,
+    }) }));
+    render(<>{await AppHomePage({})}</>);
+    const group = screen.getByRole('region', { name: '采购与运营待办' });
+    expect(within(group).getAllByRole('link', { name: '打开单据' })).toHaveLength(5);
+    expect(within(group).getByText('第 1 / 2 页')).toBeInTheDocument();
+    fireEvent.click(within(group).getByRole('button', { name: '下一页' }));
+    expect(within(group).getByText('P-7')).toBeInTheDocument();
+    expect(within(group).getAllByRole('link', { name: '打开单据' })).toHaveLength(2);
+    fireEvent.click(within(group).getByRole('button', { name: /采购与运营待办/ }));
+    expect(within(group).queryByText('P-7')).not.toBeInTheDocument();
+    expect(within(group).getByText('共 7 条')).toBeInTheDocument();
   });
 });

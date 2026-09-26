@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getFormalTodos, type FormalTodoItem } from '../app/app/_lib/formal-todos';
 import AppTodosPage from '../app/app/todos/page';
@@ -191,5 +191,27 @@ describe('AppTodosPage', () => {
     expect(screen.queryByText('P202607080002')).not.toBeInTheDocument();
     expect(screen.queryByText('Q202607080002')).not.toBeInTheDocument();
     expect(screen.getByText('消息待办 Todo: 00')).toBeInTheDocument();
+  });
+
+  it('filters the compact list and pages matching todos', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      items: Array.from({ length: 7 }, (_, index) => ({
+        id: `sales-${index}`, docNo: `Q-${index + 1}`, title: `报价待办 ${index + 1}`,
+        domain: 'sales', moduleLabel: '报价', statusLabel: index === 6 ? '待老板确认' : '待处理',
+        ownerName: 'Zoe', href: `/app/sales/quotes/${index + 1}`,
+        priority: 'high', description: '待处理', customerName: index === 6 ? '特定客户' : '普通客户',
+      })), total: 7, closedTotal: 0,
+    }) }));
+    render(<>{await AppTodosPage({})}</>);
+    const group = screen.getByRole('region', { name: '销售待办' });
+    expect(within(group).getAllByRole('link', { name: '打开单据' })).toHaveLength(5);
+    fireEvent.click(within(group).getByRole('button', { name: '下一页' }));
+    expect(within(group).getByText('Q-7')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox', { name: '关键词' }), { target: { value: '特定客户' } });
+    fireEvent.click(screen.getByRole('button', { name: '查询' }));
+    expect(within(screen.getByRole('region', { name: '销售待办' })).getAllByRole('link', { name: '打开单据' })).toHaveLength(1);
+    expect(within(screen.getByRole('region', { name: '销售待办' })).getByText('第 1 / 1 页')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '重置' }));
+    expect(within(screen.getByRole('region', { name: '销售待办' })).getAllByRole('link', { name: '打开单据' })).toHaveLength(5);
   });
 });

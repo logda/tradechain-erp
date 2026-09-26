@@ -1,81 +1,11 @@
-import Link from 'next/link';
 import { AppShell } from './_components/app-shell';
 import { StatStrip } from './_components/stat-strip';
-import { resolveDemoSession, type DemoSession } from './_lib/demo-session';
-import { getFormalTodos, type FormalTodoItem } from './_lib/formal-todos';
-import { buildFormalApiRequestHeaders } from './_lib/formal-api-request-headers';
+import { TodoGroup } from './_components/todo-group';
+import { resolveDemoSession } from './_lib/demo-session';
+import { getFormalTodos } from './_lib/formal-todos';
+import { loadFormalTodos } from './_lib/load-formal-todos';
 
 type SearchParams = Record<string, string | string[] | undefined>;
-type FormalTodoApiResponse = { items: FormalTodoItem[]; total: number; closedTotal: number };
-
-function getTodoApiBaseUrl() {
-  return process.env.ERP_API_BASE_URL ?? 'http://127.0.0.1:3001/api';
-}
-
-async function loadFormalTodos(session: DemoSession): Promise<FormalTodoApiResponse | null> {
-  try {
-    const params = new URLSearchParams({ role: session.role, user: session.user });
-    const response = await fetch(`${getTodoApiBaseUrl()}/todos/formal?${params}`, {
-      cache: 'no-store',
-      headers: buildFormalApiRequestHeaders(session),
-    });
-    if (!response.ok) return null;
-    const result = await response.json() as FormalTodoApiResponse;
-    return Array.isArray(result?.items) && typeof result.closedTotal === 'number' ? result : null;
-  } catch {
-    return null;
-  }
-}
-
-function formatTodoTime(value?: string) {
-  if (!value || Number.isNaN(Date.parse(value))) return '';
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  }).format(new Date(value));
-}
-
-function safeImageUrl(value?: string) {
-  return value && (/^https?:\/\//i.test(value) || (value.startsWith('/') && !value.startsWith('//')))
-    ? value : null;
-}
-
-function TodoGroup({ title, todos }: { title: string; todos: FormalTodoItem[] }) {
-  return (
-    <section className="erp-home-todo-group">
-      <div className="erp-home-todo-group__head">
-        <h3>{title}</h3>
-        <span>共 {todos.length} 条</span>
-      </div>
-      {todos.length === 0 ? <p className="erp-home-todo-empty">暂无待办</p> : (
-        <ul className="erp-home-todo-list">
-          {todos.map((todo) => {
-            const imageUrl = safeImageUrl(todo.imageUrls?.[0]);
-            return (
-              <li key={todo.id} className="erp-home-todo-row">
-                <div className="erp-home-todo-row__image">
-                  {imageUrl ? <img src={imageUrl} alt={todo.productNames?.[0] || '业务图片'} /> : <span>暂无图片</span>}
-                </div>
-                <div className="erp-home-todo-row__content">
-                  <strong>{todo.title}</strong>
-                  <span>{todo.docNo} · {todo.statusLabel}</span>
-                  {todo.productNames?.length ? <span>产品：{todo.productNames.join('、')}</span> : null}
-                  {todo.customerName ? <span>客户：{todo.customerName}</span> : null}
-                  {todo.supplierName ? <span>供应商：{todo.supplierName}</span> : null}
-                </div>
-                <div className="erp-home-todo-row__action">
-                  <time>{formatTodoTime(todo.createdAt)}</time>
-                  <Link href={todo.href}>打开单据</Link>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 export default async function AppHomePage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
   const session = resolveDemoSession(searchParams ? await searchParams : {});
   const liveTodos = await loadFormalTodos(session);

@@ -659,6 +659,18 @@ textarea.erp-control {
   font-size: 18px;
 }
 
+.erp-home-todo-group__toggle {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--erp-text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.erp-home-todo-group__toggle:hover { color: #2563eb; }
+
 .erp-home-todo-group__head span,
 .erp-home-todo-empty,
 .erp-home-todo-row__content span,
@@ -735,6 +747,58 @@ textarea.erp-control {
   font-weight: 700;
 }
 
+.erp-home-todo-pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--erp-border);
+  color: var(--erp-text-muted);
+  font-size: 13px;
+}
+
+.erp-home-todo-pagination button,
+.erp-todo-button {
+  border: 1px solid var(--erp-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--erp-text);
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.erp-home-todo-pagination button:disabled { opacity: .45; cursor: default; }
+.erp-todo-button--primary { background: #0f172a; color: #fff; border-color: #0f172a; }
+
+.erp-todo-links { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.erp-todo-links a { color: var(--erp-text); text-decoration: none; font-weight: 700; }
+.erp-todo-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(150px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid var(--erp-border);
+  border-radius: 18px;
+  background: #fff;
+}
+.erp-todo-filters label { display: grid; gap: 6px; font-weight: 700; font-size: 13px; color: var(--erp-text-muted); }
+.erp-todo-filters input, .erp-todo-filters select {
+  min-width: 0;
+  height: 40px;
+  border: 1px solid var(--erp-border);
+  border-radius: 9px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--erp-text);
+  font: inherit;
+}
+.erp-todo-filters__actions { display: flex; gap: 8px; }
+.erp-todo-result-count, .erp-todo-footnote { color: var(--erp-text-muted); font-size: 13px; }
+
 .erp-home-todo-error {
   border: 1px solid #fbbf24;
   border-radius: 12px;
@@ -743,6 +807,7 @@ textarea.erp-control {
 }
 
 @media (max-width: 700px) {
+  .erp-todo-filters { grid-template-columns: 1fr; }
   .erp-home-todo-row {
     grid-template-columns: 48px minmax(0, 1fr);
   }

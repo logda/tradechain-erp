@@ -1,4 +1,5 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { vi } from 'vitest';
 import { AppShell } from '../app/app/_components/app-shell';
 
 describe('formal responsive shell', () => {
@@ -24,5 +25,16 @@ describe('formal responsive shell', () => {
     expect(screen.getByText('页面内容').parentElement).toHaveClass('erp-shell__body');
     expect(screen.queryByRole('link', { name: '全链路验收中心' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '日志中心' })).toHaveAttribute('href', '/app/logs');
+  });
+
+  it('loads the live todo count on pages without a page-level count', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ count: 17 }),
+    }));
+    render(<AppShell title="主数据中心" session={{ role: 'admin', user: 'Admin' }}><p>内容</p></AppShell>);
+    await waitFor(() => expect(screen.getByRole('link', { name: '消息待办 Todo: 17' })).toBeInTheDocument());
+    expect(screen.queryByText('消息待办 Todo: 05')).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 });

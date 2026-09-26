@@ -7,7 +7,7 @@ import {
   type FormalModule,
   getDemoRoleLabel,
 } from '../_lib/demo-session';
-import { getFormalTodoCount } from '../_lib/formal-todos';
+import { LiveTodoCount } from './live-todo-count';
 import { WorkspaceTabs } from './workspace-tabs';
 
 type NavEntryVisible = FormalModule | 'all' | 'salesOrPurchase';
@@ -65,9 +65,6 @@ export function AppShell({
   todoCountOverride?: number;
 }) {
   const roleLabel = getDemoRoleLabel(session.role);
-  const todoCount = String(
-    todoCountOverride ?? getFormalTodoCount(session),
-  ).padStart(2, '0');
   const visibleNavEntries = navEntries.filter((entry) => {
     if (entry.visible === 'all') {
       return true;
@@ -103,7 +100,7 @@ export function AppShell({
               <span>{`角色 Role: ${roleLabel}`}</span>
             </div>
             <Link href="/app/todos" className="erp-shell__account-link">
-              消息待办 Todo: {todoCount}
+              <LiveTodoCount initialCount={todoCountOverride} />
             </Link>
             <a href="/app/logout" className="erp-shell__account-link erp-shell__account-logout">
               退出登录
