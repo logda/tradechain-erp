@@ -1,7 +1,8 @@
-import { Controller, Get, Inject, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Inject, Req, UseGuards } from '@nestjs/common';
 import { FormalRoles } from '../auth/formal-role.decorator';
 import { FormalRoleGuard } from '../auth/formal-role.guard';
-import { FormalTodoListQuery, FormalTodoService } from './formal-todo.service';
+import { readFormalSession } from '../auth/formal-session';
+import { FormalTodoService } from './formal-todo.service';
 
 @Controller('todos')
 @UseGuards(FormalRoleGuard)
@@ -20,7 +21,7 @@ export class FormalTodoController {
     'purchase',
   )
   @Get('formal')
-  listFormalTodos(@Query() query: FormalTodoListQuery) {
-    return this.formalTodoService.listFormalTodos(query);
+  listFormalTodos(@Req() request: { headers: Record<string, string | string[] | undefined> }) {
+    return this.formalTodoService.listFormalTodos(readFormalSession(request.headers));
   }
 }

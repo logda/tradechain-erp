@@ -13,9 +13,14 @@ export type FormalTodoItem = {
   href: string;
   priority: 'high' | 'medium' | 'low';
   description: string;
+  createdAt?: string;
+  productNames?: string[];
+  customerName?: string;
+  supplierName?: string;
+  imageUrls?: string[];
   lifecycleStatus?: 'open' | 'auto_closed' | 'voided';
   closeReason?: string;
-  visibility?: 'owner_only';
+  visibility?: 'owner_only' | 'purchase_team' | 'purchase_manager_only' | 'finance_only';
 };
 
 const formalTodos: FormalTodoItem[] = [
@@ -121,6 +126,9 @@ function canSeeTodo(session: DemoSession, todo: FormalTodoItem) {
     return true;
   }
 
+  if (todo.visibility === 'finance_only') return false;
+  if (todo.visibility === 'purchase_manager_only') return session.role === 'purchase_manager';
+
   if (session.role === 'sales_manager') {
     return todo.domain === 'sales';
   }
@@ -141,7 +149,7 @@ function canSeeTodo(session: DemoSession, todo: FormalTodoItem) {
     (todo.domain === 'purchase' ||
       todo.domain === 'operations' ||
       todo.domain === 'after_sales') &&
-    todo.ownerName === session.user
+    (todo.ownerName === session.user || todo.visibility === 'purchase_team')
   );
 }
 

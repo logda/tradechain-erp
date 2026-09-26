@@ -1,6 +1,15 @@
 import { SampleOrderService } from '../src/sample-order/sample-order.service';
 
 describe('SampleOrderService list', () => {
+  it('lets purchase staff open sampling work even when the sales owner is different', async () => {
+    const service = new SampleOrderService();
+    const list = await service.list({ page: 1, pageSize: 20 }, { role: 'purchase', user: 'Leo' });
+    expect(list.items.map((item) => item.docNo)).toContain('SP202607080001');
+    expect(list.items.map((item) => item.docNo)).not.toContain('SP202607080002');
+    await expect(service.getDetail(1, { role: 'purchase', user: 'Leo' }))
+      .resolves.toMatchObject({ currentStatus: 'pending_sampling' });
+  });
+
   it('filters samples by advanced fields and returns applied filters', async () => {
     const service = new SampleOrderService();
 

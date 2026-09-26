@@ -42,7 +42,9 @@ describe('FormalTodoController', () => {
     const controller = moduleRef.get(FormalTodoController);
 
     await expect(
-      controller.listFormalTodos({ role: 'sales', user: 'Zoe' }),
+      controller.listFormalTodos({ headers: {
+        'x-erp-role': 'sales', 'x-erp-user': 'Zoe',
+      } }),
     ).resolves.toEqual({
       items: [{ id: 'quote-Q1', docNo: 'Q1' }],
       total: 1,

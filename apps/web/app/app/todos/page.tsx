@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { AppShell } from '../_components/app-shell';
 import { StatStrip } from '../_components/stat-strip';
 import {
-  getFormalClosedTodoCount,
   getFormalTodos,
   type FormalTodoItem,
 } from '../_lib/formal-todos';
@@ -193,9 +192,9 @@ export default async function AppTodosPage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const session = resolveDemoSession(resolvedSearchParams);
   const liveTodos = await loadFormalTodos(session);
-  const todos = getFormalTodos(session, liveTodos?.items);
+  const todos = getFormalTodos(session, liveTodos?.items ?? []);
   const closedTodoCount =
-    liveTodos?.closedTotal ?? getFormalClosedTodoCount(session);
+    liveTodos?.closedTotal ?? 0;
 
   return (
     <AppShell
@@ -224,6 +223,7 @@ export default async function AppTodosPage({
           { label: '售后待办', value: countByDomain(todos, 'after_sales') },
         ]}
       />
+      {!liveTodos ? <p role="status" className="erp-home-todo-error">待办暂时无法加载，请刷新页面重试。</p> : null}
 
       <section style={sectionStyle} id="sales">
         <div style={anchorCardStyle}>

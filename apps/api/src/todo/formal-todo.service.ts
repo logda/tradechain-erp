@@ -33,9 +33,14 @@ export type FormalTodoItem = {
   href: string;
   priority: 'high' | 'medium' | 'low';
   description: string;
+  createdAt?: string;
+  productNames?: string[];
+  customerName?: string;
+  supplierName?: string;
+  imageUrls?: string[];
   lifecycleStatus?: 'open' | 'auto_closed' | 'voided';
   closeReason?: string;
-  visibility?: 'owner_only';
+  visibility?: 'owner_only' | 'purchase_team' | 'purchase_manager_only' | 'finance_only';
 };
 
 export type FormalTodoResponse = {
@@ -54,6 +59,33 @@ type LifecycleTrackedItem = {
   closeReason?: string;
 };
 
+type TodoSourceContext = {
+  docNo?: string;
+  inquiryNo?: string;
+  createdAt?: string;
+  customerName?: string;
+  counterpartyName?: string;
+  supplierName?: string;
+  goodsName?: string;
+  items?: Array<{ productName?: string; imageUrls?: string[] }>;
+};
+
+function detailContext(value: unknown) {
+  const detail = value as { imageUrls?: string[]; items?: Array<{
+    productName?: string;
+    imageUrls?: string[];
+    factoryPicUrls?: string[];
+  }> } | null;
+  const items = detail?.items ?? [];
+  return {
+    productNames: items.map((item) => item.productName ?? '').filter(Boolean),
+    imageUrls: [
+      ...(detail?.imageUrls ?? []),
+      ...items.flatMap((item) => item.imageUrls ?? item.factoryPicUrls ?? []),
+    ].filter(Boolean),
+  };
+}
+
 function formalDetailHref(detailHref: string, formalPrefix: string) {
   const id = detailHref.split('/').filter(Boolean).at(-1);
   return id ? `${formalPrefix}/${id}` : formalPrefix;
@@ -66,6 +98,9 @@ function canSeeFormalTodo(query: FormalTodoListQuery | undefined, item: FormalTo
   if (!role || role === 'admin' || role === 'boss') {
     return true;
   }
+
+  if (item.visibility === 'finance_only') return false;
+  if (item.visibility === 'purchase_manager_only') return role === 'purchase_manager';
 
   if (role === 'sales_manager') {
     return item.domain === 'sales';
@@ -87,7 +122,7 @@ function canSeeFormalTodo(query: FormalTodoListQuery | undefined, item: FormalTo
     (item.domain === 'purchase' ||
       item.domain === 'operations' ||
       item.domain === 'after_sales') &&
-    item.ownerName === user
+    (item.ownerName === user || item.visibility === 'purchase_team')
   );
 }
 
@@ -99,21 +134,21 @@ function isClosedLifecycleStatus(value?: string) {
 export class FormalTodoService {
   constructor(
     @Inject(QuoteService)
-    private readonly quoteService: Pick<QuoteService, 'list'>,
+    private readonly quoteService: Pick<QuoteService, 'list'> & Partial<Pick<QuoteService, 'getDetail'>>,
     @Inject(SalesOrderService)
-    private readonly salesOrderService: Pick<SalesOrderService, 'list' | 'listPendingPurchaseAssignments'>,
+    private readonly salesOrderService: Pick<SalesOrderService, 'list' | 'listPendingPurchaseAssignments'> & Partial<Pick<SalesOrderService, 'getDetail'>>,
     @Inject(PurchaseOrderService)
     private readonly purchaseOrderService: Pick<PurchaseOrderService, 'list'> & Partial<Pick<PurchaseOrderService, 'getDetail'>>,
     @Inject(ShipmentBatchService)
-    private readonly shipmentBatchService: Pick<ShipmentBatchService, 'list'>,
+    private readonly shipmentBatchService: Pick<ShipmentBatchService, 'list'> & Partial<Pick<ShipmentBatchService, 'getDetail'>>,
     @Inject(AfterSalesService)
-    private readonly afterSalesService: Pick<AfterSalesService, 'list'>,
+    private readonly afterSalesService: Pick<AfterSalesService, 'list'> & Partial<Pick<AfterSalesService, 'getDetail'>>,
     @Optional()
     @Inject(InquiryService)
     private readonly inquiryService?: Pick<InquiryService, 'list'>,
     @Optional()
     @Inject(SampleOrderService)
-    private readonly sampleOrderService?: Pick<SampleOrderService, 'list'>,
+    private readonly sampleOrderService?: Pick<SampleOrderService, 'list'> & Partial<Pick<SampleOrderService, 'getDetail'>>,
   ) {}
 
   async listFormalTodos(
@@ -163,6 +198,11 @@ export class FormalTodoService {
           docNo: string;
           title: string;
           bossConfirmed: boolean;
+          status?: string;
+          secondaryStatus?: string;
+          createdAt?: string;
+          customerName?: string;
+          items?: Array<{ productName: string; imageUrls?: string[] }>;
           createdBy: string;
           detailHref: string;
           lifecycleStatus?: 'open' | 'auto_closed' | 'voided';
@@ -175,6 +215,7 @@ export class FormalTodoService {
           ownerName?: string;
           createdBy: string;
           detailHref: string;
+          createdAt?: string;
           lifecycleStatus?: 'open' | 'auto_closed' | 'voided';
           closeReason?: string;
         }>,
@@ -214,6 +255,8 @@ export class FormalTodoService {
           quoteOrderNo: string;
           status: string;
           customerName: string;
+          createdAt?: string;
+          items?: Array<{ productName: string; imageUrls?: string[] }>;
           createdBy: string;
           detailHref: string;
           lifecycleStatus?: 'open' | 'auto_closed' | 'voided';
@@ -253,7 +296,12 @@ export class FormalTodoService {
 
     quotes.items
       .filter((item) => !countClosed(item, 'sales'))
-      .filter((item) => !item.bossConfirmed)
+      .filter((item) => !item.bossConfirmed && (
+        !item.status ||
+        ['pending_boss_approval', 'pending_boss_price_confirmation',
+          'pending_boss_confirm', 'pending_boss_confirmation', 'pending_boss_review'].includes(item.status) ||
+        (item.status === 'quoted' && item.secondaryStatus === 'pending_boss_confirmation')
+      ))
       .forEach((item) => {
         items.push({
           id: `quote-${item.docNo}`,
@@ -266,8 +314,47 @@ export class FormalTodoService {
           href: formalDetailHref(item.detailHref, '/app/sales/quotes'),
           priority: 'high',
           description: `${item.title} 需要老板确认价格、利润与转单口径。`,
+          createdAt: item.createdAt,
         });
       });
+
+    quotes.items
+      .filter((item) => !isClosedLifecycleStatus(item.lifecycleStatus))
+      .filter((item) => item.status === 'pending_customer_feedback')
+      .forEach((item) => items.push({
+        id: `quote-feedback-${item.docNo}`,
+        docNo: item.docNo,
+        title: '报价待客户反馈',
+        domain: 'sales',
+        moduleLabel: '报价',
+        statusLabel: '待客户反馈',
+        ownerName: item.createdBy,
+        href: formalDetailHref(item.detailHref, '/app/sales/quotes'),
+        priority: 'medium',
+        description: `${item.title} 等待销售跟进客户反馈。`,
+        createdAt: item.createdAt,
+      }));
+
+    inquiries.items
+      .filter((item) => !isClosedLifecycleStatus(item.lifecycleStatus))
+      .filter((item) => item.status === 'pending_inquiry')
+      .forEach((item) => items.push({
+        id: `inquiry-work-${item.inquiryNo}`,
+        docNo: item.inquiryNo,
+        title: '询价待录入比价',
+        domain: 'purchase',
+        moduleLabel: '询价',
+        statusLabel: '待询价',
+        ownerName: '',
+        visibility: 'purchase_team',
+        href: formalDetailHref(item.detailHref, '/app/sales/inquiries'),
+        priority: 'high',
+        description: `${item.customerName} / ${item.quoteOrderNo} 需要采购录入供应商报价。`,
+        createdAt: item.createdAt,
+        customerName: item.customerName,
+        productNames: item.items?.map((entry) => entry.productName).filter(Boolean),
+        imageUrls: item.items?.flatMap((entry) => entry.imageUrls ?? []).filter(Boolean),
+      }));
 
     inquiries.items
       .filter((item) =>
@@ -293,17 +380,22 @@ export class FormalTodoService {
           href: formalDetailHref(item.detailHref, '/app/sales/inquiries'),
           priority: 'high',
           description: `${item.customerName} / ${item.quoteOrderNo} 已提交比价，需要老板确认最终售价。`,
+          createdAt: item.createdAt,
+          customerName: item.customerName,
+          productNames: item.items?.map((entry) => entry.productName).filter(Boolean),
+          imageUrls: item.items?.flatMap((entry) => entry.imageUrls ?? []).filter(Boolean),
         });
       });
 
     sampleOrders.items
-      .filter((item) => !countClosed(item, 'sales'))
+      .filter((item) => !countClosed(item, ['pending_sampling', 'sampling'].includes(item.status) ? 'purchase' : 'sales'))
       .filter((item) =>
         ['pending_approval', 'pending_sampling', 'sampling', 'sample_sent'].includes(
           item.status,
         ),
       )
       .forEach((item) => {
+        const purchaseStep = item.status === 'pending_sampling' || item.status === 'sampling';
         const statusMeta =
           item.status === 'pending_approval'
             ? {
@@ -337,10 +429,11 @@ export class FormalTodoService {
           id: `sample-${item.docNo}`,
           docNo: item.docNo,
           title: statusMeta.title,
-          domain: 'sales',
+          domain: purchaseStep ? 'purchase' : 'sales',
           moduleLabel: '样品单',
           statusLabel: statusMeta.statusLabel,
-          ownerName: item.ownerName ?? '',
+          ownerName: purchaseStep ? '' : item.ownerName ?? '',
+          visibility: purchaseStep ? 'purchase_team' : undefined,
           href: formalDetailHref(item.detailHref, '/app/sales/samples'),
           priority: statusMeta.priority,
           description: statusMeta.description,
@@ -364,6 +457,23 @@ export class FormalTodoService {
           description: `${item.title} 已提交，需要销售主管确认后进入采购履约。`,
         });
       });
+
+    salesOrders.items
+      .filter((item) => !isClosedLifecycleStatus(item.lifecycleStatus))
+      .filter((item) => item.status === 'rejected')
+      .forEach((item) => items.push({
+        id: `sales-rejected-${item.docNo}`,
+        docNo: item.docNo,
+        title: '销售单驳回待修改',
+        domain: 'sales',
+        moduleLabel: '销售单',
+        statusLabel: '待修改重提',
+        ownerName: item.ownerName ?? item.createdBy,
+        href: formalDetailHref(item.detailHref, '/app/sales/orders'),
+        priority: 'high',
+        description: `${item.title} 已驳回，请修改后重新提交。`,
+        createdAt: item.createdAt,
+      }));
 
     const pendingAssignments = await this.salesOrderService.listPendingPurchaseAssignments?.() ?? [];
     pendingAssignments.forEach((item) => {
@@ -470,7 +580,26 @@ export class FormalTodoService {
 
     afterSalesOrders.items
       .filter((item) => !countClosed(item, 'after_sales'))
-      .filter((item) => item.status !== 'closed' && item.financeReviewStatus === 'pending')
+      .filter((item) => item.status === 'pending_approval')
+      .forEach((item) => {
+        items.push({
+          id: `after-sales-approval-${item.docNo}`,
+          docNo: item.docNo,
+          title: '售后单待审批',
+          domain: 'after_sales',
+          moduleLabel: '售后',
+          statusLabel: '待审批',
+          ownerName: '',
+          visibility: 'purchase_manager_only',
+          href: formalDetailHref(item.detailHref, '/app/after-sales'),
+          priority: 'medium',
+          description: `${item.title} 需要审批售后处理方案。`,
+        });
+      });
+
+    afterSalesOrders.items
+      .filter((item) => !countClosed(item, 'after_sales'))
+      .filter((item) => item.status === 'finance_reviewing' && item.financeReviewStatus === 'pending')
       .forEach((item) => {
         items.push({
           id: `after-sales-${item.docNo}`,
@@ -479,14 +608,58 @@ export class FormalTodoService {
           domain: 'after_sales',
           moduleLabel: '售后',
           statusLabel: '财务复核中',
-          ownerName: item.ownerName,
+          ownerName: '',
+          visibility: 'finance_only',
           href: formalDetailHref(item.detailHref, '/app/after-sales'),
           priority: 'medium',
           description: `${item.title} 需要复核退款、抵扣和收款状态后闭环。`,
         });
       });
 
-    const visibleItems = items.filter((item) => canSeeFormalTodo(query, item));
+    const sources = [
+      ...quotes.items, ...salesOrders.items, ...purchaseOrders.items,
+      ...shipmentBatches.items, ...afterSalesOrders.items,
+      ...inquiries.items, ...sampleOrders.items,
+    ] as unknown as TodoSourceContext[];
+    const visibleItems = await Promise.all(items
+      .filter((item) => canSeeFormalTodo(query, item))
+      .map(async (item) => {
+        const source = sources.find((entry) => (entry.docNo ?? entry.inquiryNo) === item.docNo);
+        const sourceItems = source?.items ?? [];
+        const sourceContext = {
+          productNames: sourceItems.map((entry) => entry.productName ?? '').filter(Boolean),
+          imageUrls: sourceItems.flatMap((entry) => entry.imageUrls ?? []).filter(Boolean),
+        };
+        const id = Number(item.href.split('/').filter(Boolean).at(-1));
+        let detail: unknown;
+        if (Number.isSafeInteger(id) && id > 0) {
+          try {
+            if (item.id.startsWith('quote-')) detail = await this.quoteService.getDetail?.(id, query);
+            else if (item.id.startsWith('inquiry-')) detail = null;
+            else if (item.id.startsWith('sample-')) detail = await this.sampleOrderService?.getDetail?.(id, query);
+            else if (item.id.startsWith('sales-') || item.id.startsWith('purchase-assignment-') && item.href.includes('/sales/')) detail = await this.salesOrderService.getDetail?.(id, query);
+            else if (item.id.startsWith('purchase-')) detail = await this.purchaseOrderService.getDetail?.(id, query);
+            else if (item.id.startsWith('shipment-')) detail = await this.shipmentBatchService.getDetail?.(id, query);
+            else if (item.id.startsWith('after-sales-')) detail = await this.afterSalesService.getDetail?.(id, query);
+          } catch {
+            // A readable summary still remains available if a detail was removed meanwhile.
+          }
+        }
+        const detailData = detailContext(detail);
+        return {
+          ...item,
+          createdAt: item.createdAt ?? source?.createdAt,
+          customerName: item.customerName ?? source?.customerName ?? source?.counterpartyName,
+          supplierName: item.supplierName ?? source?.supplierName,
+          productNames: item.productNames?.length ? item.productNames
+            : detailData.productNames.length ? detailData.productNames
+              : sourceContext.productNames.length ? sourceContext.productNames
+                : source?.goodsName ? [source.goodsName] : [],
+          imageUrls: item.imageUrls?.length ? item.imageUrls
+            : detailData.imageUrls.length ? detailData.imageUrls : sourceContext.imageUrls,
+        };
+      }));
+    visibleItems.sort((left, right) => (right.createdAt ?? '').localeCompare(left.createdAt ?? ''));
 
     return {
       items: visibleItems,

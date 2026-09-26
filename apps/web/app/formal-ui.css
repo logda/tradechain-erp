@@ -606,6 +606,129 @@ textarea.erp-control {
   text-decoration: none;
 }
 
+.erp-home-todo-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.erp-home-todo-group {
+  border: 1px solid var(--erp-border);
+  border-radius: 18px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.erp-home-todo-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--erp-border);
+}
+
+.erp-home-todo-group__head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.erp-home-todo-group__head span,
+.erp-home-todo-empty,
+.erp-home-todo-row__content span,
+.erp-home-todo-row__action time {
+  color: var(--erp-text-muted);
+}
+
+.erp-home-todo-empty {
+  margin: 0;
+  padding: 20px;
+}
+
+.erp-home-todo-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.erp-home-todo-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--erp-border);
+}
+
+.erp-home-todo-row:last-child {
+  border-bottom: 0;
+}
+
+.erp-home-todo-row__image {
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--erp-border);
+  border-radius: 10px;
+  background: #f8fafc;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.erp-home-todo-row__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.erp-home-todo-row__image span {
+  color: var(--erp-text-muted);
+  font-size: 11px;
+}
+
+.erp-home-todo-row__content,
+.erp-home-todo-row__action {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.erp-home-todo-row__content span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.erp-home-todo-row__action {
+  justify-items: end;
+}
+
+.erp-home-todo-row__action a {
+  color: var(--erp-text);
+  font-weight: 700;
+}
+
+.erp-home-todo-error {
+  border: 1px solid #fbbf24;
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: #fffbeb;
+}
+
+@media (max-width: 700px) {
+  .erp-home-todo-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+  .erp-home-todo-row__image {
+    width: 48px;
+    height: 48px;
+  }
+  .erp-home-todo-row__action {
+    grid-column: 2;
+    display: flex;
+    justify-content: space-between;
+  }
+}
+
 @media (max-width: 1366px) {
   .erp-shell__frame {
     grid-template-columns: 220px minmax(0, 1fr);

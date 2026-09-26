@@ -11,6 +11,105 @@ function createListResponse<T>(items: T[]) {
 }
 
 describe('FormalTodoService', () => {
+  it('creates a boss todo only for a quote at the boss approval node', async () => {
+    const empty = { list: jest.fn().mockResolvedValue(createListResponse([])) };
+    const quote = { list: jest.fn().mockResolvedValue(createListResponse([
+      { docNo: 'Q-DRAFT', title: '草稿', status: 'draft', bossConfirmed: false,
+        createdBy: 'Zoe', detailHref: '/quotes/1' },
+      { docNo: 'Q-BOSS', title: '待批', status: 'pending_boss_price_confirmation', bossConfirmed: false,
+        createdBy: 'Zoe', detailHref: '/quotes/2', createdAt: '2026-09-25T10:00:00.000Z' },
+    ])) };
+    const service = new FormalTodoService(quote as never, empty as never, empty as never,
+      empty as never, empty as never);
+    const result = await service.listFormalTodos({ role: 'boss', user: 'Mia' });
+    expect(result.items.map((item) => item.docNo)).toEqual(['Q-BOSS']);
+    expect(result.items[0]).toMatchObject({ createdAt: '2026-09-25T10:00:00.000Z' });
+  });
+
+  it('returns newest purchase tasks with product, supplier and image from the order snapshot', async () => {
+    const empty = { list: jest.fn().mockResolvedValue(createListResponse([])) };
+    const purchase = {
+      list: jest.fn().mockResolvedValue(createListResponse([
+        { docNo: 'P-OLDER', title: '台灯采购', status: 'pending_purchase_manager_approval',
+          supplierName: '甲厂', createdAt: '2026-09-24T10:00:00.000Z', detailHref: '/purchase-orders/101' },
+        { docNo: 'P-NEWER', title: '风扇采购', status: 'pending_purchase_manager_approval',
+          supplierName: '乙厂', createdAt: '2026-09-25T10:00:00.000Z', detailHref: '/purchase-orders/102' },
+      ])),
+      getDetail: jest.fn().mockImplementation(async (id: number) => ({
+        items: [{ productName: id === 102 ? '风扇' : '台灯', imageUrls: [`/uploads/${id}.png`] }],
+      })),
+    };
+    const service = new FormalTodoService(empty as never, empty as never, purchase as never,
+      empty as never, empty as never);
+    const result = await service.listFormalTodos({ role: 'purchase_manager', user: 'Mia' });
+    expect(result.items.map((item) => item.docNo)).toEqual(['P-NEWER', 'P-OLDER']);
+    expect(result.items[0]).toMatchObject({
+      supplierName: '乙厂', productNames: ['风扇'], imageUrls: ['/uploads/102.png'],
+    });
+  });
+
+  it('moves follow-up tasks to the current workflow node and clears finance tasks outside finance review', async () => {
+    const empty = { list: jest.fn().mockResolvedValue(createListResponse([])) };
+    const quote = { list: jest.fn().mockResolvedValue(createListResponse([
+      { docNo: 'Q-FEEDBACK', title: '风扇报价', status: 'pending_customer_feedback',
+        bossConfirmed: true, createdBy: 'Zoe', detailHref: '/quotes/1' },
+    ])) };
+    const sales = { ...empty, listPendingPurchaseAssignments: jest.fn().mockResolvedValue([]),
+      list: jest.fn().mockResolvedValue(createListResponse([
+        { docNo: 'S-REJECTED', title: '台灯销售', status: 'rejected', ownerName: 'Zoe',
+          createdBy: 'Zoe', detailHref: '/sales-orders/2' },
+      ])) };
+    const afterSales = { list: jest.fn().mockResolvedValue(createListResponse([
+      { docNo: 'AS-DRAFT', title: '退货草稿', status: 'pending_submit',
+        financeReviewStatus: 'pending', ownerName: 'Leo', detailHref: '/after-sales/3' },
+      { docNo: 'AS-FINANCE', title: '退货复核', status: 'finance_reviewing',
+        financeReviewStatus: 'pending', ownerName: 'Leo', detailHref: '/after-sales/4' },
+    ])) };
+    const service = new FormalTodoService(quote as never, sales as never, empty as never,
+      empty as never, afterSales as never);
+    const result = await service.listFormalTodos({ role: 'boss', user: 'Mia' });
+    expect(result.items.map((item) => item.docNo)).toEqual(['Q-FEEDBACK', 'S-REJECTED', 'AS-FINANCE']);
+    expect(result.items[0]).toMatchObject({ title: '报价待客户反馈', ownerName: 'Zoe' });
+  });
+
+  it('routes inquiry work to purchase and sample approval to sales while sampling moves to purchase', async () => {
+    const empty = { list: jest.fn().mockResolvedValue(createListResponse([])) };
+    const inquiry = { list: jest.fn().mockResolvedValue(createListResponse([
+      { inquiryNo: 'IQ-WORK', quoteOrderNo: 'Q1', status: 'pending_inquiry',
+        customerName: '星河', createdBy: 'Zoe', detailHref: '/inquiries/1', items: [] },
+    ])) };
+    const sample = { list: jest.fn().mockResolvedValue(createListResponse([
+      { docNo: 'SP-APPROVE', title: '待审批样品', status: 'pending_approval', ownerName: 'Zoe',
+        detailHref: '/samples/2' },
+      { docNo: 'SP-SAMPLING', title: '待打样样品', status: 'pending_sampling', ownerName: 'Zoe',
+        detailHref: '/samples/3' },
+    ])) };
+    const service = new (FormalTodoService as new (...args: unknown[]) => FormalTodoService)(
+      empty, empty, empty, empty, empty, inquiry, sample,
+    );
+    const purchase = await service.listFormalTodos({ role: 'purchase', user: 'Leo' });
+    expect(purchase.items.map((item) => item.docNo)).toEqual(['IQ-WORK', 'SP-SAMPLING']);
+    const sales = await service.listFormalTodos({ role: 'sales_manager', user: 'Mia' });
+    expect(sales.items.map((item) => item.docNo)).toEqual(['SP-APPROVE']);
+  });
+
+  it('assigns after-sales approval to the manager and finance confirmation to the boss', async () => {
+    const empty = { list: jest.fn().mockResolvedValue(createListResponse([])) };
+    const afterSales = { list: jest.fn().mockResolvedValue(createListResponse([
+      { docNo: 'AS-APPROVE', title: '待审批售后', status: 'pending_approval',
+        financeReviewStatus: 'pending', ownerName: 'Leo', detailHref: '/after-sales/1' },
+      { docNo: 'AS-FINANCE', title: '待财务售后', status: 'finance_reviewing',
+        financeReviewStatus: 'pending', ownerName: 'Leo', detailHref: '/after-sales/2' },
+    ])) };
+    const service = new FormalTodoService(empty as never, empty as never, empty as never,
+      empty as never, afterSales as never);
+    expect((await service.listFormalTodos({ role: 'purchase_manager', user: 'Mia' })).items
+      .map((item) => item.docNo)).toEqual(['AS-APPROVE']);
+    expect((await service.listFormalTodos({ role: 'purchase', user: 'Leo' })).items).toEqual([]);
+    expect((await service.listFormalTodos({ role: 'boss', user: 'Admin' })).items
+      .map((item) => item.docNo)).toEqual(['AS-APPROVE', 'AS-FINANCE']);
+  });
+
   it('shows an ETA reminder to the assigned purchaser from three days before delivery until fully shipped', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-09-25T12:00:00.000Z'));
     try {
@@ -126,7 +225,7 @@ describe('FormalTodoService', () => {
             {
               docNo: 'AS-RUNTIME-001',
               title: 'Runtime after-sales',
-              status: 'pending_approval',
+              status: 'finance_reviewing',
               financeReviewStatus: 'pending',
               ownerName: 'Leo',
               detailHref: '/after-sales/55',
@@ -247,7 +346,7 @@ describe('FormalTodoService', () => {
             {
               docNo: 'AS-LEO-001',
               title: 'Leo after-sales',
-              status: 'pending_approval',
+              status: 'finance_reviewing',
               financeReviewStatus: 'pending',
               ownerName: 'Leo',
               detailHref: '/after-sales/1',
@@ -272,9 +371,8 @@ describe('FormalTodoService', () => {
     ).resolves.toMatchObject({
       items: [
         expect.objectContaining({ docNo: 'SH-LEO-001' }),
-        expect.objectContaining({ docNo: 'AS-LEO-001' }),
       ],
-      total: 2,
+      total: 1,
     });
   });
 
@@ -388,7 +486,6 @@ describe('FormalTodoService', () => {
     expect(result.items.map((item) => item.docNo)).toEqual([
       'IQ-RUNTIME-001',
       'SP-APPROVAL-001',
-      'SP-SAMPLING-001',
       'SP-SENT-001',
     ]);
     expect(result.items).toEqual([
@@ -401,11 +498,6 @@ describe('FormalTodoService', () => {
         title: '样品单待审批',
         href: '/app/sales/samples/21',
         priority: 'high',
-      }),
-      expect.objectContaining({
-        title: '样品单待打样',
-        href: '/app/sales/samples/22',
-        priority: 'medium',
       }),
       expect.objectContaining({
         title: '样品待客户确认',

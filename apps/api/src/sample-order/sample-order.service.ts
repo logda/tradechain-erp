@@ -13,7 +13,6 @@ import type {
 import { buildSequentialDocumentCode } from '@erp/shared';
 import {
   type FormalSession,
-  filterVisibleFormalItems,
   isFormalAdminOrBoss,
   matchesFormalUser,
 } from '../auth/formal-session';
@@ -454,6 +453,15 @@ function createSampleOrderListItem(record: SampleOrderDetailRecord): SampleListI
   };
 }
 
+function canReadSampleOrder(session: FormalSession | undefined, item: SampleListItem) {
+  if (!session?.role || isFormalAdminOrBoss(session.role) ||
+      session.role === 'sales_manager' || session.role === 'purchase_manager') {
+    return true;
+  }
+  return matchesFormalUser(session, item) ||
+    (session.role === 'purchase' && ['pending_sampling', 'sampling'].includes(item.status));
+}
+
 function toSampleOrderDocumentPayload(
   record: PrismaBusinessDocumentRecord,
 ): SampleOrderDetailRecord {
@@ -815,11 +823,7 @@ export class SampleOrderService {
         ).map(toSampleOrderDocumentPayload).map(createSampleOrderListItem)
       : this.listRuntimeSampleOrders();
 
-    const filtered = filterVisibleFormalItems(
-      sourceItems,
-      session ?? {},
-      ['admin', 'boss', 'sales_manager', 'purchase_manager'],
-    ).filter((item) => {
+    const filtered = sourceItems.filter((item) => canReadSampleOrder(session, item)).filter((item) => {
       if (
         keyword &&
         ![
@@ -1190,13 +1194,7 @@ export class SampleOrderService {
       if (created && created.bizType === 'sample_order') {
         const detail = toSampleOrderDocumentPayload(created);
         const listItem = createSampleOrderListItem(detail);
-        if (
-          session?.role &&
-          !isFormalAdminOrBoss(session?.role) &&
-          session?.role !== 'sales_manager' &&
-          session?.role !== 'purchase_manager' &&
-          !matchesFormalUser(session ?? {}, listItem)
-        ) {
+        if (!canReadSampleOrder(session, listItem)) {
           throw new NotFoundException('样品单不存在');
         }
 
@@ -1208,13 +1206,7 @@ export class SampleOrderService {
 
     if (detail) {
       const listItem = createSampleOrderListItem(detail);
-      if (
-        session?.role &&
-        !isFormalAdminOrBoss(session?.role) &&
-        session?.role !== 'sales_manager' &&
-        session?.role !== 'purchase_manager' &&
-        !matchesFormalUser(session ?? {}, listItem)
-      ) {
+      if (!canReadSampleOrder(session, listItem)) {
         throw new NotFoundException('样品单不存在');
       }
 
@@ -1224,13 +1216,7 @@ export class SampleOrderService {
     const fallback = this.buildSyntheticSampleOrder(id, 'pending_approval');
     const fallbackListItem = createSampleOrderListItem(fallback);
 
-    if (
-      session?.role &&
-      !isFormalAdminOrBoss(session?.role) &&
-      session?.role !== 'sales_manager' &&
-      session?.role !== 'purchase_manager' &&
-      !matchesFormalUser(session ?? {}, fallbackListItem)
-    ) {
+    if (!canReadSampleOrder(session, fallbackListItem)) {
       throw new NotFoundException('样品单不存在');
     }
 

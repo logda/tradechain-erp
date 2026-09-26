@@ -187,10 +187,9 @@ describe('AppTodosPage', () => {
     );
 
     expect(screen.getByText('角色 Role: 采购')).toBeInTheDocument();
-    expect(screen.getByText('P202607080002')).toBeInTheDocument();
-    expect(screen.getByText('SH202607080002')).toBeInTheDocument();
-    expect(screen.getByText('AS202607080001')).toBeInTheDocument();
+    expect(screen.getByText('待办暂时无法加载，请刷新页面重试。')).toBeInTheDocument();
+    expect(screen.queryByText('P202607080002')).not.toBeInTheDocument();
     expect(screen.queryByText('Q202607080002')).not.toBeInTheDocument();
-    expect(screen.getByText('消息待办 Todo: 03')).toBeInTheDocument();
+    expect(screen.getByText('消息待办 Todo: 00')).toBeInTheDocument();
   });
 });

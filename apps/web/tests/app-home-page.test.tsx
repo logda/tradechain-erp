@@ -35,6 +35,10 @@ describe('AppHomePage', () => {
             href: '/app/purchase-orders/99',
             priority: 'high',
             description: 'Runtime API generated purchase todo',
+            productNames: ['智能风扇'],
+            supplierName: '乙厂',
+            imageUrls: ['/uploads/fan.png'],
+            createdAt: '2026-09-25T10:00:00.000Z',
           },
           {
             id: 'after-sales-AS-RUNTIME-001',
@@ -77,10 +81,12 @@ describe('AppHomePage', () => {
     expect(screen.getByText('采购运营待办')).toBeInTheDocument();
     expect(screen.getByText('已自动收口')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '登录页' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '销售工作台' })).toHaveAttribute(
-      'href',
-      '/app/sales',
-    );
+    const homeTodos = screen.getByTestId('home-todo-groups');
+    expect(within(homeTodos).getAllByRole('heading', { level: 3 })[0]).toHaveTextContent('采购与运营待办');
+    expect(within(homeTodos).getByText('产品：智能风扇')).toBeInTheDocument();
+    expect(within(homeTodos).getByText('供应商：乙厂')).toBeInTheDocument();
+    expect(within(homeTodos).getByRole('img', { name: '智能风扇' })).toHaveAttribute('src', '/uploads/fan.png');
+    expect(screen.queryByRole('link', { name: '销售工作台' })).not.toBeInTheDocument();
     expect(
       screen.getAllByRole('link', { name: '主数据中心' }).some((link) =>
         link.getAttribute('href') === '/app/master-data',
@@ -114,45 +120,10 @@ describe('AppHomePage', () => {
     expect(
       within(sidebarNav).queryByRole('link', { name: '正式发货批次' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '老板看板' })).toHaveAttribute(
-      'href',
-      '/app/dashboard/boss',
-    );
-    expect(
-      screen.getAllByRole('link', { name: '财务中心' }).some((link) =>
-        link.getAttribute('href') === '/app/finance',
-      ),
-    ).toBe(true);
-    expect(
-      screen.getAllByRole('link', { name: '报表中心' }).some((link) =>
-        link.getAttribute('href') === '/app/reports',
-      ),
-    ).toBe(true);
+    expect(within(sidebarNav).getByRole('link', { name: '经营驾驶舱' })).toHaveAttribute('href', '/app/dashboard/boss');
     expect(screen.queryByRole('link', { name: '日志中心' })).not.toBeInTheDocument();
-    expect(
-      screen.getAllByRole('link', { name: '正式待办中心' }).some((link) =>
-        link.getAttribute('href') === '/app/todos',
-      ),
-    ).toBe(true);
+    expect(within(sidebarNav).getByRole('link', { name: '正式待办中心' })).toHaveAttribute('href', '/app/todos');
     expect(screen.queryByRole('link', { name: '全链路验收中心' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '采购工作台' })).toHaveAttribute(
-      'href',
-      '/app/purchase',
-    );
-    expect(screen.getByRole('link', { name: '运营工作台' })).toHaveAttribute(
-      'href',
-      '/app/operations',
-    );
-    expect(
-      screen.getAllByRole('link', { name: '正式发货批次' }).some((link) =>
-        link.getAttribute('href') === '/app/shipment-batches',
-      ),
-    ).toBe(true);
-    expect(
-      screen.getAllByRole('link', { name: '正式售后单' }).some((link) =>
-        link.getAttribute('href') === '/app/after-sales',
-      ),
-    ).toBe(true);
     expect(
       screen.queryByRole('link', { name: '返回演示页' }),
     ).not.toBeInTheDocument();
@@ -190,10 +161,7 @@ describe('AppHomePage', () => {
         }),
       }),
     );
-    expect(screen.getByRole('link', { name: '销售工作台' })).toHaveAttribute(
-      'href',
-      '/app/sales',
-    );
+    expect(within(screen.getByRole('navigation', { name: 'formal-app-nav' })).getByRole('link', { name: '销售中心' })).toHaveAttribute('href', '/app/sales');
     expect(
       screen.queryByRole('link', { name: '用户管理' }),
     ).not.toBeInTheDocument();
