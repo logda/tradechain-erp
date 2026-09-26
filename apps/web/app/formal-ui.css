@@ -463,6 +463,72 @@ textarea.erp-control {
   gap: 18px;
 }
 
+.erp-workspace-tabs {
+  width: min(100%, 1920px);
+  margin: -4px auto 16px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--erp-border);
+}
+
+.erp-workspace-tabs__list {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  gap: 6px;
+}
+
+.erp-workspace-tabs__item {
+  display: flex;
+  align-items: center;
+  max-width: 240px;
+  border: 1px solid var(--erp-border);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: var(--erp-surface-muted);
+  color: #475569;
+}
+
+.erp-workspace-tabs__item.is-active {
+  background: #fff;
+  color: var(--erp-text);
+  box-shadow: inset 0 2px 0 #2563eb;
+}
+
+.erp-workspace-tabs__switch,
+.erp-workspace-tabs__close {
+  color: inherit;
+  text-decoration: none;
+}
+
+.erp-workspace-tabs__switch {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  padding: 11px 8px 11px 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.erp-workspace-tabs__close {
+  flex: none;
+  padding: 9px 12px 9px 5px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.erp-workspace-tabs__switch:hover,
+.erp-workspace-tabs__close:hover {
+  color: #1d4ed8;
+}
+
+.erp-workspace-tabs__switch:focus-visible,
+.erp-workspace-tabs__close:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
 .erp-filter-panel {
   display: grid;
   gap: 16px;

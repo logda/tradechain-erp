@@ -9,6 +9,7 @@ import {
   getDemoRoleLabel,
 } from '../_lib/demo-session';
 import { getFormalTodoCount } from '../_lib/formal-todos';
+import { WorkspaceTabs } from './workspace-tabs';
 
 type NavEntryVisible = FormalModule | 'all' | 'salesOrPurchase';
 
@@ -144,6 +145,7 @@ export function AppShell({
             </div>
           </header>
 
+          <WorkspaceTabs title={title} sessionKey={`${session.username ?? session.user}:${session.role}`} />
           <div className="erp-shell__body">{children}</div>
         </section>
       </div>

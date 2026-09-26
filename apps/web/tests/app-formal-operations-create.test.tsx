@@ -31,6 +31,7 @@ const { redirectMock } = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   redirect: redirectMock,
+  usePathname: () => null,
 }));
 
 function mockCounterpartyFetch() {
