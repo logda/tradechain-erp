@@ -9,6 +9,8 @@ export type DemoRole =
 export type DemoSession = {
   role: DemoRole;
   user: string;
+  userId?: number;
+  legacyUserIds?: number[];
   username?: string;
   accessScopes?: {
     modules: string[];
@@ -134,11 +136,14 @@ export function resolveDemoSession(searchParams?: SearchParams): DemoSession {
   const role = normalizeRole(readParam(searchParams?.role));
   const user = readParam(searchParams?.user) ?? defaultUsers[role];
   const username = readParam(searchParams?.username);
+  const parsedUserId = Number(readParam(searchParams?.userId));
+  const legacyUserIds = readParam(searchParams?.legacyUserIds)?.split(',').map(Number).filter(id => Number.isSafeInteger(id) && id > 0);
+  const identity = Number.isSafeInteger(parsedUserId) && parsedUserId > 0 ? { userId: parsedUserId, ...(legacyUserIds ? { legacyUserIds } : {}) } : {};
   const accessScopes = parseAccessScopes(readParam(searchParams?.access));
 
   return accessScopes
-    ? { role, user, ...(username ? { username } : {}), accessScopes }
-    : { role, user, ...(username ? { username } : {}) };
+    ? { role, user, ...identity, ...(username ? { username } : {}), accessScopes }
+    : { role, user, ...identity, ...(username ? { username } : {}) };
 }
 
 export function getDemoRoleLabel(role: DemoRole) {
@@ -226,10 +231,11 @@ export function canViewFormalAuditCenter(session: DemoSession) {
     session.accessScopes?.actions?.includes('audit.view') === true;
 }
 
-export function filterQuoteRows<T extends { createdBy: string }>(
+export function filterQuoteRows<T extends { createdBy: string; ownerId?: number; createdById?: number; salesUserId?: number }>(
   items: T[],
   session: DemoSession,
 ) {
+  if (session.userId !== undefined) return items;
   if (
     session.role === 'admin' ||
     session.role === 'boss' ||
@@ -239,15 +245,18 @@ export function filterQuoteRows<T extends { createdBy: string }>(
   }
 
   if (session.role === 'sales') {
-    return items.filter((item) => item.createdBy === session.user);
+    return items.filter((item) => session.userId !== undefined
+      ? [session.userId, ...(session.legacyUserIds ?? [])].some(id => item.ownerId === id || item.createdById === id || item.salesUserId === id)
+      : item.createdBy === session.user);
   }
 
   return [];
 }
 
 export function filterSalesOrderRows<
-  T extends { ownerName?: string; createdBy: string },
+  T extends { ownerName?: string; createdBy: string; ownerId?: number; createdById?: number; salesUserId?: number },
 >(items: T[], session: DemoSession) {
+  if (session.userId !== undefined) return items;
   if (
     session.role === 'admin' ||
     session.role === 'boss' ||
@@ -258,7 +267,9 @@ export function filterSalesOrderRows<
 
   if (session.role === 'sales') {
     return items.filter(
-      (item) => item.ownerName === session.user || item.createdBy === session.user,
+      (item) => session.userId !== undefined
+        ? [session.userId, ...(session.legacyUserIds ?? [])].some(id => item.ownerId === id || item.createdById === id)
+        : item.ownerName === session.user || item.createdBy === session.user,
     );
   }
 
@@ -266,8 +277,9 @@ export function filterSalesOrderRows<
 }
 
 export function filterPurchaseOrderRows<
-  T extends { ownerName?: string; createdBy: string },
+  T extends { ownerName?: string; createdBy: string; ownerId?: number; createdById?: number; salesUserId?: number },
 >(items: T[], session: DemoSession) {
+  if (session.userId !== undefined) return items;
   if (
     session.role === 'admin' ||
     session.role === 'boss' ||
@@ -278,7 +290,9 @@ export function filterPurchaseOrderRows<
 
   if (session.role === 'purchase') {
     return items.filter(
-      (item) => item.ownerName === session.user || item.createdBy === session.user,
+      (item) => session.userId !== undefined
+        ? [session.userId, ...(session.legacyUserIds ?? [])].some(id => item.ownerId === id || item.createdById === id)
+        : item.ownerName === session.user || item.createdBy === session.user,
     );
   }
 
@@ -286,8 +300,9 @@ export function filterPurchaseOrderRows<
 }
 
 export function filterOperationsRows<
-  T extends { ownerName: string; createdBy?: string },
+  T extends { ownerName: string; createdBy?: string; ownerId?: number; createdById?: number },
 >(items: T[], session: DemoSession) {
+  if (session.userId !== undefined) return items;
   if (
     session.role === 'admin' ||
     session.role === 'boss' ||
@@ -300,7 +315,9 @@ export function filterOperationsRows<
 
   if (session.role === 'purchase') {
     return items.filter(
-      (item) => item.ownerName === session.user || item.createdBy === session.user,
+      (item) => session.userId !== undefined
+        ? [session.userId, ...(session.legacyUserIds ?? [])].some(id => item.ownerId === id || item.createdById === id)
+        : item.ownerName === session.user || item.createdBy === session.user,
     );
   }
 

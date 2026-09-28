@@ -1,3 +1,4 @@
+import { resolveFormalUserName, resolveRuntimeFormalUserName } from '../auth/formal-user-name';
 import {
   BadRequestException,
   Inject,
@@ -14,7 +15,6 @@ import {
   type FormalSession,
   isFormalAdminOrBoss,
 } from '../auth/formal-session';
-import { purchaseOrderListData } from './purchase-order-list.data';
 import { resolvePurchaseOrderStore } from './purchase-order.store';
 import { PrismaService } from '../storage/prisma.service';
 import { resolveStorageMode } from '../storage/storage-mode';
@@ -58,6 +58,7 @@ export type CreateFromSalesOrderPayload = {
   shipTo?: string;
   purchaseOrderAttachments?: PurchaseOrderAttachmentInfo[];
   ownerName?: string;
+  ownerId?: number;
   session?: FormalSession;
   allowPendingAssignment?: boolean;
 };
@@ -106,6 +107,7 @@ export type CreatedPurchaseOrderRecord = {
   supplierId: number;
   supplierName: string;
   ownerName: string;
+  ownerId?: number;
   lockedPurchaseOwner?: boolean;
   sourceInquiryId?: number;
   currentVersionNo: number;
@@ -123,6 +125,7 @@ export type CreatedPurchaseOrderRecord = {
   purchaseOrderAttachments?: PurchaseOrderAttachmentInfo[];
   currentBatchCount: number;
   cancelReason?: string;
+  rejectionReason?: string;
   stockInStatus?: string;
   stockInDocNo?: string | null;
   versionHistory: PurchaseOrderVersionHistoryEntry[];
@@ -130,6 +133,7 @@ export type CreatedPurchaseOrderRecord = {
 };
 
 export type PurchaseOrderTransitionPayload = {
+  operatorId?: number;
   purchaseOrderId: number;
   currentStatus: string;
   session?: FormalSession;
@@ -280,15 +284,7 @@ function resolveProductMeta(productId: number) {
 }
 
 function resolveUserName(userId: number) {
-  if (userId === 2001) {
-    return 'Zoe';
-  }
-
-  if (userId === 2002) {
-    return 'Leo';
-  }
-
-  return 'Mia';
+  return resolveRuntimeFormalUserName(userId);
 }
 
 function resolvePurchaseOwnerName(supplierId: number) {
@@ -478,9 +474,9 @@ function refreshGeneratedPurchaseTitle(
   return next;
 }
 
-function toSyntheticPurchaseUser(name: string): AssignablePurchaseUserItem {
+function toSyntheticPurchaseUser(name: string, id = 0): AssignablePurchaseUserItem {
   return {
-    id: 0,
+    id,
     username: name.toLowerCase(),
     realName: name,
     roleCode: 'purchase_manager',
@@ -503,6 +499,8 @@ function toCreatedPurchaseOrderListItem(
     secondaryStatus: item.status,
     supplierName: item.supplierName,
     ownerName: item.ownerName,
+    ownerId: item.ownerId,
+    createdById: item.createdBy,
     factoryEstimatedDeliveryDate: item.factoryEstimatedDeliveryDate,
     createdAt: item.createdAt,
     detailHref: `/purchase-orders/${item.id}`,
@@ -602,6 +600,7 @@ function toPurchaseDocumentPayload(
     ...record.payload,
     id: Number(record.payload.id ?? record.id),
     purchaseNo: record.docNo,
+    ownerId: record.payload.ownerId ?? (record.ownerUserId == null ? undefined : Number(record.ownerUserId)),
     status: record.status,
     currentVersionNo: record.payload.currentVersionNo ?? 1,
     itemCount: record.payload.itemCount ?? record.payload.items?.length ?? 0,
@@ -636,18 +635,21 @@ function snapshotAuditData<T>(value: T): T {
 
 function canSeePurchaseOrder(
   session: FormalSession | undefined,
-  item: { ownerName?: string | null },
+  item: { ownerName?: string | null; ownerId?: number; createdById?: number },
 ) {
   if (!session?.role && !session?.user) {
     return true;
   }
 
   if (
-    isFormalAdminOrBoss(session?.role) ||
-    session?.role === 'purchase_manager'
+    session?.dataScope === 'all' || session?.dataScope === 'purchase_team' ||
+    (!session?.dataScope?.startsWith('own_') && (isFormalAdminOrBoss(session?.role) ||
+    session?.role === 'purchase_manager'))
   ) {
     return true;
   }
+
+  if (session?.userId !== undefined) return [session.userId, ...(session.legacyUserIds ?? [])].includes(item.ownerId ?? 0);
 
   return (
     typeof item.ownerName === 'string' &&
@@ -767,10 +769,10 @@ export class PurchaseOrderService {
     if (session.role === 'purchase') {
       const matchedSelf = activeDirectory.find(
         (item) =>
-          item.realName === selfName ||
-          item.username.toLowerCase() === selfName.toLowerCase(),
+          session?.userId !== undefined ? item.id === session.userId :
+          item.realName === selfName || item.username.toLowerCase() === selfName.toLowerCase(),
       );
-      return matchedSelf ? [matchedSelf] : selfName ? [toSyntheticPurchaseUser(selfName)] : [];
+      return matchedSelf ? [matchedSelf] : session.userId === undefined && selfName ? [toSyntheticPurchaseUser(selfName, session.userId)] : [];
     }
 
     if (session.role === 'purchase_manager') {
@@ -783,7 +785,7 @@ export class PurchaseOrderService {
             item.username.toLowerCase() === selfName.toLowerCase(),
         )
       ) {
-        items.unshift(toSyntheticPurchaseUser(selfName));
+        items.unshift(toSyntheticPurchaseUser(selfName, session.userId));
       }
       return items;
     }
@@ -798,7 +800,7 @@ export class PurchaseOrderService {
             item.username.toLowerCase() === selfName.toLowerCase(),
         )
       ) {
-        items.unshift(toSyntheticPurchaseUser(selfName));
+        items.unshift(toSyntheticPurchaseUser(selfName, session.userId));
       }
       return items;
     }
@@ -808,6 +810,7 @@ export class PurchaseOrderService {
 
   private async resolveAllowedPurchaseOwnerName(payload: {
     requestedOwnerName?: string;
+    requestedOwnerId?: number;
     fallbackOwnerName?: string;
     session?: FormalSession;
   }) {
@@ -819,17 +822,18 @@ export class PurchaseOrderService {
     }
 
     const allowedOwners = await this.listAssignablePurchaseOwners(payload.session);
-    const selectedOwnerName = requestedOwnerName || fallbackOwnerName || allowedOwners[0]?.realName || '';
+    const selectedOwnerName = payload.requestedOwnerId !== undefined
+      ? allowedOwners.find(owner => owner.id === payload.requestedOwnerId)?.realName ?? ''
+      : requestedOwnerName || fallbackOwnerName || allowedOwners[0]?.realName || '';
 
     if (!selectedOwnerName) {
       throw new BadRequestException('请选择采购负责人');
     }
 
-    const matchedOwner = allowedOwners.find(
-      (item) =>
-        item.realName === selectedOwnerName ||
-        item.username.toLowerCase() === selectedOwnerName.toLowerCase(),
-    );
+    const matchingOwners = allowedOwners.filter(item => payload.requestedOwnerId !== undefined
+      ? item.id === payload.requestedOwnerId
+      : item.realName === selectedOwnerName || item.username.toLowerCase() === selectedOwnerName.toLowerCase());
+    const matchedOwner = matchingOwners.length === 1 ? matchingOwners[0] : undefined;
 
     if (!matchedOwner) {
       throw new BadRequestException('当前角色不能选择该采购负责人');
@@ -861,7 +865,8 @@ export class PurchaseOrderService {
 
   async assignExistingDirectPurchaseOwner(payload: {
     purchaseOrderId: number;
-    ownerName: string;
+    ownerName?: string;
+    ownerId?: number;
     currentStatus?: string;
     session?: FormalSession;
   }) {
@@ -878,13 +883,15 @@ export class PurchaseOrderService {
 
   private async assignExistingDirectPurchaseOwnerOnce(payload: {
     purchaseOrderId: number;
-    ownerName: string;
+    ownerName?: string;
+    ownerId?: number;
     currentStatus?: string;
     session?: FormalSession;
   }) {
     const owners = await this.listAssignablePurchaseOwners(payload.session);
     const requestedOwnerName = normalizeOwnerName(payload.ownerName);
-    const owner = owners.find((item) => item.id > 0 && item.realName === requestedOwnerName);
+    const matchingOwners = owners.filter(item => item.id > 0 && (payload.ownerId !== undefined ? item.id === payload.ownerId : item.realName === requestedOwnerName));
+    const owner = matchingOwners.length === 1 ? matchingOwners[0] : undefined;
     if (!owner) throw new BadRequestException('请选择有效的采购负责人');
 
     if (this.shouldUsePrisma()) {
@@ -901,7 +908,7 @@ export class PurchaseOrderService {
       if (!(await this.needsExistingDirectOwnerAssignment(beforeData))) {
         throw new BadRequestException('采购负责人已分配或当前采购单不需分配');
       }
-      const nextPayload = { ...beforeData, ownerName: owner.realName, lockedPurchaseOwner: true };
+      const nextPayload = { ...beforeData, ownerName: owner.realName, ownerId: owner.id, lockedPurchaseOwner: true };
       await this.prismaDb!.businessDocument.update({
         where: { id: existing.id },
         data: { ownerUserId: BigInt(owner.id), payload: nextPayload },
@@ -909,11 +916,11 @@ export class PurchaseOrderService {
       await this.prismaDb!.operationLog.create({
         data: {
           bizType: 'purchase_order', bizId: existing.id,
-          operationType: 'assign_purchase_owner', operatorId: existing.createdBy ?? 0n,
+          operationType: 'assign_purchase_owner', operatorId: BigInt(payload.session?.userId ?? Number(existing.createdBy ?? 0n)),
           beforeData, afterData: nextPayload,
         },
       });
-      return { ownerName: owner.realName, lockedPurchaseOwner: true };
+      return { ownerName: owner.realName, ownerId: owner.id, lockedPurchaseOwner: true };
     }
 
     const existing = this.store.getPurchaseOrder(payload.purchaseOrderId);
@@ -926,14 +933,15 @@ export class PurchaseOrderService {
     }
     const beforeData = snapshotAuditData(existing);
     existing.ownerName = owner.realName;
+    existing.ownerId = owner.id;
     existing.lockedPurchaseOwner = true;
     this.store.upsertPurchaseOrder(existing);
     this.store.recordAuditLog({
       bizType: 'purchase_order', bizId: existing.id,
-      operationType: 'assign_purchase_owner', operatorId: existing.createdBy,
+      operationType: 'assign_purchase_owner', operatorId: payload.session?.userId ?? existing.createdBy,
       beforeData, afterData: existing,
     });
-    return { ownerName: owner.realName, lockedPurchaseOwner: true };
+    return { ownerName: owner.realName, ownerId: owner.id, lockedPurchaseOwner: true };
   }
 
   private async ensureSubmittedPurchaseProducts(record: CreatedPurchaseOrderRecord) {
@@ -1097,17 +1105,7 @@ export class PurchaseOrderService {
           })) as PrismaBusinessDocumentRecord[]
         ).map(toPurchaseDocumentPayload)
       : this.store.listPurchaseOrders();
-    const previewRecords = this.shouldUsePrisma()
-      ? []
-      : purchaseOrderListData.map((item) => ({
-          id: Number(item.detailHref.split('/').filter(Boolean).at(-1) ?? 0),
-          purchaseNo: item.docNo,
-          status: item.status,
-          sourceSalesOrderId: 0,
-          salesOrderNo: item.salesOrderNo,
-        }));
-
-    return [...runtimeRecords, ...previewRecords]
+    return runtimeRecords
       .filter((record) => {
         const matchesSource =
           record.sourceSalesOrderId === payload.salesOrderId ||
@@ -1151,7 +1149,6 @@ export class PurchaseOrderService {
         ).map(toPurchaseDocumentPayload).map(toCreatedPurchaseOrderListItem)
       : [
           ...this.store.listPurchaseOrders().map(toCreatedPurchaseOrderListItem),
-          ...purchaseOrderListData,
         ];
 
     const filtered = allItems.filter((item) => {
@@ -1302,19 +1299,23 @@ export class PurchaseOrderService {
       throw new NotFoundException('来源销售单不存在');
     }
     if (sourceSalesOrder) {
+      if (sourceSalesOrder.purchaseOwnerId !== undefined) {
+        if (payload.ownerId !== undefined && payload.ownerId !== sourceSalesOrder.purchaseOwnerId) throw new BadRequestException('采购负责人必须与来源销售单一致');
+        payload = { ...payload, ownerId: sourceSalesOrder.purchaseOwnerId };
+      }
       if (sourceSalesOrder.status !== 'purchasing' &&
           !(payload.allowPendingAssignment && sourceSalesOrder.status === 'pending_purchase_assignment')) {
         throw new BadRequestException('销售单尚未进入采购转换节点');
       }
-      if (sourceSalesOrder.purchaseOwnerName &&
+      if (!sourceSalesOrder.purchaseOwnerId && sourceSalesOrder.purchaseOwnerName &&
           sourceSalesOrder.purchaseOwnerName !== payload.ownerName) {
         throw new BadRequestException('采购负责人必须与来源销售单一致');
       }
-      if (sourceSalesOrder.purchaseOwnerName && payload.session?.user &&
-          sourceSalesOrder.purchaseOwnerName !== payload.session.user) {
+      if ((sourceSalesOrder.purchaseOwnerId && payload.session?.userId !== undefined && sourceSalesOrder.purchaseOwnerId !== payload.session.userId) ||
+          (!sourceSalesOrder.purchaseOwnerId && sourceSalesOrder.purchaseOwnerName && payload.session?.user && sourceSalesOrder.purchaseOwnerName !== payload.session.user)) {
         throw new BadRequestException('仅指定采购负责人可将销售单转为采购单');
       }
-      if (sourceSalesOrder.status === 'pending_purchase_assignment' && !payload.ownerName) {
+      if (sourceSalesOrder.status === 'pending_purchase_assignment' && !payload.ownerName && !payload.ownerId) {
         throw new BadRequestException('请先指定采购负责人');
       }
     }
@@ -1335,7 +1336,7 @@ export class PurchaseOrderService {
       (record) => record.sourceSalesOrderId === payload.salesOrderId && record.status !== 'void',
     );
     if (alreadyCreated.length > 0) {
-      if (payload.ownerName && alreadyCreated.some((record) => record.ownerName !== payload.ownerName)) {
+      if (alreadyCreated.some(record => payload.ownerId !== undefined ? record.ownerId !== payload.ownerId : Boolean(payload.ownerName && record.ownerName !== payload.ownerName))) {
         throw new BadRequestException('采购单已由其他负责人创建，不能重复分配');
       }
       const createdGroups = new Set(alreadyCreated.map((record) => {
@@ -1383,12 +1384,13 @@ export class PurchaseOrderService {
         });
         const ownerName = await this.resolveAllowedPurchaseOwnerName({
           requestedOwnerName: payload.ownerName,
+          requestedOwnerId: payload.ownerId,
           fallbackOwnerName:
             items[0]?.purchaseOwnerName || resolvePurchaseOwnerName(supplierId),
           session: payload.session,
         });
         const ownerUserId = (await this.listAssignablePurchaseOwners()).find(
-          (owner) => owner.realName === ownerName && owner.id > 0,
+          (owner) => (payload.ownerId !== undefined ? owner.id === payload.ownerId : owner.realName === ownerName) && owner.id > 0,
         )?.id;
         const basePayload: CreatedPurchaseOrderRecord = {
           id: 0,
@@ -1397,6 +1399,7 @@ export class PurchaseOrderService {
           supplierId,
           supplierName,
           ownerName,
+          ownerId: ownerUserId,
           lockedPurchaseOwner: Boolean(sourceSalesOrder),
           sourceInquiryId: sourceSalesOrder?.sourceInquiryId,
           currentVersionNo: 1,
@@ -1481,10 +1484,12 @@ export class PurchaseOrderService {
       });
       const ownerName = await this.resolveAllowedPurchaseOwnerName({
         requestedOwnerName: payload.ownerName,
+        requestedOwnerId: payload.ownerId,
         fallbackOwnerName:
           items[0]?.purchaseOwnerName || resolvePurchaseOwnerName(supplierId),
         session: payload.session,
       });
+      const ownerUserId = (await this.listAssignablePurchaseOwners()).find(owner => payload.ownerId !== undefined ? owner.id === payload.ownerId : owner.realName === ownerName)?.id;
       const id = this.store.nextPurchaseOrderId();
       const createdRecord: CreatedPurchaseOrderRecord = {
           id,
@@ -1493,6 +1498,7 @@ export class PurchaseOrderService {
           supplierId,
           supplierName,
           ownerName,
+          ownerId: ownerUserId,
           lockedPurchaseOwner: Boolean(sourceSalesOrder),
           sourceInquiryId: sourceSalesOrder?.sourceInquiryId,
           currentVersionNo: 1,
@@ -1545,10 +1551,10 @@ export class PurchaseOrderService {
     return { purchaseOrders };
   }
 
-  async listAuditLogs() {
+  async listAuditLogs(bizId?: number) {
     if (this.shouldUsePrisma()) {
       const logs = (await this.prismaDb!.operationLog.findMany({
-        where: { bizType: 'purchase_order' },
+        where: { bizType: 'purchase_order', ...(bizId === undefined ? {} : { bizId: BigInt(bizId) }) },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       })) as PrismaOperationLogRecord[];
 
@@ -1558,7 +1564,9 @@ export class PurchaseOrderService {
     }
 
     return {
-      items: this.store.listAuditLogs(),
+      items: this.store.listAuditLogs().filter((item) =>
+        item.bizType === 'purchase_order' && (bizId === undefined || item.bizId === bizId),
+      ),
     };
   }
 
@@ -1681,7 +1689,7 @@ export class PurchaseOrderService {
     session?: FormalSession,
   ) {
     if (session?.user &&
-        record.ownerName !== session.user?.trim()) {
+        (session.userId !== undefined ? ![session.userId, ...(session.legacyUserIds ?? [])].includes(record.ownerId ?? 0) : record.ownerName !== session.user?.trim())) {
       throw new BadRequestException('仅指定采购负责人可处理此采购单');
     }
   }
@@ -1741,7 +1749,7 @@ export class PurchaseOrderService {
       await this.prismaDb!.operationLog.create({
         data: {
           bizType: 'purchase_order', bizId: existing.id,
-          operationType: 'update_factory_eta', operatorId: existing.createdBy ?? 0n,
+          operationType: 'update_factory_eta', operatorId: BigInt(payload.session?.userId ?? Number(existing.createdBy ?? 0n)),
           beforeData: record, afterData: nextRecord,
         },
       });
@@ -1749,7 +1757,7 @@ export class PurchaseOrderService {
       this.store.upsertPurchaseOrder(nextRecord);
       this.store.recordAuditLog({
         bizType: 'purchase_order', bizId: record.id,
-        operationType: 'update_factory_eta', operatorId: record.createdBy,
+        operationType: 'update_factory_eta', operatorId: payload.session?.userId ?? record.createdBy,
         beforeData: record, afterData: nextRecord,
       });
     }
@@ -1796,6 +1804,7 @@ export class PurchaseOrderService {
         );
         await this.updatePurchaseOrderStatus({
           purchaseOrderId: payload.purchaseOrderId,
+          operatorId: payload.operatorId ?? payload.session?.userId,
           status: 'pending_purchase_manager_approval',
           operationType: 'submit_purchase_order',
           mutate: () => ({
@@ -1807,6 +1816,7 @@ export class PurchaseOrderService {
       } else {
         await this.updatePurchaseOrderStatus({
           purchaseOrderId: payload.purchaseOrderId,
+          operatorId: payload.operatorId ?? payload.session?.userId,
           status: 'pending_purchase_manager_approval',
           operationType: 'submit_purchase_order',
         });
@@ -1849,7 +1859,7 @@ export class PurchaseOrderService {
         bizType: 'purchase_order',
         bizId: created.id,
         operationType: 'submit_purchase_order',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? payload.session?.userId ?? created.createdBy,
         beforeData,
         afterData: submittedPayload,
       });
@@ -1893,11 +1903,13 @@ export class PurchaseOrderService {
         );
       }
 
-      const ownerName = await this.resolveAllowedPurchaseOwnerName({
-        requestedOwnerName: payload.ownerName,
-        fallbackOwnerName: beforeData.ownerName,
-        session: payload.session,
-      });
+      const ownerName = !payload.ownerName || payload.ownerName.trim() === beforeData.ownerName
+        ? beforeData.ownerName
+        : await this.resolveAllowedPurchaseOwnerName({
+            requestedOwnerName: payload.ownerName,
+            fallbackOwnerName: beforeData.ownerName,
+            session: payload.session,
+          });
       if (ownerName !== beforeData.ownerName) {
         throw new BadRequestException('采购负责人不可通过保存草稿修改');
       }
@@ -1921,9 +1933,7 @@ export class PurchaseOrderService {
         where: { id: existing.id },
         data: {
           status: beforeData.status,
-          ownerUserId: BigInt((await this.listAssignablePurchaseOwners()).find(
-            (owner) => owner.realName === ownerName && owner.id > 0,
-          )?.id ?? Number(existing.ownerUserId ?? existing.createdBy ?? 0n)),
+          ownerUserId: existing.ownerUserId,
           counterpartyId: nextPayload.supplierId > 0 ? BigInt(nextPayload.supplierId) : null,
           payload: nextPayload,
         },
@@ -1934,7 +1944,7 @@ export class PurchaseOrderService {
           bizType: 'purchase_order',
           bizId: updated.id,
           operationType: 'save_purchase_order_draft',
-          operatorId: existing.createdBy ?? 0n,
+          operatorId: BigInt(payload.operatorId ?? payload.session?.userId ?? Number(existing.createdBy ?? 0n)),
           beforeData,
           afterData: nextPayload,
         },
@@ -1964,11 +1974,13 @@ export class PurchaseOrderService {
       }
 
       const beforeData = snapshotAuditData(created);
-      const ownerName = await this.resolveAllowedPurchaseOwnerName({
-        requestedOwnerName: payload.ownerName,
-        fallbackOwnerName: created.ownerName,
-        session: payload.session,
-      });
+      const ownerName = !payload.ownerName || payload.ownerName.trim() === created.ownerName
+        ? created.ownerName
+        : await this.resolveAllowedPurchaseOwnerName({
+            requestedOwnerName: payload.ownerName,
+            fallbackOwnerName: created.ownerName,
+            session: payload.session,
+          });
       if (ownerName !== created.ownerName) {
         throw new BadRequestException('采购负责人不可通过保存草稿修改');
       }
@@ -2000,7 +2012,7 @@ export class PurchaseOrderService {
         bizType: 'purchase_order',
         bizId: created.id,
         operationType: 'save_purchase_order_draft',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? payload.session?.userId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
@@ -2054,6 +2066,7 @@ export class PurchaseOrderService {
         existing?.bizType === 'purchase_order'
           ? await this.updatePurchaseOrderStatus({
               purchaseOrderId: payload.purchaseOrderId,
+          operatorId: payload.operatorId ?? payload.session?.userId,
               status: 'purchasing',
               operationType: 'approve_purchase_order',
               mutate: () => ({
@@ -2063,6 +2076,7 @@ export class PurchaseOrderService {
             })
           : await this.updatePurchaseOrderStatus({
               purchaseOrderId: payload.purchaseOrderId,
+          operatorId: payload.operatorId ?? payload.session?.userId,
               status: 'purchasing',
               operationType: 'approve_purchase_order',
             });
@@ -2070,7 +2084,7 @@ export class PurchaseOrderService {
         await this.syncSourceSalesOrderPurchaseStatus({
           salesOrderId: updated.sourceSalesOrderId,
           purchaseAggregateStatus: 'approved',
-          operatorId: updated.createdBy,
+          operatorId: payload.operatorId ?? payload.session?.userId ?? updated.createdBy,
         });
       }
 
@@ -2098,14 +2112,14 @@ export class PurchaseOrderService {
         bizType: 'purchase_order',
         bizId: created.id,
         operationType: 'approve_purchase_order',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? payload.session?.userId ?? created.createdBy,
         beforeData,
         afterData: activatedPayload,
       });
       await this.syncSourceSalesOrderPurchaseStatus({
         salesOrderId: created.sourceSalesOrderId,
         purchaseAggregateStatus: 'approved',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? payload.session?.userId ?? created.createdBy,
       });
     }
 
@@ -2115,19 +2129,29 @@ export class PurchaseOrderService {
     };
   }
 
-  async reject(payload: PurchaseOrderTransitionPayload) {
+  async reject(payload: PurchaseOrderTransitionPayload & { rejectionReason: string }) {
     if (payload.currentStatus !== 'pending_purchase_manager_approval') {
       throw new BadRequestException(
         'Only pending purchase manager approval orders can be rejected',
       );
     }
 
+    const rejectionReason = typeof payload.rejectionReason === 'string' ? payload.rejectionReason.trim() : '';
+    if (!rejectionReason) {
+      throw new BadRequestException('请填写驳回修改要求');
+    }
+
     if (this.shouldUsePrisma()) {
-      await this.updatePurchaseOrderStatus({
+      const updated = await this.updatePurchaseOrderStatus({
         purchaseOrderId: payload.purchaseOrderId,
+        operatorId: payload.operatorId ?? payload.session?.userId,
+        expectedStatus: payload.currentStatus,
+        session: payload.session,
         status: 'draft',
         operationType: 'reject_purchase_order',
+        mutate: (record) => ({ ...record, rejectionReason }),
       });
+      if (!updated) throw new NotFoundException('采购单不存在');
 
       return {
         id: payload.purchaseOrderId,
@@ -2136,15 +2160,22 @@ export class PurchaseOrderService {
     }
 
     const created = this.store.getPurchaseOrder(payload.purchaseOrderId);
+    if (!created) throw new NotFoundException('采购单不存在');
+    if (!canSeePurchaseOrder(payload.session, toCreatedPurchaseOrderListItem(created))) {
+      throw new NotFoundException('采购单不存在');
+    }
     if (created) {
+      if (created.status !== payload.currentStatus) {
+        throw new BadRequestException('Purchase order status has changed; refresh before retrying');
+      }
       const beforeData = snapshotAuditData(created);
-      updateCreatedPurchaseOrder(created, { status: 'draft' });
+      updateCreatedPurchaseOrder(created, { status: 'draft', rejectionReason });
       this.store.upsertPurchaseOrder(created);
       this.store.recordAuditLog({
         bizType: 'purchase_order',
         bizId: created.id,
         operationType: 'reject_purchase_order',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? payload.session?.userId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
@@ -2172,6 +2203,7 @@ export class PurchaseOrderService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updatePurchaseOrderStatus({
         purchaseOrderId: payload.purchaseOrderId,
+          operatorId: payload.operatorId ?? payload.session?.userId,
         status: 'pending_purchase_manager_approval',
         operationType: 'resubmit_purchase_order',
         mutate: (record) => ({
@@ -2222,7 +2254,7 @@ export class PurchaseOrderService {
         bizType: 'purchase_order',
         bizId: created.id,
         operationType: 'resubmit_purchase_order',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? payload.session?.userId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
@@ -2249,46 +2281,62 @@ export class PurchaseOrderService {
       throw new BadRequestException('Cannot cancel after shipment has started');
     }
 
+    const cancelReason = typeof payload.cancelReason === 'string' ? payload.cancelReason.trim() : '';
+    if (!cancelReason) {
+      throw new BadRequestException('请填写采购单作废原因');
+    }
+
     if (this.shouldUsePrisma()) {
-      await this.updatePurchaseOrderStatus({
+      const updated = await this.updatePurchaseOrderStatus({
         purchaseOrderId: payload.purchaseOrderId,
+        operatorId: payload.operatorId ?? payload.session?.userId,
+        expectedStatus: payload.currentStatus,
+        session: payload.session,
         status: 'void',
         operationType: 'cancel_purchase_order',
         mutate: (record) => ({
           ...record,
-          cancelReason: payload.cancelReason,
+          cancelReason,
           versionHistory: [
             ...record.versionHistory,
             createPurchaseOrderVersionHistoryEntry({
               versionNo: record.currentVersionNo,
               status: 'void',
               createdAt: '2026-07-11T10:30:00.000Z',
-              changeReason: payload.cancelReason,
+              changeReason: cancelReason,
             }),
           ],
         }),
       });
+      if (!updated) throw new NotFoundException('采购单不存在');
 
       return {
         id: payload.purchaseOrderId,
         status: 'void',
-        cancelReason: payload.cancelReason,
+        cancelReason,
       };
     }
 
     const created = this.store.getPurchaseOrder(payload.purchaseOrderId);
+    if (!created) throw new NotFoundException('采购单不存在');
+    if (!canSeePurchaseOrder(payload.session, toCreatedPurchaseOrderListItem(created))) {
+      throw new NotFoundException('采购单不存在');
+    }
     if (created) {
+      if (created.status !== payload.currentStatus) {
+        throw new BadRequestException('Purchase order status has changed; refresh before retrying');
+      }
       const beforeData = snapshotAuditData(created);
       updateCreatedPurchaseOrder(created, {
         status: 'void',
-        cancelReason: payload.cancelReason,
+        cancelReason,
         versionHistory: [
           ...created.versionHistory,
           createPurchaseOrderVersionHistoryEntry({
             versionNo: created.currentVersionNo,
             status: 'void',
             createdAt: '2026-07-11T10:30:00.000Z',
-            changeReason: payload.cancelReason,
+            changeReason: cancelReason,
           }),
         ],
       });
@@ -2297,7 +2345,7 @@ export class PurchaseOrderService {
         bizType: 'purchase_order',
         bizId: created.id,
         operationType: 'cancel_purchase_order',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? payload.session?.userId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
@@ -2306,7 +2354,7 @@ export class PurchaseOrderService {
     return {
       id: payload.purchaseOrderId,
       status: 'void',
-      cancelReason: payload.cancelReason,
+      cancelReason,
     };
   }
 
@@ -2318,6 +2366,7 @@ export class PurchaseOrderService {
         purchaseOrderId: payload.purchaseOrderId,
         status: payload.status,
         operationType: 'sync_purchase_order_shipment_status',
+        operatorId: payload.operatorId,
       });
       if (updated) {
         if (this.salesOrderService) {
@@ -2374,8 +2423,11 @@ export class PurchaseOrderService {
 
   private async updatePurchaseOrderStatus(payload: {
     purchaseOrderId: number;
+    expectedStatus?: string;
+    session?: FormalSession;
     status: string;
     operationType: string;
+    operatorId?: number;
     mutate?: (record: CreatedPurchaseOrderRecord) => CreatedPurchaseOrderRecord;
   }) {
     const existing = (await this.prismaDb!.businessDocument.findUnique({
@@ -2387,13 +2439,19 @@ export class PurchaseOrderService {
     }
 
     const beforeData = toPurchaseDocumentPayload(existing);
+    if (payload.session && !canSeePurchaseOrder(payload.session, toCreatedPurchaseOrderListItem(beforeData))) {
+      throw new NotFoundException('采购单不存在');
+    }
+    if (payload.expectedStatus && beforeData.status !== payload.expectedStatus) {
+      throw new BadRequestException('Purchase order status has changed; refresh before retrying');
+    }
     const baseNext = {
       ...beforeData,
       status: payload.status,
     };
     const nextPayload = payload.mutate ? payload.mutate(baseNext) : baseNext;
     const updated = (await this.prismaDb!.businessDocument.update({
-      where: { id: existing.id },
+      where: { id: existing.id, ...(payload.expectedStatus ? { status: payload.expectedStatus } : {}) },
       data: {
         status: payload.status,
         payload: nextPayload,
@@ -2405,7 +2463,7 @@ export class PurchaseOrderService {
         bizType: 'purchase_order',
         bizId: updated.id,
         operationType: payload.operationType,
-        operatorId: existing.createdBy ?? 0n,
+        operatorId: BigInt(payload.operatorId ?? Number(existing.createdBy ?? 0n)),
         beforeData,
         afterData: nextPayload,
       },

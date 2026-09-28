@@ -1,5 +1,7 @@
+import { UserManagementService } from '../user-management/user-management.service';
 import {
   Body,
+  ForbiddenException,
   Controller,
   Headers,
   Get,
@@ -17,12 +19,13 @@ import { salesOrderListSortFields } from '@erp/shared';
 import { normalizeSalesDocumentSourceMode } from '@erp/shared';
 import { FormalActions, FormalModules, FormalRoles } from '../auth/formal-role.decorator';
 import { FormalRoleGuard } from '../auth/formal-role.guard';
+import { parseAuditBizId } from '../audit/audit-log-query';
 import { CreateDirectSalesOrderDto } from './dto/create-direct-sales-order.dto';
 import { ListSalesOrdersQueryDto } from './dto/list-sales-orders-query.dto';
 import { ResubmitSalesOrderDto } from './dto/resubmit-sales-order.dto';
 import { UpdateSalesOrderDraftDto } from './dto/update-sales-order-draft.dto';
 import { SalesOrderService, type SalesOrderLineItem } from './sales-order.service';
-import { readOptionalFormalSession } from '../auth/formal-session';
+import { filterVisibleFormalItems, readOptionalFormalSession } from '../auth/formal-session';
 import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
 import { ProductService } from '../product/product.service';
 import { QuoteService } from '../quote/quote.service';
@@ -119,23 +122,37 @@ export class SalesOrderController {
     @Optional()
     @Inject(InquiryService)
     private readonly inquiryService?: Pick<InquiryService, 'getPurchaseSource'>,
+    @Optional()
+    @Inject(UserManagementService)
+    private readonly userManagementService?: UserManagementService,
   ) {}
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
   @FormalActions('sales.order.write')
   @Post()
-  create(@Body() dto: CreateDirectSalesOrderDto) {
-    return this.salesOrderService.create(dto);
+  async create(@Body() dto: CreateDirectSalesOrderDto, @Headers('x-erp-user-id') userId?: string, @Headers('x-erp-role') role?: string) {
+    await (this.userManagementService ?? new UserManagementService()).assertSalesOwnerSelection(dto.salesUserId, { userId: userId ? Number(userId) : undefined, role });
+    return this.salesOrderService.create({ ...dto, createdBy: userId ? Number(userId) : dto.createdBy });
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
   @FormalActions('sales.order.write')
   @Post(':id/draft')
-  updateDraft(
+  async updateDraft(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateSalesOrderDraftDto,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
   ) {
-    return this.salesOrderService.updateDraft(id, dto);
+    if (userId) {
+      const existing = await this.salesOrderService.getDetail(id);
+      const session = readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user-id': userId, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope })!;
+      if (!filterVisibleFormalItems([existing], session, ['admin', 'boss', 'sales_manager']).length) throw new ForbiddenException('无权修改此单据');
+      await (this.userManagementService ?? new UserManagementService()).assertSalesOwnerSelection(dto.salesUserId ?? existing.salesUserId, { userId: Number(userId), role, legacyUserIds: legacyUserIds?.split(',').map(Number) }, existing.salesUserId);
+    }
+    return this.salesOrderService.updateDraft(id, dto, userId ? Number(userId) : undefined);
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
@@ -144,6 +161,10 @@ export class SalesOrderController {
     @Query() query: ListSalesOrdersQueryDto,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     const sortBy: (typeof salesOrderListSortFields)[number] = salesOrderListSortFields.includes(
       query.sortBy as (typeof salesOrderListSortFields)[number],
@@ -164,6 +185,10 @@ export class SalesOrderController {
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -171,8 +196,8 @@ export class SalesOrderController {
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
   @FormalActions('audit.view')
   @Get('audit-logs')
-  listAuditLogs() {
-    return this.salesOrderService.listAuditLogs();
+  listAuditLogs(@Query('bizId') bizId?: string) {
+    return this.salesOrderService.listAuditLogs(parseAuditBizId(bizId));
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager')
@@ -182,10 +207,18 @@ export class SalesOrderController {
     @Param('id', ParseIntPipe) id: number,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     const detail = await this.salesOrderService.getDetail(id, readOptionalFormalSession({
       'x-erp-role': role,
       'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
     }));
     if (detail.status !== 'pending_sales_manager_approval') {
       return { productNames: [] };
@@ -212,12 +245,20 @@ export class SalesOrderController {
     @Param('id', ParseIntPipe) id: number,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     const detail = await this.salesOrderService.getDetail(
       id,
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
     const linkedPurchaseOrders =
@@ -262,9 +303,11 @@ export class SalesOrderController {
   submit(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
     return this.salesOrderService.submit({
       salesOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
     });
   }
@@ -275,8 +318,9 @@ export class SalesOrderController {
   approve(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string; createdBy?: number },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
-    return this.approveAndCreatePurchaseOrders(id, body);
+    return this.approveAndCreatePurchaseOrders(id, { ...body, ...(userId ? { createdBy: Number(userId) } : {}) });
   }
 
   private async approveAndCreatePurchaseOrders(
@@ -286,6 +330,7 @@ export class SalesOrderController {
     const beforeApproval = await this.salesOrderService.getDetail(id);
     let sourceInquiryId: number | undefined;
     let purchaseOwnerName: string | undefined;
+    let purchaseOwnerId: number | undefined;
     if (beforeApproval.sourceMode === 'from_quote' && this.quoteService && this.inquiryService) {
       try {
         const quote = await this.quoteService.getDetail(beforeApproval.sourceQuoteOrderId);
@@ -297,9 +342,10 @@ export class SalesOrderController {
           purchaseOwnerName = inquiry.comparisonSubmittedBy?.trim() || undefined;
           if (purchaseOwnerName && this.purchaseOrderService) {
             const assignable = await this.purchaseOrderService.listAssignablePurchaseOwners();
-            if (!assignable.some((owner) => owner.id > 0 && owner.realName === purchaseOwnerName)) {
-              purchaseOwnerName = undefined;
-            }
+            const matchingOwners = assignable.filter(owner => owner.id > 0 && (inquiry.comparisonSubmittedById !== undefined ? owner.id === inquiry.comparisonSubmittedById : owner.realName === purchaseOwnerName));
+            const assignedOwner = matchingOwners.length === 1 ? matchingOwners[0] : undefined;
+            purchaseOwnerName = assignedOwner?.realName;
+            purchaseOwnerId = assignedOwner?.id;
           }
         }
       } catch (error) {
@@ -312,6 +358,8 @@ export class SalesOrderController {
       salesOrderId: id,
       currentStatus: body.currentStatus,
       sourceInquiryId,
+      operatorId: body.createdBy,
+      purchaseOwnerId,
       purchaseOwnerName,
       deferPurchaseTransfer: Boolean(purchaseOwnerName && this.purchaseOrderService),
     });
@@ -343,9 +391,10 @@ export class SalesOrderController {
             shipTo: salesOrder.shipTo,
             purchaseOrderAttachments: salesOrder.salesOrderAttachments,
             ownerName: purchaseOwnerName,
+            ownerId: purchaseOwnerId,
             allowPendingAssignment: true,
           });
-    await this.salesOrderService.completePurchaseAssignment(id, purchaseOwnerName);
+    await this.salesOrderService.completePurchaseAssignment(id, purchaseOwnerName, body.createdBy, purchaseOwnerId);
 
     return {
       ...result,
@@ -368,24 +417,32 @@ export class SalesOrderController {
   @Post(':id/assign-purchaser')
   async assignPurchaser(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { ownerName?: string },
+    @Body() body: { ownerName?: string; ownerId?: number },
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     if (!this.purchaseOrderService) {
       throw new ServiceUnavailableException('采购单服务暂不可用');
     }
-    const session = readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user });
-    const ownerName = body.ownerName?.trim();
+    const session = readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user, 'x-erp-user-id': userId, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope, 'x-erp-modules': modules });
+    const requestedOwnerName = body.ownerName?.trim();
     const owners = await this.purchaseOrderService.listAssignablePurchaseOwners(session);
-    if (!ownerName || !owners.some((owner) => owner.id > 0 && owner.realName === ownerName)) {
+    const matchingOwners = owners.filter(owner => owner.id > 0 && (body.ownerId !== undefined ? owner.id === body.ownerId : owner.realName === requestedOwnerName));
+    const assignedOwner = matchingOwners.length === 1 ? matchingOwners[0] : undefined;
+    const ownerName = assignedOwner?.realName;
+    const ownerId = assignedOwner?.id;
+    if (!ownerName || !ownerId) {
       throw new BadRequestException('请选择有效的采购负责人');
     }
     const salesOrder = await this.salesOrderService.getDetail(id);
     if (salesOrder.status !== 'pending_purchase_assignment') {
       throw new BadRequestException('当前销售单无需分配采购负责人');
     }
-    if (salesOrder.purchaseOwnerName && salesOrder.purchaseOwnerName !== ownerName) {
+    if (salesOrder.purchaseOwnerId !== undefined ? salesOrder.purchaseOwnerId !== ownerId : salesOrder.purchaseOwnerName && salesOrder.purchaseOwnerName !== ownerName) {
       throw new BadRequestException('采购负责人必须与来源销售单一致');
     }
     const items = await buildPurchaseItemsFromSalesOrderItems(
@@ -398,9 +455,10 @@ export class SalesOrderController {
     const result = await this.purchaseOrderService.createFromSalesOrder({
       salesOrderId: id,
       items,
-      createdBy: salesOrder.createdBy,
+      createdBy: userId ? Number(userId) : salesOrder.createdBy,
       initialStatus: 'pending_purchase_claim',
       ownerName,
+      ownerId,
       allowPendingAssignment: true,
       salesOrderNo: salesOrder.salesNo,
       customerOrderNo: salesOrder.customerOrderNo,
@@ -410,7 +468,7 @@ export class SalesOrderController {
       shipTo: salesOrder.shipTo,
       purchaseOrderAttachments: salesOrder.salesOrderAttachments,
     });
-    await this.salesOrderService.completePurchaseAssignment(id, ownerName);
+    await this.salesOrderService.completePurchaseAssignment(id, ownerName, userId ? Number(userId) : undefined, ownerId);
     return { status: 'purchasing', purchaseOwnerName: ownerName, ...result };
   }
 
@@ -419,11 +477,19 @@ export class SalesOrderController {
   @Post(':id/reject')
   reject(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { currentStatus: string },
+    @Body() body: { currentStatus: string; rejectionReason?: string },
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
   ) {
+    const session = readOptionalFormalSession({ 'x-erp-user-id': userId, 'x-erp-role': role, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope });
     return this.salesOrderService.reject({
       salesOrderId: id,
+      ...(session ? { session } : {}),
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
+      rejectionReason: body.rejectionReason,
     });
   }
 
@@ -433,13 +499,31 @@ export class SalesOrderController {
   resubmit(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: ResubmitSalesOrderDto & { currentStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
     return this.salesOrderService.resubmit({
       salesOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
       changeReason: body.changeReason,
       hasShipmentBatches: body.hasShipmentBatches,
     });
+  }
+
+  @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
+  @FormalActions('sales.order.write')
+  @Get(':id/cancellation-impact')
+  getCancellationImpact(
+    @Param('id', ParseIntPipe) id: number,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+  ) {
+    return this.salesOrderService.getCancellationImpact(id, readOptionalFormalSession({
+      'x-erp-user-id': userId, 'x-erp-role': role,
+      'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope,
+    }));
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
@@ -450,13 +534,20 @@ export class SalesOrderController {
     @Body()
     body: {
       currentStatus: string;
-      hasShipmentBatches: boolean;
-      unshippedPurchaseOrderIds: number[];
+      hasShipmentBatches?: boolean;
+      unshippedPurchaseOrderIds?: number[];
       cancelReason: string;
     },
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
   ) {
+    const session = readOptionalFormalSession({ 'x-erp-user-id': userId, 'x-erp-role': role, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope });
     return this.salesOrderService.cancel({
       salesOrderId: id,
+      ...(session ? { session } : {}),
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
       hasShipmentBatches: body.hasShipmentBatches,
       unshippedPurchaseOrderIds: body.unshippedPurchaseOrderIds,
@@ -470,9 +561,16 @@ export class SalesOrderController {
   updateReceiptStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { receiptStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
   ) {
+    const session = readOptionalFormalSession({ 'x-erp-user-id': userId, 'x-erp-role': role, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope });
     return this.salesOrderService.updateReceiptStatus({
       salesOrderId: id,
+      ...(userId ? { operatorId: Number(userId) } : {}),
+      ...(session ? { session } : {}),
       receiptStatus: body.receiptStatus,
     });
   }
@@ -482,12 +580,17 @@ export class SalesOrderController {
   @Post(':id/finance-confirm')
   confirmFinance(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { receiptStatus: string; financeStatus: string },
+    @Body() body: { receiptStatus?: string; financeStatus?: string },
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
   ) {
+    const session = readOptionalFormalSession({ 'x-erp-user-id': userId, 'x-erp-role': role, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope });
     return this.salesOrderService.confirmFinance({
       salesOrderId: id,
-      receiptStatus: body.receiptStatus,
-      financeStatus: body.financeStatus,
+      ...(userId ? { operatorId: Number(userId) } : {}),
+      ...(session ? { session } : {}),
     });
   }
 

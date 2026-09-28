@@ -1,3 +1,4 @@
+import { resolveFormalUserId } from '../../_lib/formal-access';
 import { AppShell } from '../../_components/app-shell';
 import { loadActiveCounterpartyOptions } from '../../_lib/counterparty-options';
 import { resolveDemoSession } from '../../_lib/demo-session';
@@ -52,17 +53,6 @@ const deniedStyle = {
   padding: '24px',
 } satisfies React.CSSProperties;
 
-function resolveUserId(user: string) {
-  if (user === 'Zoe') {
-    return 2001;
-  }
-
-  if (user === 'Leo') {
-    return 2002;
-  }
-
-  return 2000;
-}
 
 function encodeAccessScopes(accessScopes: ReturnType<typeof resolveDemoSession>['accessScopes']) {
   if (!accessScopes) {
@@ -83,12 +73,12 @@ export default async function AppNewFormalAfterSalesPage({
   if (!canUseFormalAfterSalesProcessActions(session)) {
     return (
       <AppShell
-        title="正式新建售后单"
+        title="新建售后单"
         subtitle="当前角色不具备售后处理权限，不能创建售后单。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限创建正式售后单</h2>
+          <h2>无权限创建售后单</h2>
           <p>请切换到采购、采购主管或管理员账号后再创建售后单。</p>
         </section>
       </AppShell>
@@ -100,7 +90,7 @@ export default async function AppNewFormalAfterSalesPage({
 
   return (
     <AppShell
-      title="正式新建售后单"
+      title="新建售后单"
       subtitle="正式售后页支持从销售、采购和发货追溯节点快速创建售后单。"
       session={session}
     >
@@ -117,7 +107,7 @@ export default async function AppNewFormalAfterSalesPage({
           <CreateFormalAfterSalesForm
             customerOptions={customerOptions}
             supplierOptions={supplierOptions}
-            createdBy={resolveUserId(session.user)}
+            createdBy={resolveFormalUserId(session)}
             role={session.role}
             user={session.user}
             access={encodeAccessScopes(session.accessScopes)}

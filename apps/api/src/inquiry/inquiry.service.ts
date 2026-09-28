@@ -6,7 +6,6 @@ import {
   Optional,
 } from '@nestjs/common';
 import {
-  inquiryListData,
   type InquiryListItem,
   type InquirySupplierQuote,
   type InquiryStatus,
@@ -339,6 +338,7 @@ function toInquiryListItem(record: PrismaBusinessDocumentRecord): InquiryListIte
     ...record.payload,
     id: Number(record.payload.id ?? record.id),
     inquiryNo: record.docNo,
+    createdById: record.payload.createdById ?? (record.createdBy == null ? undefined : Number(record.createdBy)),
     status: record.status as InquiryStatus,
     supplierCount: countInquirySupplierQuotes(items),
     createdAt: record.payload.createdAt ?? record.createdAt.toISOString(),
@@ -723,16 +723,6 @@ export class InquiryService {
     return this.prisma as PrismaInquiryDb | undefined;
   }
 
-  private ensureRuntimeSeeded() {
-    if (this.store.listInquiries().length > 0) {
-      return;
-    }
-
-    inquiryListData.forEach((item) => {
-      this.store.upsertInquiry(item);
-    });
-  }
-
   private async loadExistingInquiry(inquiryId: number) {
     if (this.shouldUsePrisma()) {
       const record = (await this.prismaDb!.businessDocument.findUnique({
@@ -742,7 +732,6 @@ export class InquiryService {
       return record ? toInquiryListItem(record) : undefined;
     }
 
-    this.ensureRuntimeSeeded();
     const inquiry = this.store.getInquiry(inquiryId);
     return inquiry ? normalizeInquiryListItemSummary(inquiry) : undefined;
   }
@@ -763,7 +752,7 @@ export class InquiryService {
             orderBy: { createdAt: 'desc' },
           })) as PrismaBusinessDocumentRecord[]
         ).map(toInquiryListItem)
-      : (this.ensureRuntimeSeeded(), this.store.listInquiries().map(normalizeInquiryListItemSummary));
+      : this.store.listInquiries().map(normalizeInquiryListItemSummary);
     const counterpartyService = new CounterpartyService(this.prisma);
     const hydratedItems = await this.hydrateInquiryImageItems(sourceItems);
 
@@ -1033,9 +1022,11 @@ export class InquiryService {
         inquiryId: payload.inquiryId,
         status: 'pending_boss_review',
         operationType: 'submit_inquiry_for_comparison',
+        operatorId: session?.userId,
         items: payload.items,
         operatorName,
         comparisonSubmittedBy: session?.user?.trim(),
+        comparisonSubmittedById: session?.userId,
       });
     } else {
       const existing = this.store.getInquiry(payload.inquiryId);
@@ -1045,13 +1036,14 @@ export class InquiryService {
         payload.items,
         operatorName,
         session?.user?.trim(),
+        session?.userId,
       );
       if (existing) {
         this.store.recordAuditLog({
           bizType: 'quote_inquiry',
           bizId: existing.id,
           operationType: 'submit_inquiry_for_comparison',
-          operatorId: Number(existing.createdBy ?? 0),
+          operatorId: session?.userId ?? Number(existing.createdBy ?? 0),
           beforeData: snapshotAuditData(existing),
           afterData: snapshotAuditData(this.store.getInquiry(payload.inquiryId) ?? existing),
         });
@@ -1151,6 +1143,7 @@ export class InquiryService {
             inquiryId: payload.inquiryId,
             status: 'boss_confirmed',
             operationType: 'boss_confirm_inquiry',
+            operatorId: session?.userId,
             items: payload.items,
             operatorName,
           },
@@ -1188,7 +1181,7 @@ export class InquiryService {
           bizType: 'quote_inquiry',
           bizId: existing.id,
           operationType: 'boss_confirm_inquiry',
-          operatorId: Number(existing.createdBy ?? 0),
+          operatorId: session?.userId ?? Number(existing.createdBy ?? 0),
           beforeData: snapshotAuditData(existing),
           afterData: snapshotAuditData(
             this.store.getInquiry(payload.inquiryId) ?? existing,
@@ -1226,6 +1219,7 @@ export class InquiryService {
         inquiryId,
         status: 'pending_inquiry',
         operationType: 'reject_inquiry_by_boss',
+        operatorId: session?.userId,
         operatorName: session?.user?.trim() || '老板',
       });
     } else {
@@ -1236,7 +1230,7 @@ export class InquiryService {
           bizType: 'quote_inquiry',
           bizId: inquiryId,
           operationType: 'reject_inquiry_by_boss',
-          operatorId: Number(existing.createdBy ?? 0),
+          operatorId: session?.userId ?? Number(existing.createdBy ?? 0),
           beforeData: snapshotAuditData(existing),
           afterData: snapshotAuditData(this.store.getInquiry(inquiryId) ?? existing),
         });
@@ -1249,9 +1243,11 @@ export class InquiryService {
     inquiryId: number;
     status: InquiryStatus;
     operationType: string;
+    operatorId?: number;
     items?: InquiryItemMutationPayload[];
     operatorName?: string;
     comparisonSubmittedBy?: string;
+    comparisonSubmittedById?: number;
   }, prismaDb = this.prismaDb) {
     const existing = (await prismaDb!.businessDocument.findUnique({
       where: { id: BigInt(payload.inquiryId) },
@@ -1267,6 +1263,7 @@ export class InquiryService {
       : existingPayload.items;
     const nextPayloadBase: InquiryListItem = {
       ...existingPayload,
+      comparisonSubmittedById: payload.operationType === 'submit_inquiry_for_comparison' ? payload.comparisonSubmittedById : existingPayload.comparisonSubmittedById,
       comparisonSubmittedBy: payload.operationType === 'submit_inquiry_for_comparison'
         ? payload.comparisonSubmittedBy
         : existingPayload.comparisonSubmittedBy,
@@ -1294,7 +1291,7 @@ export class InquiryService {
         bizType: 'quote_inquiry',
         bizId: updated.id,
         operationType: payload.operationType,
-        operatorId: existing.createdBy ?? 0n,
+        operatorId: payload.operatorId !== undefined ? BigInt(payload.operatorId) : existing.createdBy ?? 0n,
         beforeData: toInquiryListItem(existing),
         afterData: nextPayload,
       },
@@ -1310,8 +1307,8 @@ export class InquiryService {
     items?: InquiryItemMutationPayload[],
     operatorName = 'system',
     comparisonSubmittedBy?: string,
+    comparisonSubmittedById?: number,
   ) {
-    this.ensureRuntimeSeeded();
 
     const existing = this.store.getInquiry(inquiryId);
     if (!existing) {
@@ -1321,6 +1318,7 @@ export class InquiryService {
     const nextItems = items ? mergeInquiryItems(existing.items, items) : existing.items;
     const nextPayloadBase: InquiryListItem = {
       ...existing,
+      comparisonSubmittedById: status === 'pending_boss_review' ? comparisonSubmittedById : existing.comparisonSubmittedById,
       comparisonSubmittedBy: status === 'pending_boss_review'
         ? comparisonSubmittedBy
         : existing.comparisonSubmittedBy,

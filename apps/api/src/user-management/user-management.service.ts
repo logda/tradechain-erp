@@ -315,8 +315,23 @@ export class UserManagementService {
       }));
   }
 
+  private async resolveLegacyUserIds(record: { id: number | bigint; username: string }) {
+    const aliases: Record<string, { id: number; legacyId: number }> = {
+      admin: { id: 1, legacyId: 9000 }, mia: { id: 2, legacyId: 2000 },
+      zoe: { id: 3, legacyId: 2001 }, leo: { id: 4, legacyId: 2002 },
+    };
+    const alias = aliases[record.username];
+    if (!alias || Number(record.id) !== alias.id) return [];
+    const allocated = this.shouldUsePrisma()
+      ? await this.prisma!.user.findUnique({ where: { id: BigInt(alias.legacyId) } })
+      : this.store.listUsers().find(user => user.id === alias.legacyId);
+    return allocated ? [] : [alias.legacyId];
+  }
+
   async getCurrentSession(username: string): Promise<{
     role: RoleCode;
+    userId: number;
+    legacyUserIds?: number[];
     user: string;
     username: string;
     accessScopes: AccessScopes;
@@ -332,6 +347,8 @@ export class UserManagementService {
     const permissions = await this.loadRolePermissionMap();
     return {
       role,
+      userId: Number(record.id),
+      legacyUserIds: await this.resolveLegacyUserIds(record),
       user: role === 'admin' ? 'Admin' : record.realName,
       username: record.username,
       accessScopes: resolveAccessScopes(role, permissions),
@@ -346,6 +363,24 @@ export class UserManagementService {
 
   private shouldUsePrisma() {
     return resolveStorageMode() === 'prisma' && this.prisma;
+  }
+
+  async assertSalesOwnerSelection(ownerId: number, session: { userId?: number; role?: string; legacyUserIds?: number[] }, existingOwnerId?: number) {
+    if (session.userId === undefined) return;
+    if (session.role === 'sales' && ownerId !== session.userId &&
+        !(ownerId === existingOwnerId && session.legacyUserIds?.includes(ownerId))) {
+      throw new BadRequestException('销售人员只能选择本人为销售负责人');
+    }
+    if (ownerId === existingOwnerId) return;
+    const directory = await this.list();
+    const owner = directory.items.find(item => item.id === ownerId && item.status === 'active');
+    const maySelect = owner && (
+      (session.role === 'sales' && ownerId === session.userId) ||
+      (session.role === 'sales_manager' && (owner.roleCode === 'sales' || ownerId === session.userId)) ||
+      (session.role === 'boss' && (owner.roleCode === 'sales' || owner.roleCode === 'sales_manager' || ownerId === session.userId)) ||
+      (session.role === 'admin' && (owner.roleCode === 'sales' || owner.roleCode === 'sales_manager'))
+    );
+    if (!maySelect) throw new BadRequestException('请选择当前角色可分配的有效销售负责人');
   }
 
   async listAssignableSalesUsers() {
@@ -1113,6 +1148,8 @@ export class UserManagementService {
       const roleCode = record.roleCode as RoleCode;
       return {
         role: roleCode,
+        userId: Number(record.id),
+      legacyUserIds: await this.resolveLegacyUserIds(record),
         user: roleCode === 'admin' ? 'Admin' : record.realName,
         username: record.username,
         accessScopes: resolveAccessScopes(roleCode, permissions),
@@ -1146,6 +1183,8 @@ export class UserManagementService {
 
     return {
       role: record.roleCode,
+      userId: record.id,
+      legacyUserIds: await this.resolveLegacyUserIds(record),
       user: record.roleCode === 'admin' ? 'Admin' : record.realName,
       username: record.username,
       accessScopes: resolveAccessScopes(record.roleCode, permissions),

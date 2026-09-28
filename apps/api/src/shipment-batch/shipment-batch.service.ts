@@ -1,3 +1,4 @@
+import { matchesFormalUser } from '../auth/formal-session';
 import {
   BadRequestException,
   Inject,
@@ -14,13 +15,14 @@ import type {
 } from '@erp/shared';
 import { buildSequentialDocumentCode } from '@erp/shared';
 import { type FormalSession } from '../auth/formal-session';
-import { shipmentBatchListData } from './shipment-batch-list.data';
 import { resolveShipmentBatchStore } from './shipment-batch.store';
 import { PrismaService } from '../storage/prisma.service';
 import { CounterpartyService } from '../counterparty/counterparty.service';
 import { resolveStorageMode } from '../storage/storage-mode';
 import { SalesOrderService } from '../sales-order/sales-order.service';
 import { PurchaseOrderService } from '../purchase-order/purchase-order.service';
+import { resolveSalesOrderStore } from '../sales-order/sales-order.store';
+import { resolvePurchaseOrderStore } from '../purchase-order/purchase-order.store';
 
 export type CreatedShipmentBatchRecord = {
   id: number;
@@ -49,6 +51,8 @@ export type CreatedShipmentBatchRecord = {
   estimatedArrivalDate?: string;
   remark?: string;
   createdBy: number;
+  ownerId?: number;
+  ownerName?: string;
   salesOrderId: number;
   purchaseOrderId: number;
   purchaseOrderCurrentStatus: string;
@@ -109,6 +113,8 @@ export type CreateShipmentBatchPayload = {
   estimatedArrivalDate?: string;
   remark?: string;
   createdBy: number;
+  ownerId?: number;
+  ownerName?: string;
   purchaseOrderCurrentStatus: string;
   currentBatchCount: number;
   items?: Array<{
@@ -166,6 +172,20 @@ const shipmentProgressOrder = [
   'forwarder_shipped',
   'arrived',
 ] as const;
+
+const shipmentAllowedPurchaseStatuses = [
+  'purchasing', 'partial_shipped', 'partial_to_forwarder',
+  'partial_forwarder_shipped', 'partial_arrived',
+];
+
+function assertShipmentSourcesActive(salesOrder?: { status: string }, purchaseOrder?: { status: string }) {
+  if (salesOrder?.status === 'void') {
+    throw new BadRequestException('Cannot create shipment batches for a void sales order');
+  }
+  if (purchaseOrder && !shipmentAllowedPurchaseStatuses.includes(purchaseOrder.status)) {
+    throw new BadRequestException('Only purchasing purchase orders can create shipment batches');
+  }
+}
 
 function normalizeTriStateFilter(value: 'all' | 'yes' | 'no' | undefined) {
   if (value === 'yes' || value === 'no') {
@@ -244,6 +264,9 @@ function toCreatedShipmentBatchListItem(
 ): ShipmentBatchListItem {
   return {
     moduleLabel: '发货批次',
+    ownerId: item.ownerId ?? item.createdBy,
+    ownerName: item.ownerName,
+    createdById: item.createdBy,
     docNo: item.batchNo,
     title: item.title,
     status: item.status,
@@ -709,16 +732,17 @@ export class ShipmentBatchService {
       return items;
     }
 
+    if (session.dataScope === 'all' || session.dataScope?.endsWith('_team')) return items;
     if (
-      session.role === 'admin' ||
+      !session.dataScope?.startsWith('own_') && (session.role === 'admin' ||
       session.role === 'boss' ||
       session.role === 'sales_manager' ||
-      session.role === 'purchase_manager'
+      session.role === 'purchase_manager')
     ) {
       return items;
     }
 
-    if (session.role === 'sales' && this.salesOrderService?.list) {
+    if ((session.role === 'sales' || session.role === 'sales_manager') && this.salesOrderService?.list) {
       const visibleSalesOrders = (await this.salesOrderService
         .list({ page: 1, pageSize: 1000 }, session)
         .catch(() => ({ items: [] }))) as Pick<SalesOrderListResponse, 'items'>;
@@ -729,7 +753,7 @@ export class ShipmentBatchService {
       return items.filter((item) => visibleSalesOrderNos.has(item.salesOrderNo));
     }
 
-    if (session.role === 'purchase' && this.purchaseOrderService?.list) {
+    if ((session.role === 'purchase' || session.role === 'purchase_manager') && this.purchaseOrderService?.list) {
       const visiblePurchaseOrders = (await this.purchaseOrderService
         .list({ page: 1, pageSize: 1000 }, session)
         .catch(() => ({ items: [] }))) as Pick<PurchaseOrderListResponse, 'items'>;
@@ -742,7 +766,7 @@ export class ShipmentBatchService {
       );
     }
 
-    return items;
+    return session.dataScope?.startsWith('own_') ? items.filter(item => matchesFormalUser(session, item)) : items;
   }
 
   private async canSeeShipmentBatch(
@@ -781,7 +805,6 @@ export class ShipmentBatchService {
         ).map(toShipmentDocumentPayload).map(toCreatedShipmentBatchListItem)
       : [
           ...this.store.listShipmentBatches().map(toCreatedShipmentBatchListItem),
-          ...shipmentBatchListData,
         ];
 
     const visibleItems = await this.filterVisibleShipmentBatches(allItems, session);
@@ -974,13 +997,7 @@ export class ShipmentBatchService {
       remark: normalizeOptionalText(payload.remark),
     };
 
-    const canCreateShipmentForPurchaseStatus = [
-      'purchasing',
-      'partial_shipped',
-      'partial_to_forwarder',
-      'partial_forwarder_shipped',
-      'partial_arrived',
-    ].includes(purchaseOrderCurrentStatus);
+    const canCreateShipmentForPurchaseStatus = shipmentAllowedPurchaseStatuses.includes(purchaseOrderCurrentStatus);
 
     if (!canCreateShipmentForPurchaseStatus) {
       throw new BadRequestException(
@@ -1022,6 +1039,8 @@ export class ShipmentBatchService {
         shippedAt: payload.shippedAt,
         ...shipmentLedgerFields,
         createdBy: payload.createdBy,
+        ownerId: linkedPurchaseOrder?.ownerId ?? payload.createdBy,
+        ownerName: linkedPurchaseOrder?.ownerName,
         salesOrderId: payload.salesOrderId,
         purchaseOrderId: payload.purchaseOrderId,
         purchaseOrderCurrentStatus: payload.purchaseOrderCurrentStatus,
@@ -1035,38 +1054,51 @@ export class ShipmentBatchService {
         hasException: false,
         items: normalizedItems,
       };
-      const created = (await this.prismaDb!.businessDocument.create({
-        data: {
-          bizType: 'shipment_batch',
-          docNo: `PENDING-SHIPMENT-${Date.now()}`,
-          status: 'shipped',
-          ownerUserId: BigInt(payload.createdBy),
-          counterpartyId: BigInt(payload.purchaseOrderId),
-          payload: basePayload,
-          createdBy: BigInt(payload.createdBy),
-        },
-      })) as PrismaBusinessDocumentRecord;
-      const finalPayload: CreatedShipmentBatchRecord = {
-        ...basePayload,
-        id: Number(created.id),
-        batchNo: buildSequentialDocumentCode('SH', Number(created.id)),
-      };
-      const updated = (await this.prismaDb!.businessDocument.update({
-        where: { id: created.id },
-        data: {
-          docNo: finalPayload.batchNo,
-          payload: finalPayload,
-        },
-      })) as PrismaBusinessDocumentRecord;
-      await this.prismaDb!.operationLog.create({
-        data: {
-          bizType: 'shipment_batch',
-          bizId: updated.id,
-          operationType: 'create_shipment_batch',
-          operatorId: BigInt(payload.createdBy),
-          beforeData: undefined,
-          afterData: finalPayload,
-        },
+      const finalPayload = await this.prisma!.$transaction(async (transaction) => {
+        const tx = transaction as unknown as PrismaShipmentDb;
+        // Cancellation uses the same sales lock; take both locks before any source snapshot read.
+        await tx.$queryRaw`SELECT id FROM BusinessDocument WHERE id = ${BigInt(payload.salesOrderId)} AND bizType = 'sales_order' FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM BusinessDocument WHERE id = ${BigInt(payload.purchaseOrderId)} AND bizType = 'purchase_order' FOR UPDATE`;
+        const salesOrder = await tx.businessDocument.findUnique({ where: { id: BigInt(payload.salesOrderId) } }) as PrismaBusinessDocumentRecord | null;
+        const purchaseOrder = await tx.businessDocument.findUnique({ where: { id: BigInt(payload.purchaseOrderId) } }) as PrismaBusinessDocumentRecord | null;
+        assertShipmentSourcesActive(
+          salesOrder?.bizType === 'sales_order' ? salesOrder : undefined,
+          purchaseOrder?.bizType === 'purchase_order' ? purchaseOrder : undefined,
+        );
+        const created = (await tx.businessDocument.create({
+          data: {
+            bizType: 'shipment_batch',
+            docNo: `PENDING-SHIPMENT-${Date.now()}`,
+            status: 'shipped',
+            ownerUserId: BigInt(payload.createdBy),
+            counterpartyId: BigInt(payload.purchaseOrderId),
+            payload: basePayload,
+            createdBy: BigInt(payload.createdBy),
+          },
+        })) as PrismaBusinessDocumentRecord;
+        const finalPayload: CreatedShipmentBatchRecord = {
+          ...basePayload,
+          id: Number(created.id),
+          batchNo: buildSequentialDocumentCode('SH', Number(created.id)),
+        };
+        const updated = (await tx.businessDocument.update({
+          where: { id: created.id },
+          data: {
+            docNo: finalPayload.batchNo,
+            payload: finalPayload,
+          },
+        })) as PrismaBusinessDocumentRecord;
+        await tx.operationLog.create({
+          data: {
+            bizType: 'shipment_batch',
+            bizId: updated.id,
+            operationType: 'create_shipment_batch',
+            operatorId: BigInt(payload.createdBy),
+            beforeData: undefined,
+            afterData: finalPayload,
+          },
+        });
+        return finalPayload;
       });
       const purchaseOrderStatus = await this.syncPurchaseAndSalesShipmentStatus({
         record: finalPayload,
@@ -1092,6 +1124,11 @@ export class ShipmentBatchService {
       };
     }
 
+    // Keep the fresh source read and batch write synchronous so cancellation cannot interleave.
+    assertShipmentSourcesActive(
+      resolveSalesOrderStore().getSalesOrder(payload.salesOrderId),
+      resolvePurchaseOrderStore().getPurchaseOrder(payload.purchaseOrderId),
+    );
     const id = this.store.nextShipmentBatchId();
     const created: CreatedShipmentBatchRecord = {
       id,
@@ -1104,6 +1141,8 @@ export class ShipmentBatchService {
       shippedAt: payload.shippedAt,
       ...shipmentLedgerFields,
       createdBy: payload.createdBy,
+      ownerId: linkedPurchaseOrder?.ownerId ?? payload.createdBy,
+      ownerName: linkedPurchaseOrder?.ownerName,
       salesOrderId: payload.salesOrderId,
       purchaseOrderId: payload.purchaseOrderId,
       purchaseOrderCurrentStatus: payload.purchaseOrderCurrentStatus,
@@ -1153,10 +1192,10 @@ export class ShipmentBatchService {
     };
   }
 
-  async listAuditLogs() {
+  async listAuditLogs(bizId?: number) {
     if (this.shouldUsePrisma()) {
       const logs = (await this.prismaDb!.operationLog.findMany({
-        where: { bizType: 'shipment_batch' },
+        where: { bizType: 'shipment_batch', ...(bizId === undefined ? {} : { bizId: BigInt(bizId) }) },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       })) as PrismaOperationLogRecord[];
 
@@ -1166,7 +1205,9 @@ export class ShipmentBatchService {
     }
 
     return {
-      items: this.store.listAuditLogs(),
+      items: this.store.listAuditLogs().filter((item) =>
+        item.bizType === 'shipment_batch' && (bizId === undefined || item.bizId === bizId),
+      ),
     };
   }
 
@@ -1539,24 +1580,32 @@ export class ShipmentBatchService {
     currentStatus: string;
     reason: string;
     operatorId?: number;
+    session?: FormalSession;
   }) {
     if (payload.currentStatus === 'arrived' || payload.currentStatus === 'exception') {
       throw new BadRequestException('Arrived batches cannot be marked exception');
+    }
+
+    const reason = typeof payload.reason === 'string' ? payload.reason.trim() : '';
+    if (!reason) {
+      throw new BadRequestException('请填写发货异常原因');
     }
 
     if (this.shouldUsePrisma()) {
       const updated = await this.updateShipmentBatchStatus({
         shipmentBatchId: payload.shipmentBatchId,
         expectedStatus: payload.currentStatus,
+        session: payload.session,
         status: 'exception',
         operationType: 'mark_shipment_exception',
         operatorId: payload.operatorId,
         mutate: (record) => ({
           ...record,
           hasException: true,
-          exceptionReason: payload.reason,
+          exceptionReason: reason,
         }),
       });
+      if (!updated) throw new NotFoundException('Shipment batch not found');
       const operatorId = payload.operatorId ?? updated?.createdBy;
       if (updated && operatorId !== undefined) {
         await this.syncPurchaseAndSalesShipmentStatus({
@@ -1568,18 +1617,22 @@ export class ShipmentBatchService {
       return {
         id: payload.shipmentBatchId,
         status: 'exception',
-        reason: payload.reason,
+        reason,
       };
     }
 
-    const created = this.store.getShipmentBatch(payload.shipmentBatchId);
+    let created = this.store.getShipmentBatch(payload.shipmentBatchId);
+    if (created && !(await this.canSeeShipmentBatch(toCreatedShipmentBatchListItem(created), payload.session))) {
+      throw new NotFoundException('发货批次不存在');
+    }
+    created = this.store.getShipmentBatch(payload.shipmentBatchId);
     this.assertShipmentStatus(created, payload.currentStatus);
     if (created) {
       const operatorId = payload.operatorId ?? created.createdBy;
       const beforeData = snapshotAuditData(created);
       created.status = 'exception';
       created.hasException = true;
-      created.exceptionReason = payload.reason;
+      created.exceptionReason = reason;
       this.store.upsertShipmentBatch(created);
       this.store.recordAuditLog({
         bizType: 'shipment_batch',
@@ -1598,7 +1651,7 @@ export class ShipmentBatchService {
     return {
       id: payload.shipmentBatchId,
       status: 'exception',
-      reason: payload.reason,
+      reason,
     };
   }
 
@@ -1728,6 +1781,7 @@ export class ShipmentBatchService {
   private async updateShipmentBatchStatus(payload: {
     shipmentBatchId: number;
     expectedStatus?: string;
+    session?: FormalSession;
     requireUnsentReceipt?: boolean;
     status?: string;
     operationType: string;
@@ -1743,6 +1797,9 @@ export class ShipmentBatchService {
     }
 
     const beforeData = toShipmentDocumentPayload(existing);
+    if (payload.session && !(await this.canSeeShipmentBatch(toCreatedShipmentBatchListItem(beforeData), payload.session))) {
+      throw new NotFoundException('发货批次不存在');
+    }
     if (payload.requireUnsentReceipt && beforeData.receiptSendStatus === 'sent') {
       throw new BadRequestException('Receipt has already been sent');
     }

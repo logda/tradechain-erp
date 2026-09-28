@@ -199,8 +199,8 @@ describe('formal sales order create page', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式新建销售单' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '返回正式销售单列表' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '新建销售单' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回销售单列表' })).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: '订货单位录入方式 Ordering Mode' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '从客户主数据选择' })).toHaveAttribute(
       'aria-pressed',
@@ -376,6 +376,15 @@ describe('formal sales order create page', () => {
     });
   });
 
+  it('submits the retained historical owner from the real edit form instead of the first active employee', async () => {
+    mockCounterpartyFetch([{ id: 5, username: 'active', realName: 'Current employee', roleCode: 'sales', status: 'active' }]);
+    render(await AppEditSalesOrderDraftPage({ params: Promise.resolve({ id: '111' }), searchParams: Promise.resolve({ role: 'admin', user: 'Admin', userId: '1' }) }));
+    const ownerSelect = screen.getByLabelText('销售负责人 Sales Owner') as HTMLSelectElement;
+    expect(ownerSelect).toHaveValue('2001');
+    expect(Array.from(ownerSelect.options).map(option => option.value)).toEqual(['5', '2001']);
+    expect(new FormData(ownerSelect.form!).get('salesUserId')).toBe('2001');
+  });
+
   it('preserves saved sales order prices when editing an existing order', async () => {
     mockCounterpartyFetch();
 
@@ -510,8 +519,8 @@ describe('formal sales order create page', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式新建销售单' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '无权限创建正式销售单' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '新建销售单' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '无权限创建销售单' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '保存草稿' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '提交审批' })).not.toBeInTheDocument();

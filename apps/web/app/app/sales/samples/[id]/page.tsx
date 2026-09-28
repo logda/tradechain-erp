@@ -1,3 +1,4 @@
+import { resolveFormalUserId } from '../../../_lib/formal-access';
 import Link from 'next/link';
 import { formatSampleOrderStatus } from '@erp/shared';
 import { AppShell } from '../../../_components/app-shell';
@@ -61,6 +62,18 @@ function getSampleApiBaseUrl() {
   return process.env.ERP_API_BASE_URL ?? 'http://127.0.0.1:3001/api';
 }
 
+async function loadSourceQuoteNumber(id: number, session: { role: string; user: string }) {
+  try {
+    const response = await fetch(`${getSampleApiBaseUrl()}/quotes/${id}`, {
+      cache: 'no-store',
+      headers: { ...buildFormalRequestHeaders(session), ...buildSignedFormalRequestHeaders(session) },
+    });
+    if (!response.ok) return null;
+    const detail = await response.json() as { id?: number; quoteNo?: string };
+    return detail?.id === id && typeof detail.quoteNo === 'string' && detail.quoteNo.trim() ? detail.quoteNo.trim() : null;
+  } catch { return null; }
+}
+
 function hasValidSampleDetail(value: unknown): value is SampleOrderDetail {
   return (
     typeof value === 'object' &&
@@ -72,19 +85,8 @@ function hasValidSampleDetail(value: unknown): value is SampleOrderDetail {
   );
 }
 
-function resolveUserId(user: string) {
-  if (user === 'Zoe') {
-    return 2001;
-  }
 
-  if (user === 'Leo') {
-    return 2002;
-  }
-
-  return 2000;
-}
-
-async function loadSampleDetail(id: string, session: { role: string; user: string }) {
+async function loadSampleDetail(id: string, session: { role: string; user: string; userId?: number }) {
   if (!id.trim()) {
     return null;
   }
@@ -109,7 +111,7 @@ async function loadSampleDetail(id: string, session: { role: string; user: strin
   }
 }
 
-async function loadSampleAuditLogs(session: { role: string; user: string }) {
+async function loadSampleAuditLogs(session: { role: string; user: string; userId?: number }) {
   try {
     const response = await fetch(`${getSampleApiBaseUrl()}/samples/audit-logs`, {
       cache: 'no-store',
@@ -334,7 +336,7 @@ export default async function AppSampleOrderDetailPage({
   if (!canViewSalesSamples && !canViewPurchaseSamples) {
     return (
       <AppShell
-        title="正式样品单详情"
+        title="样品单详情"
         subtitle="样品单详情加载失败。"
         session={session}
       >
@@ -352,7 +354,7 @@ export default async function AppSampleOrderDetailPage({
     loadSampleDetail(resolvedParams.id, session),
     loadSampleAuditLogs(session),
   ]);
-  const createdBy = resolveUserId(session.user);
+  const createdBy = resolveFormalUserId(session);
   const actionRequestHeaders = buildFormalRequestHeaders(
     session.role === 'admin'
       ? { role: session.role, user: session.user }
@@ -362,14 +364,14 @@ export default async function AppSampleOrderDetailPage({
   if (!sampleOrder) {
     return (
       <AppShell
-        title="正式样品单详情"
+        title="样品单详情"
         subtitle="样品单详情加载失败。"
         session={session}
       >
         <section style={detailLayoutStyle}>
           <article style={heroCardStyle}>
             <h3 style={heroTitleStyle}>样品单详情加载失败</h3>
-            <p style={heroSubStyle}>请返回正式样品单列表后重试。</p>
+            <p style={heroSubStyle}>请返回样品单列表后重试。</p>
           </article>
         </section>
       </AppShell>
@@ -401,7 +403,7 @@ export default async function AppSampleOrderDetailPage({
   if (!canViewFormalSampleDetail(session)) {
     return (
       <AppShell
-        title="正式样品单详情"
+        title="样品单详情"
         subtitle="样品单详情加载失败。"
         session={session}
       >
@@ -415,10 +417,14 @@ export default async function AppSampleOrderDetailPage({
     );
   }
 
+  const sourceQuoteNumber = canViewSalesSamples && sampleOrder.sourceQuoteOrderId
+    ? await loadSourceQuoteNumber(sampleOrder.sourceQuoteOrderId, session) : null;
+
   return (
     <AppShell
-      title="正式样品单详情"
+      title="样品单详情"
       subtitle="展示样品单版本、报价追溯、替代版本、取消规则和样品生命周期动作。"
+      tabLabel={sampleOrder.sampleNo}
       session={session}
     >
       <section style={detailLayoutStyle}>
@@ -451,15 +457,11 @@ export default async function AppSampleOrderDetailPage({
           </article>
           <article style={infoCardStyle}>
             <p style={labelStyle}>来源报价 Quote</p>
-            <p style={valueStyle}>{`报价单 ID：${sampleOrder.sourceQuoteOrderId ?? '-'}`}</p>
-            {sampleOrder.sourceQuoteOrderId ? (
-              <Link
-                href={`/app/sales/quotes/${sampleOrder.sourceQuoteOrderId}`}
-                style={{ ...backLinkStyle, display: 'inline-flex', marginTop: '10px' }}
-              >
-                查看来源报价 {sampleOrder.sourceQuoteOrderId}
+            {sampleOrder.sourceQuoteOrderId ? (canViewSalesSamples ? (
+              <Link href={`/app/sales/quotes/${sampleOrder.sourceQuoteOrderId}`} style={backLinkStyle}>
+                {sourceQuoteNumber ?? `单号暂不可用 #${sampleOrder.sourceQuoteOrderId}`}
               </Link>
-            ) : null}
+            ) : <p style={valueStyle}>{`报价单 #${sampleOrder.sourceQuoteOrderId}（无查看权限）`}</p>) : <p style={valueStyle}>未关联</p>}
           </article>
           <article style={infoCardStyle}>
             <p style={labelStyle}>报价版本 Quote Version</p>

@@ -38,7 +38,7 @@ describe('root page', () => {
   it('redirects to the formal workspace when a session cookie exists', async () => {
     cookieGetMock.mockReturnValue({ value: 'signed-ticket' });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
-      role: 'boss', user: 'Mia', username: 'mia',
+      role: 'boss', user: 'Mia', userId: 2, username: 'mia',
       accessScopes: { modules: ['sales'], dataScope: 'all', actions: [] },
     }) }));
 

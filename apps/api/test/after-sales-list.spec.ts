@@ -1,6 +1,8 @@
+import { useListFixtures } from './helpers/list-fixtures';
 import { AfterSalesService } from '../src/after-sales/after-sales.service';
 
 describe('AfterSalesService list', () => {
+  useListFixtures('after-sales');
   it('filters after-sales orders by advanced fields and returns applied filters', async () => {
     const service = new AfterSalesService();
 

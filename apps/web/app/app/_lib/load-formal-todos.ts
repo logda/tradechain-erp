@@ -6,6 +6,9 @@ export type FormalTodoApiResponse = {
   items: FormalTodoItem[];
   total: number;
   closedTotal: number;
+  actionTotal?: number;
+  followingTotal?: number;
+  generatedAt: string;
 };
 
 export async function loadFormalTodos(session: DemoSession): Promise<FormalTodoApiResponse | null> {
@@ -18,7 +21,9 @@ export async function loadFormalTodos(session: DemoSession): Promise<FormalTodoA
     });
     if (!response.ok) return null;
     const result = await response.json() as FormalTodoApiResponse;
-    return Array.isArray(result?.items) && typeof result.closedTotal === 'number' ? result : null;
+    if (!Array.isArray(result?.items) || result.items.some((item) => !item || typeof item !== 'object') ||
+      !Number.isInteger(result.total) || result.total < 0 || !Number.isInteger(result.closedTotal) || result.closedTotal < 0) return null;
+    return { ...result, generatedAt: result.generatedAt && !Number.isNaN(Date.parse(result.generatedAt)) ? result.generatedAt : new Date().toISOString() };
   } catch {
     return null;
   }

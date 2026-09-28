@@ -579,7 +579,7 @@ export default async function AppFormalInquiryDetailPage({
   if (!inquiry) {
     return (
       <AppShell
-        title="正式询价详情"
+        title="询价详情"
         subtitle="正式工作台下查看询价详情。"
         session={session}
       >
@@ -596,13 +596,13 @@ export default async function AppFormalInquiryDetailPage({
   if (!canViewFormalInquiryDetail(session, inquiry)) {
     return (
       <AppShell
-        title="正式询价详情"
+        title="询价详情"
         subtitle="正式工作台下查看询价详情。"
         session={session}
       >
         <section style={detailLayoutStyle}>
           <div style={heroCardStyle}>
-            <h3 style={heroTitleStyle}>无权限访问正式询价单</h3>
+            <h3 style={heroTitleStyle}>无权限访问询价单</h3>
             <p style={heroSubStyle}>当前登录账号没有权限查看这张询价单。</p>
           </div>
         </section>
@@ -623,8 +623,9 @@ export default async function AppFormalInquiryDetailPage({
 
   return (
     <AppShell
-      title="正式询价详情"
+      title="询价详情"
       subtitle="正式询价页承接供应商比价、老板确认与报价版本回写。"
+      tabLabel={inquiry.inquiryNo}
       session={session}
     >
       <section style={detailLayoutStyle}>

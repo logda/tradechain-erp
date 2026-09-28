@@ -42,6 +42,7 @@ export function FormalPagination({
   const totalPages = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)));
   const currentPage = Math.min(Math.max(page, 1), totalPages);
   const summaryPrefix = summaryLabel ? `${summaryLabel}：` : '';
+  if (totalPages === 1) return <p className="erp-pagination">{summaryPrefix}共 {total} 条</p>;
 
   return (
     <nav

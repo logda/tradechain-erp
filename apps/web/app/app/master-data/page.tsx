@@ -138,7 +138,7 @@ export default async function AppMasterDataPage({
             <WorktileCard
               title="报价来源字典"
               href="/app/master-data/quote-source"
-              description="维护正式报价单的来源渠道，如线上、TikTok、展会、转介绍。"
+              description="维护报价单的来源渠道，如线上、TikTok、展会、转介绍。"
               badge="Source"
             />
           ) : null}

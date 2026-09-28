@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreateProductForm } from '../app/app/master-data/products/create-product-form';
 import AppProductsPage from '../app/app/master-data/products/page';
@@ -7,6 +7,21 @@ import { ProductTableRow } from '../app/app/master-data/products/product-table-r
 describe('formal product master data page', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('applies an explicit URL query when the server updates the mounted page', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ items: [], total: 0, page: 1, pageSize: 20 }),
+    }));
+    const first = await AppProductsPage({ searchParams: Promise.resolve({ role: 'admin', user: 'Admin', keyword: '第一次查询' }) });
+    const view = render(<>{first}</>);
+    expect(screen.getByRole('textbox', { name: '关键词 Keyword' })).toHaveValue('第一次查询');
+    let next = first;
+    await act(async () => {
+      next = await AppProductsPage({ searchParams: Promise.resolve({ role: 'admin', user: 'Admin', keyword: '网址明确的新查询' }) });
+    });
+    view.rerender(<>{next}</>);
+    expect(screen.getByRole('textbox', { name: '关键词 Keyword' })).toHaveValue('网址明确的新查询');
   });
 
   it('shows product maintenance to boss only when product.write is granted', async () => {
@@ -121,6 +136,7 @@ describe('formal product master data page', () => {
     expect(screen.getByText('智能 LED 灯带')).toBeInTheDocument();
     expect(screen.getByText('SALE-LED-001')).toBeInTheDocument();
     expect(screen.getByText('PUR-LED-001')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '查看资料' }));
     expect(screen.getByText('SUP-LIGHT')).toBeInTheDocument();
     expect(screen.getByText('Starlight')).toBeInTheDocument();
     expect(screen.getByText('深圳光源制造有限公司')).toBeInTheDocument();
@@ -225,7 +241,7 @@ describe('formal product master data page', () => {
       </>,
     );
 
-    expect(screen.getByText('产品资料总览')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '商品 / SKU 主数据' })).toBeInTheDocument();
     expect(screen.getByText('当前页商品')).toBeInTheDocument();
     expect(screen.getByText('正式产品')).toBeInTheDocument();
     expect(screen.getByText('阶梯报价')).toBeInTheDocument();

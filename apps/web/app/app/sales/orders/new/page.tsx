@@ -69,12 +69,12 @@ export default async function AppNewSalesOrderPage({
   if (!canUseFormalSalesOrderActions(session)) {
     return (
       <AppShell
-        title="正式新建销售单"
+        title="新建销售单"
         subtitle="当前角色不具备销售单创建权限，不能创建销售单。"
         session={session}
       >
         <section style={formPanelStyle}>
-          <h2>无权限创建正式销售单</h2>
+          <h2>无权限创建销售单</h2>
           <p>请切换到销售、销售主管、老板或管理员账号后再创建销售单。</p>
         </section>
       </AppShell>
@@ -87,11 +87,11 @@ export default async function AppNewSalesOrderPage({
     loadSalesUserOptions(session),
   ]);
   const defaultSalesUserId = resolveDefaultSalesUserId(session, salesUsers);
-  const currentUserId = resolveFormalUserId(session.user);
+  const currentUserId = resolveFormalUserId(session);
 
   return (
     <AppShell
-      title="正式新建销售单"
+      title="新建销售单"
       subtitle="支持销售不通过报价直接建单，先进入草稿，再进入审批、采购与发货链路。"
       session={session}
     >

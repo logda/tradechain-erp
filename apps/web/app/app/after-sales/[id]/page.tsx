@@ -5,7 +5,9 @@ import { AppShell } from '../../_components/app-shell';
 import { MutationActionForm } from '../../_components/mutation-action-form';
 import {
   canViewFormalModule,
+  canViewFormalAuditCenter,
   resolveDemoSession,
+  type DemoSession,
 } from '../../_lib/demo-session';
 import {
   canConfirmFormalAfterSalesFinance,
@@ -13,7 +15,7 @@ import {
   canViewFormalAfterSalesDetail,
   getFormalDetailAccessDeniedLabel,
 } from '../../_lib/formal-access';
-import { hasValidAuditLogResponse, type AuditLogResponse } from '../../_lib/audit-log';
+import { hasValidUnifiedAuditLogResponse } from '../../_lib/audit-log';
 import { buildFormalRequestHeaders } from '../../_lib/formal-request-headers';
 import { buildSignedFormalRequestHeaders } from '../../_lib/formal-request-signature';
 
@@ -36,6 +38,7 @@ type AfterSalesDetail = {
   shipmentBatchId?: number;
   type?: string;
   issueDescription?: string;
+  rejectionReason?: string;
   items?: Array<{
     lineNo: number;
     shipmentLineNo: number;
@@ -90,9 +93,10 @@ async function loadAfterSalesDetail(id: string, session: { role: string; user: s
   }
 }
 
-async function loadAfterSalesAuditLogs(session: { role: string; user: string }) {
+async function loadAfterSalesAuditLogs(id: string, session: DemoSession) {
+  if (!canViewFormalAuditCenter(session)) return null;
   try {
-    const response = await fetch(`${getAfterSalesApiBaseUrl()}/after-sales/audit-logs`, {
+    const response = await fetch(`${getAfterSalesApiBaseUrl()}/audit-logs?bizType=after_sales&bizId=${encodeURIComponent(id)}`, {
       cache: 'no-store',
       headers: {
         ...buildFormalRequestHeaders(session),
@@ -105,17 +109,34 @@ async function loadAfterSalesAuditLogs(session: { role: string; user: string }) 
     }
 
     const result = (await response.json().catch(() => null)) as unknown;
-    return hasValidAuditLogResponse(result) ? result : null;
+    return hasValidUnifiedAuditLogResponse(result) && !result.modules.some((module) => module.failed)
+      ? { items: result.items.filter((item) => item.bizType === 'after_sales' && item.bizId === Number(id)) }
+      : null;
   } catch {
     return null;
   }
 }
 
-const backLinkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
+async function loadSourceDocumentNo(module: 'sales' | 'purchase' | 'operations', id: number | undefined, session: DemoSession): Promise<string | null> {
+  if (!id || !canViewFormalModule(session, module)) return null;
+  const path = module === 'sales' ? 'sales-orders' : module === 'purchase' ? 'purchase-orders' : 'shipment-batches';
+  const field = module === 'sales' ? 'salesNo' : module === 'purchase' ? 'purchaseNo' : 'batchNo';
+  try {
+    const response = await fetch(`${getAfterSalesApiBaseUrl()}/${path}/${id}`, {
+      cache: 'no-store',
+      headers: {
+        ...buildFormalRequestHeaders(session),
+        ...buildSignedFormalRequestHeaders(session),
+      },
+    });
+    if (!response.ok) return null;
+    const result = await response.json();
+    return result?.id === id && typeof result[field] === 'string' && result[field].trim()
+      ? result[field].trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 const detailLayoutStyle = {
   display: 'grid',
@@ -150,13 +171,6 @@ const heroSubStyle = {
   fontSize: '15px',
   color: '#475569',
   lineHeight: 1.7,
-} satisfies React.CSSProperties;
-
-const heroActionStyle = {
-  display: 'flex',
-  gap: '12px',
-  flexWrap: 'wrap' as const,
-  marginTop: '18px',
 } satisfies React.CSSProperties;
 
 const gridStyle = {
@@ -271,7 +285,7 @@ export default async function AppAfterSalesDetailPage({
   if (!canViewFormalModule(session, 'operations')) {
     return (
       <AppShell
-        title="正式售后单详情"
+        title="售后单详情"
         subtitle="正式售后详情页承接售后状态、财务复核与关单前确认。"
         session={session}
       >
@@ -290,20 +304,20 @@ export default async function AppAfterSalesDetailPage({
   const { id } = await params;
   const [afterSalesOrder, auditLogs] = await Promise.all([
     loadAfterSalesDetail(id, session),
-    loadAfterSalesAuditLogs(session),
+    loadAfterSalesAuditLogs(id, session),
   ]);
 
   if (!afterSalesOrder) {
     return (
       <AppShell
-        title="正式售后单详情"
+        title="售后单详情"
         subtitle="正式售后详情页承接售后状态、财务复核与关单前确认。"
         session={session}
       >
         <section style={detailLayoutStyle}>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>售后单详情加载失败</h3>
-            <p style={heroSubStyle}>请返回正式售后单列表后重试。</p>
+            <p style={heroSubStyle}>请返回售后单列表后重试。</p>
           </div>
         </section>
       </AppShell>
@@ -313,7 +327,7 @@ export default async function AppAfterSalesDetailPage({
   if (!canViewFormalAfterSalesDetail(session)) {
     return (
       <AppShell
-        title="正式售后单详情"
+        title="售后单详情"
         subtitle="正式售后详情页承接售后状态、财务复核与关单前确认。"
         session={session}
       >
@@ -331,12 +345,21 @@ export default async function AppAfterSalesDetailPage({
 
   const canConfirmFinance = canConfirmFormalAfterSalesFinance(session);
   const canProcessAfterSales = canUseFormalAfterSalesProcessActions(session);
+  const canOpenSalesOrder = canViewFormalModule(session, 'sales');
+  const canOpenPurchaseOrder = canViewFormalModule(session, 'purchase');
+  const canOpenShipmentBatch = canViewFormalModule(session, 'operations');
   const actionRequestHeaders = buildFormalRequestHeaders(session);
+  const [salesNo, purchaseNo, batchNo] = await Promise.all([
+    loadSourceDocumentNo('sales', afterSalesOrder.salesOrderId, session),
+    loadSourceDocumentNo('purchase', afterSalesOrder.purchaseOrderId, session),
+    loadSourceDocumentNo('operations', afterSalesOrder.shipmentBatchId, session),
+  ]);
 
   return (
     <AppShell
-      title="正式售后单详情"
+      title="售后单详情"
       subtitle="展示售后状态、来源追溯、财务复核状态与关单条件，承接售后闭环。"
+      tabLabel={afterSalesOrder.afterSalesNo}
       session={session}
     >
       <section style={detailLayoutStyle}>
@@ -345,44 +368,27 @@ export default async function AppAfterSalesDetailPage({
           <p style={heroEyebrowStyle}>After-sales Detail / 售后单详情</p>
           <h3 style={heroTitleStyle}>{`售后单 ${afterSalesOrder.afterSalesNo}`}</h3>
           <p style={heroSubStyle}>
-            当前页面已经接通销售单、采购单和发货批次，便于追踪问题来源、处理过程和财务确认。
+            查看问题来源、处理进度和财务确认情况。
           </p>
-          <div style={heroActionStyle}>
-            {afterSalesOrder.salesOrderId ? (
-              <Link
-                href={`/app/sales/orders/${afterSalesOrder.salesOrderId}`}
-                style={backLinkStyle}
-              >
-                打开销售单
-              </Link>
-            ) : null}
-            {afterSalesOrder.purchaseOrderId ? (
-              <Link
-                href={`/app/purchase-orders/${afterSalesOrder.purchaseOrderId}`}
-                style={backLinkStyle}
-              >
-                打开采购单
-              </Link>
-            ) : null}
-            {afterSalesOrder.shipmentBatchId ? (
-              <Link
-                href={`/app/shipment-batches/${afterSalesOrder.shipmentBatchId}`}
-                style={backLinkStyle}
-              >
-                打开发货批次
-              </Link>
-            ) : null}
-          </div>
-        </article>
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>链路追溯</h3>
-          <p style={valueStyle}>
-            {`销售单 #${afterSalesOrder.salesOrderId ?? '-'} → 采购单 #${afterSalesOrder.purchaseOrderId ?? '-'} → 发货批次 #${afterSalesOrder.shipmentBatchId ?? '-'}`}
-          </p>
-          <p style={heroSubStyle}>
-            来源销售、采购与发货信息会保留在系统追溯字段中，售后明细仅展示处理需要识别的字段。
-          </p>
+          {afterSalesOrder.salesOrderId || afterSalesOrder.purchaseOrderId || afterSalesOrder.shipmentBatchId ? (
+            <nav aria-label="单据来源" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '18px', fontSize: '14px' }}>
+              {afterSalesOrder.salesOrderId ? canOpenSalesOrder ? (
+                <Link href={`/app/sales/orders/${afterSalesOrder.salesOrderId}`} style={subtleLinkStyle}>
+                  销售单 {salesNo ?? `单号暂不可用 #${afterSalesOrder.salesOrderId}`}
+                </Link>
+              ) : <span>销售单 #{afterSalesOrder.salesOrderId}（无查看权限）</span> : null}
+              {afterSalesOrder.purchaseOrderId ? canOpenPurchaseOrder ? (
+                <Link href={`/app/purchase-orders/${afterSalesOrder.purchaseOrderId}`} style={subtleLinkStyle}>
+                  采购单 {purchaseNo ?? `单号暂不可用 #${afterSalesOrder.purchaseOrderId}`}
+                </Link>
+              ) : <span>采购单 #{afterSalesOrder.purchaseOrderId}（无查看权限）</span> : null}
+              {afterSalesOrder.shipmentBatchId ? canOpenShipmentBatch ? (
+                <Link href={`/app/shipment-batches/${afterSalesOrder.shipmentBatchId}`} style={subtleLinkStyle}>
+                  发货批次 {batchNo ?? `单号暂不可用 #${afterSalesOrder.shipmentBatchId}`}
+                </Link>
+              ) : <span>发货批次 #{afterSalesOrder.shipmentBatchId}（无查看权限）</span> : null}
+            </nav>
+          ) : null}
         </article>
 
         <article style={infoCardStyle}>
@@ -413,10 +419,6 @@ export default async function AppAfterSalesDetailPage({
             <p style={valueStyle}>{afterSalesOrder.financeReviewStatus}</p>
           </article>
           <article style={infoCardStyle}>
-            <p style={labelStyle}>单据编号 After-sales No</p>
-            <p style={valueStyle}>{afterSalesOrder.afterSalesNo}</p>
-          </article>
-          <article style={infoCardStyle}>
             <p style={labelStyle}>售后类型 Type</p>
             <p style={valueStyle}>{formatAfterSalesType(afterSalesOrder.type)}</p>
           </article>
@@ -424,18 +426,12 @@ export default async function AppAfterSalesDetailPage({
             <p style={labelStyle}>问题描述 Issue</p>
             <p style={valueStyle}>{afterSalesOrder.issueDescription ?? '未填写'}</p>
           </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>发货批次 Shipment Batch</p>
-            <p style={valueStyle}>{afterSalesOrder.shipmentBatchId ?? '未关联'}</p>
-            {afterSalesOrder.shipmentBatchId ? (
-              <Link
-                href={`/app/shipment-batches/${afterSalesOrder.shipmentBatchId}`}
-                style={subtleLinkStyle}
-              >
-                查看发货追溯
-              </Link>
-            ) : null}
-          </article>
+          {afterSalesOrder.rejectionReason ? (
+            <article style={infoCardStyle}>
+              <p style={labelStyle}>最近驳回修改要求</p>
+              <p style={valueStyle}>{afterSalesOrder.rejectionReason}</p>
+            </article>
+          ) : null}
         </div>
 
         <article style={infoCardStyle}>
@@ -522,6 +518,14 @@ export default async function AppAfterSalesDetailPage({
                     name: 'currentStatus',
                     value: afterSalesOrder.status,
                   },
+                  {
+                    name: 'rejectionReason',
+                    value: '',
+                    display: 'input',
+                    label: '驳回修改要求',
+                    required: true,
+                    helpText: '请填写实际驳回原因和需要修改的内容，提交后售后负责人可在详情查看。',
+                  },
                 ]}
               />
             ) : null}
@@ -600,7 +604,11 @@ export default async function AppAfterSalesDetailPage({
           </div>
         </article>
 
-        <AuditLogTable session={session} items={auditLogs?.items ?? []} />
+        {canViewFormalAuditCenter(session) && !auditLogs ? (
+          <p role="alert">审计日志暂不可用，请刷新重试。</p>
+        ) : (
+          <AuditLogTable session={session} items={auditLogs?.items ?? []} collapseChanges />
+        )}
       </section>
     </AppShell>
   );

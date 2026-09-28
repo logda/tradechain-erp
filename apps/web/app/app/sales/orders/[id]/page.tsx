@@ -1,3 +1,4 @@
+import { resolveFormalUserId } from '../../../_lib/formal-access';
 import Link from 'next/link';
 import { ActionPermissionNote } from '../../../_components/action-permission-note';
 import { AppShell } from '../../../_components/app-shell';
@@ -6,7 +7,9 @@ import { ImagePreviewGallery } from '../../../_components/image-preview-gallery'
 import { MutationActionForm } from '../../../_components/mutation-action-form';
 import {
   canViewFormalModule,
+  canViewFormalAuditCenter,
   resolveDemoSession,
+  type DemoSession,
 } from '../../../_lib/demo-session';
 import {
   canUseFormalSalesFinanceActions,
@@ -14,7 +17,7 @@ import {
   canViewFormalSalesOrderDetail,
   getFormalDetailAccessDeniedLabel,
 } from '../../../_lib/formal-access';
-import { hasValidAuditLogResponse, type AuditLogResponse } from '../../../_lib/audit-log';
+import { hasValidUnifiedAuditLogResponse } from '../../../_lib/audit-log';
 import { buildFormalRequestHeaders } from '../../../_lib/formal-request-headers';
 import { buildSignedFormalRequestHeaders } from '../../../_lib/formal-request-signature';
 import { formatCounterpartyBilingualDisplay } from '../../../_lib/counterparty-display';
@@ -49,6 +52,7 @@ type SalesOrderDetail = {
   sourceDocumentType?: 'demand' | 'quote';
   receiptSendStatus?: string;
   salesUserId?: number;
+  salesUserName?: string;
   createdBy?: number;
   afterSalesEndStatus?: string;
   receiptStatus?: string;
@@ -74,6 +78,7 @@ type SalesOrderDetail = {
     url: string;
   }>;
   cancelReason?: string;
+  rejectionReason?: string;
   autoVoidedPurchaseOrderIds?: number[];
   linkedPurchaseOrders?: Array<{
     id: number;
@@ -131,17 +136,6 @@ function hasValidSalesOrderDetail(value: unknown): value is SalesOrderDetail {
   );
 }
 
-function resolveUserId(user: string) {
-  if (user === 'Zoe') {
-    return 2001;
-  }
-
-  if (user === 'Leo') {
-    return 2002;
-  }
-
-  return 2000;
-}
 
 function resolveSalesClosureSnapshot(salesOrder: SalesOrderDetail) {
   const receiptSendStatus = salesOrder.receiptSendStatus ?? 'pending';
@@ -153,52 +147,16 @@ function resolveSalesClosureSnapshot(salesOrder: SalesOrderDetail) {
     salesOrder.shipmentAggregateStatus === 'forwarder_shipped' ||
     salesOrder.shipmentAggregateStatus === 'arrived' ||
     salesOrder.shipmentAggregateStatus === 'closed';
-  const deliveryDone =
-    salesOrder.shipmentAggregateStatus === 'shipped' || shipmentDone;
-  const receiptPaid =
-    receiptStatus === 'deposit_received' ||
-    receiptStatus === 'fully_paid' ||
-    receiptStatus === 'prepaid_deducted';
-  const receiptSent = receiptSendStatus === 'sent';
-  const afterSalesDone = afterSalesEndStatus === 'closed';
-  const financeConfirmed = financeStatus === 'confirmed';
-
   return {
     receiptSendStatus,
     afterSalesEndStatus,
     receiptStatus,
     financeStatus,
     canClose: shipmentDone,
-    checks: [
-      {
-        label: '收款',
-        passed: receiptPaid,
-      },
-      {
-        label: '财务',
-        passed: financeConfirmed,
-      },
-      {
-        label: '交货',
-        passed: deliveryDone,
-      },
-      {
-        label: '回单',
-        passed: receiptSent,
-      },
-      {
-        label: '售后',
-        passed: afterSalesDone,
-      },
-      {
-        label: '交货代',
-        passed: shipmentDone,
-      },
-    ],
   };
 }
 
-async function loadSalesOrderDetail(id: string, session: { role: string; user: string }) {
+async function loadSalesOrderDetail(id: string, session: { role: string; user: string; userId?: number }) {
   if (!id.trim()) {
     return null;
   }
@@ -226,7 +184,27 @@ async function loadSalesOrderDetail(id: string, session: { role: string; user: s
   }
 }
 
-async function loadSalesOrderCostWarning(id: number, session: { role: string; user: string }) {
+type CancellationImpact = {
+  canCancel: boolean;
+  hasShipmentBatches: boolean;
+  purchaseOrders: Array<{ id: number; purchaseNo: string; status: string }>;
+};
+
+async function loadCancellationImpact(id: number, session: { role: string; user: string; userId?: number }): Promise<CancellationImpact | null> {
+  try {
+    const response = await fetch(`${getSalesOrderApiBaseUrl()}/sales-orders/${id}/cancellation-impact`, {
+      cache: 'no-store', headers: { ...buildFormalRequestHeaders(session), ...buildSignedFormalRequestHeaders(session) },
+    });
+    if (!response.ok) return null;
+    const result = await response.json();
+    if (typeof result?.canCancel !== 'boolean' || typeof result?.hasShipmentBatches !== 'boolean' || !Array.isArray(result.purchaseOrders) ||
+        !result.purchaseOrders.every((purchase: { id?: unknown; purchaseNo?: unknown; status?: unknown }) =>
+          typeof purchase.id === 'number' && typeof purchase.purchaseNo === 'string' && typeof purchase.status === 'string')) return null;
+    return result;
+  } catch { return null; }
+}
+
+async function loadSalesOrderCostWarning(id: number, session: { role: string; user: string; userId?: number }) {
   try {
     const response = await fetch(`${getSalesOrderApiBaseUrl()}/sales-orders/${id}/cost-warning`, {
       cache: 'no-store',
@@ -247,9 +225,10 @@ async function loadSalesOrderCostWarning(id: number, session: { role: string; us
   }
 }
 
-async function loadSalesOrderAuditLogs(session: { role: string; user: string }) {
+async function loadSalesOrderAuditLogs(id: string, session: DemoSession) {
+  if (!canViewFormalAuditCenter(session)) return null;
   try {
-    const response = await fetch(`${getSalesOrderApiBaseUrl()}/sales-orders/audit-logs`, {
+    const response = await fetch(`${getSalesOrderApiBaseUrl()}/audit-logs?bizType=sales_order&bizId=${encodeURIComponent(id)}`, {
       cache: 'no-store',
       headers: {
         ...buildFormalRequestHeaders(session),
@@ -262,7 +241,9 @@ async function loadSalesOrderAuditLogs(session: { role: string; user: string }) 
     }
 
     const result = (await response.json().catch(() => null)) as unknown;
-    return hasValidAuditLogResponse(result) ? result : null;
+    return hasValidUnifiedAuditLogResponse(result) && !result.modules.some((module) => module.failed)
+      ? { items: result.items.filter((item) => item.bizType === 'sales_order' && item.bizId === Number(id)) }
+      : null;
   } catch {
     return null;
   }
@@ -623,7 +604,7 @@ export default async function AppSalesOrderDetailPage({
   if (!canViewFormalModule(session, 'sales')) {
     return (
       <AppShell
-        title="正式销售单详情"
+        title="销售单详情"
         subtitle="正式工作台下查看销售单详情与履约追踪。"
         session={session}
       >
@@ -637,24 +618,24 @@ export default async function AppSalesOrderDetailPage({
     );
   }
 
-  const createdBy = resolveUserId(session.user);
+  const createdBy = resolveFormalUserId(session);
   const { id } = await params;
   const [salesOrder, auditLogs] = await Promise.all([
     loadSalesOrderDetail(id, session),
-    loadSalesOrderAuditLogs(session),
+    loadSalesOrderAuditLogs(id, session),
   ]);
 
   if (!salesOrder) {
     return (
       <AppShell
-        title="正式销售单详情"
+        title="销售单详情"
         subtitle="正式工作台下查看销售单详情与履约追踪。"
         session={session}
       >
         <section style={detailLayoutStyle}>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>销售订单详情加载失败</h3>
-            <p style={heroSubStyle}>请返回正式销售单列表后重试。</p>
+            <p style={heroSubStyle}>请返回销售单列表后重试。</p>
           </div>
         </section>
       </AppShell>
@@ -664,7 +645,7 @@ export default async function AppSalesOrderDetailPage({
   if (!canViewFormalSalesOrderDetail(session, salesOrder)) {
     return (
       <AppShell
-        title="正式销售单详情"
+        title="销售单详情"
         subtitle="正式工作台下查看销售单详情与履约追踪。"
         session={session}
       >
@@ -699,7 +680,10 @@ export default async function AppSalesOrderDetailPage({
     : [];
   const canSubmitSalesOrder = canUseSalesOrderActions && isDraftStatus;
   const canResubmitSalesOrder = false;
-  const canCancelSalesOrder = false;
+  const cancellationImpact = canUseSalesOrderActions && isPurchasingStatus
+    ? await loadCancellationImpact(salesOrder.id, session)
+    : null;
+  const canCancelSalesOrder = canUseSalesOrderActions && isPurchasingStatus && cancellationImpact?.canCancel === true;
   const canUpdateReceiptStatus =
     canUseFinanceActions &&
     canUseSalesFinanceRole &&
@@ -735,36 +719,38 @@ export default async function AppSalesOrderDetailPage({
     ? await Promise.all([
         loadActiveCounterpartyOptions('customer', session),
         loadActiveProductOptions(session),
-        loadSalesUserOptions(session),
+        loadSalesUserOptions(session, salesOrder.salesUserId ? { id: salesOrder.salesUserId, name: salesOrder.salesUserName } : undefined),
       ])
     : null;
   const sourceDocumentType = resolveSalesOrderSourceDocumentType(salesOrder);
   const sourceDocumentNoun = sourceDocumentType === 'demand' ? '需求' : '报价';
   const sourceDocumentNo = salesOrder.sourceQuoteNo ?? String(salesOrder.sourceQuoteOrderId ?? '');
   const sourceDocumentVersion = `V${salesOrder.sourceQuoteVersionNo ?? '-'}`;
+  const orderItems = salesOrder.items ?? [];
+  const orderAmount = orderItems.every((item) => Number.isFinite(item.amount))
+    ? Number(orderItems.reduce((sum, item) => sum + item.amount, 0).toFixed(2)) : null;
 
   return (
     <AppShell
-      title="正式销售单详情"
+      title="销售单详情"
+      tabLabel={salesOrder.salesNo}
       subtitle="展示销售单审批、采购、发货、售后和财务收口的全链路追踪。"
       session={session}
     >
       <section style={detailLayoutStyle}>
 
-        <article style={heroCardStyle}>
+        <article aria-label="销售单摘要" style={heroCardStyle}>
           <p style={heroEyebrowStyle}>Sales Order Detail / 销售单详情</p>
           <h3 style={heroTitleStyle}>{`销售订单 ${salesOrder.salesNo}`}</h3>
-          <p style={valueStyle}>
-            {`订单标题：${formatSalesValue(salesOrder.title)}`}
-          </p>
-          <p style={heroSubStyle}>
-            正式页聚焦审批状态、采购进度、发货汇总、售后闭环与财务确认。
-          </p>
-        </article>
-
-        <article style={{ ...infoCardStyle, borderLeft: '4px solid #2563eb' }}>
-          <p style={labelStyle}>状态 Status</p>
-          <p style={valueStyle}>{formatSalesOrderStatus(salesOrder.status)}</p>
+          {salesOrder.title && !salesOrder.title.includes(salesOrder.salesNo) ? (
+            <p style={valueStyle}>{`订单标题：${salesOrder.title}`}</p>
+          ) : null}
+          <div style={{ ...gridStyle, marginTop: '16px' }}>
+            <div><p style={labelStyle}>订货单位 / 客户</p><p style={valueStyle}>{formatSalesValue(formatCounterpartyBilingualDisplay(salesOrder.orderingUnit ?? salesOrder.customerName, { code: salesOrder.customerCode, fullName: salesOrder.customerFullName }))}</p></div>
+            <p style={valueStyle}>{`订单金额：${formatSalesValue(orderAmount)}`}</p>
+            <div><p style={labelStyle}>状态 Status</p><p style={valueStyle}>{formatSalesOrderStatus(salesOrder.status)}</p></div>
+          </div>
+          <p style={{ ...heroSubStyle, marginTop: '12px' }}>{`当前版本：V${salesOrder.currentVersionNo}`}</p>
         </article>
 
         {canApproveSalesOrder && belowCostProductNames === null ? (
@@ -787,209 +773,29 @@ export default async function AppSalesOrderDetailPage({
           </div>
         ) : null}
 
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>销售明细</h3>
-          <div style={tableWrapStyle}>
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={headCellStyle}>行号 Line</th>
-                  <th style={headCellStyle}>货品编码 Product No</th>
-                  <th style={headCellStyle}>货品名称 Product Name</th>
-                  <th style={headCellStyle}>工厂图片 Factory Images</th>
-                  <th style={headCellStyle}>数量/件 Quantity</th>
-                  <th style={headCellStyle}>每件数量 Quan</th>
-                  <th style={headCellStyle}>总数量 Total Q</th>
-                  <th style={headCellStyle}>装箱数</th>
-                  <th style={headCellStyle}>外箱尺寸</th>
-                  <th style={headCellStyle}>外箱毛重</th>
-                  <th style={headCellStyle}>单位 Unit</th>
-                  <th style={headCellStyle}>单价 Unit P</th>
-                  <th style={headCellStyle}>合计 Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(salesOrder.items ?? []).map((item) => (
-                  <tr key={`${item.lineNo}-${item.sku}`}>
-                    <td style={cellStyle}>{item.lineNo}</td>
-                    <td style={cellStyle}>{item.sku}</td>
-                    <td style={cellStyle}>{item.productName}</td>
-                    <td style={cellStyle}>{renderFactoryPics(item)}</td>
-                    <td style={cellStyle}>{item.packageQuantity ?? 1}</td>
-                    <td style={cellStyle}>{item.unitsPerPackage ?? item.quantity}</td>
-                    <td style={cellStyle}>{item.totalQuantity ?? item.quantity}</td>
-                    <td style={cellStyle}>{item.cartonQuantity ?? '-'}</td>
-                    <td style={cellStyle}>{item.outerCartonSizeCm || '-'}</td>
-                    <td style={cellStyle}>{item.outerCartonGrossWeightKg ?? '-'}</td>
-                    <td style={cellStyle}>{item.unit}</td>
-                    <td style={cellStyle}>{item.salePrice}</td>
-                    <td style={cellStyle}>{item.amount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </article>
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>销售收口检查</h3>
-          <p style={heroSubStyle}>
-            交货代即完成内部主流程收口；回单、售后、财务和收款保留为跟踪项，不阻塞销售收口。
-          </p>
-          <div style={{ ...gridStyle, marginTop: '16px' }}>
-            {closureSnapshot.checks.map((check) => (
-              <p key={check.label} style={valueStyle}>
-                {`${check.label}：${check.passed ? '通过' : '未通过'}`}
-              </p>
-            ))}
-          </div>
-        </article>
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>订单字段</h3>
-          <div style={tableWrapStyle}>
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={headCellStyle}>Order No 订单编码</th>
-                  <th style={headCellStyle}>Title 订单标题</th>
-                  <th style={headCellStyle}>Ordering 订货单位</th>
-                  <th style={headCellStyle}>门店</th>
-                  <th style={headCellStyle}>Order Date 订货日期</th>
-                  <th style={headCellStyle}>Sale person 销售</th>
-                  <th style={headCellStyle}>截止日期 Deadline</th>
-                  <th style={headCellStyle}>Ship to 发货至</th>
-                  <th style={headCellStyle}>备注 Remark</th>
-                  <th style={headCellStyle}>销售单附件</th>
-                  <th style={headCellStyle}>客户订单号 Customer PO No</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td style={cellStyle}>{formatSalesValue(salesOrder.salesNo)}</td>
-                  <td style={cellStyle}>{formatSalesValue(salesOrder.title)}</td>
-                  <td style={cellStyle}>
-                    {formatSalesValue(
-                      formatCounterpartyBilingualDisplay(
-                        salesOrder.orderingUnit ?? salesOrder.customerName,
-                        {
-                          code: salesOrder.customerCode,
-                          fullName: salesOrder.customerFullName,
-                        },
-                      ),
-                    )}
-                  </td>
-                  <td style={cellStyle}>{formatSalesValue(salesOrder.storeName)}</td>
-                  <td style={cellStyle}>{formatSalesValue(salesOrder.orderDate)}</td>
-                  <td style={cellStyle}>{formatSalesPerson(salesOrder.salesUserId)}</td>
-                  <td style={cellStyle}>
-                    {formatSalesValue(salesOrder.estimatedDeliveryDate)}
-                  </td>
-                  <td style={cellStyle}>{formatSalesValue(salesOrder.shipTo)}</td>
-                  <td style={cellStyle}>
-                    {formatSalesOrderRemark(salesOrder)}
-                  </td>
-                  <td style={cellStyle}>
-                    {renderSalesOrderAttachments(salesOrder.salesOrderAttachments)}
-                  </td>
-                  <td style={cellStyle}>{formatSalesValue(salesOrder.customerOrderNo)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </article>
-
-        <div style={gridStyle}>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>版本 Version</p>
-            <p style={valueStyle}>V{salesOrder.currentVersionNo}</p>
+        {salesOrder.rejectionReason ? (
+          <article role="alert" aria-label="驳回修改要求" style={infoCardStyle}>
+            <p style={labelStyle}>驳回修改要求</p>
+            <p style={valueStyle}>{salesOrder.rejectionReason}</p>
           </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>采购汇总 Purchase Aggregate</p>
-            <p style={valueStyle}>
-              {formatPurchaseAggregateStatus(salesOrder.purchaseAggregateStatus)}
-            </p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>发货汇总 Shipment Aggregate</p>
-            <p style={valueStyle}>
-              {formatShipmentAggregateStatus(salesOrder.shipmentAggregateStatus)}
-            </p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>回单状态 Receipt Sent</p>
-            <p style={valueStyle}>
-              {formatReceiptSendStatus(closureSnapshot.receiptSendStatus)}
-            </p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>收款状态 Receipt</p>
-            <p style={valueStyle}>{formatReceiptStatus(closureSnapshot.receiptStatus)}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>财务确认 Finance</p>
-            <p style={valueStyle}>{formatFinanceStatus(closureSnapshot.financeStatus)}</p>
-          </article>
-          {salesOrder.cancelReason ? (
-            <article style={infoCardStyle}>
-              <p style={labelStyle}>作废原因 Cancel Reason</p>
-              <p style={valueStyle}>{salesOrder.cancelReason}</p>
-            </article>
-          ) : null}
-          {salesOrder.autoVoidedPurchaseOrderIds?.length ? (
-            <article style={infoCardStyle}>
-              <p style={labelStyle}>联动作废采购单 Linked Void POs</p>
-              <p style={valueStyle}>
-                {salesOrder.autoVoidedPurchaseOrderIds.join(', ')}
-              </p>
-            </article>
-          ) : null}
-        </div>
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>售后状态摘要</h3>
-          <div style={gridStyle}>
-            <p style={valueStyle}>
-              {`售后阶段：${formatAfterSalesEndStatus(closureSnapshot.afterSalesEndStatus)}`}
-            </p>
-            <p style={valueStyle}>
-              {`关单判断：${closureSnapshot.afterSalesEndStatus === 'closed' ? '已闭环' : '未闭环'}`}
-            </p>
-          </div>
-          <p style={heroSubStyle}>
-            售后阶段由后销售单逐步回写，只有完成处理与财务确认后才会推进到闭环。
-          </p>
-        </article>
-
-        {salesOrder.versionHistory?.length ? (
-          <article style={infoCardStyle}>
-            <h3 style={{ marginTop: 0 }}>版本时间线</h3>
-            <div style={tableWrapStyle}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={headCellStyle}>版本 Version</th>
-                    <th style={headCellStyle}>状态 Status</th>
-                    <th style={headCellStyle}>创建时间 Created At</th>
-                    <th style={headCellStyle}>变更原因 Change Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {salesOrder.versionHistory.map((entry) => (
-                    <tr key={`${entry.versionNo}-${entry.createdAt}`}>
-                      <td style={cellStyle}>{`V${entry.versionNo}`}</td>
-                      <td style={cellStyle}>{formatSalesOrderStatus(entry.status)}</td>
-                      <td style={cellStyle}>{entry.createdAt}</td>
-                      <td style={cellStyle}>{entry.changeReason ?? '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        ) : null}
+        {salesOrder.cancelReason ? (
+          <article role="alert" aria-label="作废原因" style={infoCardStyle}>
+            <p style={labelStyle}>作废原因 Cancel Reason</p>
+            <p style={valueStyle}>{salesOrder.cancelReason}</p>
+            {salesOrder.autoVoidedPurchaseOrderIds?.length ? <p style={heroSubStyle}>{`联动作废采购单：${salesOrder.autoVoidedPurchaseOrderIds.join(', ')}`}</p> : null}
           </article>
         ) : null}
 
-        <article style={actionPanelStyle}>
+        {canUseSalesOrderActions && isPurchasingStatus && !cancellationImpact ? (
+          <p style={heroSubStyle}>作废关联检查暂不可用，请刷新后重试。</p>
+        ) : null}
+        {canUseSalesOrderActions && isPurchasingStatus && cancellationImpact?.hasShipmentBatches ? (
+          <p style={heroSubStyle}>本单已有实际发货，已发货后不可作废。</p>
+        ) : null}
+
+        <article aria-label="当前操作" style={actionPanelStyle}>
+          <h3 style={{ marginTop: 0 }}>当前操作</h3>
           <ActionPermissionNote>
             当前仅显示当前角色和当前销售单状态下可执行的动作。
           </ActionPermissionNote>
@@ -1038,6 +844,8 @@ export default async function AppSalesOrderDetailPage({
                   requiredActionLabel="销售单操作"
                   requestHeaders={actionRequestHeaders}
                   fields={[
+                    { name: 'rejectionReason', value: '', display: 'input', label: '驳回修改要求', required: true,
+                      placeholder: '请填写销售需要修改的内容' },
                     {
                       name: 'currentStatus',
                       value: salesOrder.status,
@@ -1073,70 +881,48 @@ export default async function AppSalesOrderDetailPage({
                 <MutationActionForm
                   endpoint={`${getSalesOrderApiBaseUrl()}/sales-orders/${salesOrder.id}/cancel`}
                   label="作废销售单"
-                  successLabel="销售单已作废"
+                  successLabel="销售单及关联未发货采购单已作废"
+                  confirmMessage={`作废销售单 ${salesOrder.salesNo}。${cancellationImpact?.purchaseOrders.length
+                    ? `将联动作废未发货采购单：${cancellationImpact.purchaseOrders.map(purchase => purchase.purchaseNo).join('、')}。`
+                    : '当前没有关联的未发货采购单。'}已发货后不可作废；提交时将再次核对实际发货情况。`}
                   requiredAction="sales.order.write"
                   requiredActionLabel="销售单操作"
                   requestHeaders={actionRequestHeaders}
                   fields={[
-                    {
-                      name: 'currentStatus',
-                      value: salesOrder.status,
-                    },
-                    {
-                      name: 'hasShipmentBatches',
-                      value: false,
-                      dataType: 'boolean',
-                    },
-                    {
-                      name: 'unshippedPurchaseOrderIds',
-                      value: '',
-                      dataType: 'numberArray',
-                    },
-                    {
-                      name: 'cancelReason',
-                      value: '客户取消订单',
-                    },
+                    { name: 'cancelReason', value: '', display: 'input', label: '作废原因', required: true,
+                      placeholder: '请填写本次作废的实际原因' },
                   ]}
                 />
               ) : null}
               {canUpdateReceiptStatus ? (
                 <MutationActionForm
                   endpoint={`${getSalesOrderApiBaseUrl()}/sales-orders/${salesOrder.id}/receipt-status`}
-                  label="更新收款状态"
+                  label="登记收款"
                   requiredAction="finance.confirm"
                   requiredActionLabel="财务确认"
                   requestHeaders={actionRequestHeaders}
                   fields={[
-                    {
-                      name: 'receiptStatus',
-                      value:
-                        closureSnapshot.receiptStatus === 'unpaid'
-                          ? 'fully_paid'
-                          : closureSnapshot.receiptStatus,
-                    },
+                    { name: 'receiptStatus', value: '', display: 'select', label: '本次登记收款状态', required: true,
+                      helpText: '按实际收款情况选择；登记后页面展示所选状态，财务复核另行操作。',
+                      options: [
+                        { value: '', label: '请选择实际收款状态' },
+                        { value: 'unpaid', label: '未收款' },
+                        { value: 'deposit_received', label: '已收定金' },
+                        { value: 'fully_paid', label: '已全款到账' },
+                        { value: 'prepaid_deducted', label: '预付款抵扣' },
+                      ] },
                   ]}
                 />
               ) : null}
               {canConfirmFinance ? (
                 <MutationActionForm
                   endpoint={`${getSalesOrderApiBaseUrl()}/sales-orders/${salesOrder.id}/finance-confirm`}
-                  label="财务确认"
+                  label="财务复核"
+                  successLabel={`财务已复核，收款状态保持：${formatReceiptStatus(closureSnapshot.receiptStatus)}`}
                   requiredAction="finance.confirm"
                   requiredActionLabel="财务确认"
                   requestHeaders={actionRequestHeaders}
-                  fields={[
-                    {
-                      name: 'receiptStatus',
-                      value:
-                        closureSnapshot.receiptStatus === 'unpaid'
-                          ? 'fully_paid'
-                          : closureSnapshot.receiptStatus,
-                    },
-                    {
-                      name: 'financeStatus',
-                      value: 'confirmed',
-                    },
-                  ]}
+                  fields={[]}
                 />
               ) : null}
               {canCloseSalesOrder ? (
@@ -1163,6 +949,104 @@ export default async function AppSalesOrderDetailPage({
         </article>
 
         <article style={infoCardStyle}>
+          <h3 style={{ marginTop: 0 }}>销售明细</h3>
+          <div style={tableWrapStyle}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={headCellStyle}>行号 Line</th>
+                  <th style={headCellStyle}>货品编码 Product No</th>
+                  <th style={headCellStyle}>货品名称 Product Name</th>
+                  <th style={headCellStyle}>工厂图片 Factory Images</th>
+                  <th style={headCellStyle}>数量/件 Quantity</th>
+                  <th style={headCellStyle}>每件数量 Quan</th>
+                  <th style={headCellStyle}>总数量 Total Q</th>
+                  <th style={headCellStyle}>装箱数</th>
+                  <th style={headCellStyle}>外箱尺寸</th>
+                  <th style={headCellStyle}>外箱毛重</th>
+                  <th style={headCellStyle}>单位 Unit</th>
+                  <th style={headCellStyle}>单价 Unit P</th>
+                  <th style={headCellStyle}>合计 Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(salesOrder.items ?? []).map((item) => (
+                  <tr key={`${item.lineNo}-${item.sku}`}>
+                    <td style={cellStyle}>{item.lineNo}</td>
+                    <td style={cellStyle}>{item.sku}</td>
+                    <td style={cellStyle}>{item.productName}</td>
+                    <td style={cellStyle}>{renderFactoryPics(item)}</td>
+                    <td style={cellStyle}>{item.packageQuantity ?? 1}</td>
+                    <td style={cellStyle}>{item.unitsPerPackage ?? item.quantity}</td>
+                    <td style={cellStyle}>{item.totalQuantity ?? item.quantity}</td>
+                    <td style={cellStyle}>{item.cartonQuantity ?? '-'}</td>
+                    <td style={cellStyle}>{item.outerCartonSizeCm || '-'}</td>
+                    <td style={cellStyle}>{item.outerCartonGrossWeightKg ?? '-'}</td>
+                    <td style={cellStyle}>{item.unit}</td>
+                    <td style={cellStyle}>{item.salePrice}</td>
+                    <td style={cellStyle}>{item.amount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article style={infoCardStyle}>
+          <h3 style={{ marginTop: 0 }}>订单字段</h3>
+          <div style={tableWrapStyle}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={headCellStyle}>门店</th>
+                  <th style={headCellStyle}>Order Date 订货日期</th>
+                  <th style={headCellStyle}>Sale person 销售</th>
+                  <th style={headCellStyle}>截止日期 Deadline</th>
+                  <th style={headCellStyle}>Ship to 发货至</th>
+                  <th style={headCellStyle}>备注 Remark</th>
+                  <th style={headCellStyle}>销售单附件</th>
+                  <th style={headCellStyle}>客户订单号 Customer PO No</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={cellStyle}>{formatSalesValue(salesOrder.storeName)}</td>
+                  <td style={cellStyle}>{formatSalesValue(salesOrder.orderDate)}</td>
+                  <td style={cellStyle}>{formatSalesPerson(salesOrder.salesUserId)}</td>
+                  <td style={cellStyle}>
+                    {formatSalesValue(salesOrder.estimatedDeliveryDate)}
+                  </td>
+                  <td style={cellStyle}>{formatSalesValue(salesOrder.shipTo)}</td>
+                  <td style={cellStyle}>
+                    {formatSalesOrderRemark(salesOrder)}
+                  </td>
+                  <td style={cellStyle}>
+                    {renderSalesOrderAttachments(salesOrder.salesOrderAttachments)}
+                  </td>
+                  <td style={cellStyle}>{formatSalesValue(salesOrder.customerOrderNo)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article aria-label="销售进度与跟踪" style={infoCardStyle}>
+          <h3 style={{ marginTop: 0 }}>进度与跟踪</h3>
+          <div style={gridStyle}>
+            <div><p style={labelStyle}>采购汇总 Purchase Aggregate</p><p style={valueStyle}>{formatPurchaseAggregateStatus(salesOrder.purchaseAggregateStatus)}</p></div>
+            <div><p style={labelStyle}>发货汇总 Shipment Aggregate</p><p style={valueStyle}>{formatShipmentAggregateStatus(salesOrder.shipmentAggregateStatus)}</p></div>
+            <div><p style={labelStyle}>收款状态 Receipt</p><p style={valueStyle}>{formatReceiptStatus(closureSnapshot.receiptStatus)}</p></div>
+            <div><p style={labelStyle}>财务确认 Finance</p><p style={valueStyle}>{formatFinanceStatus(closureSnapshot.financeStatus)}</p></div>
+            <div><p style={labelStyle}>回单状态 Receipt Sent</p><p style={valueStyle}>{formatReceiptSendStatus(closureSnapshot.receiptSendStatus)}</p></div>
+            <div><p style={labelStyle}>售后</p><p style={valueStyle}>{`售后阶段：${formatAfterSalesEndStatus(closureSnapshot.afterSalesEndStatus)}`}</p></div>
+          </div>
+          <p style={{ ...heroSubStyle, marginTop: '16px' }}>{`交货代：${closureSnapshot.canClose ? '通过' : '未通过'}`}</p>
+          <p style={heroSubStyle}>交货代即完成内部主流程收口；回单、售后、财务和收款保留为跟踪项，不阻塞销售收口。</p>
+          <p style={heroSubStyle}>售后阶段由后销售单逐步回写，只有完成处理与财务确认后才会推进到闭环。</p>
+          {salesOrder.autoVoidedPurchaseOrderIds?.length && !salesOrder.cancelReason ? <p style={heroSubStyle}>{`联动作废采购单：${salesOrder.autoVoidedPurchaseOrderIds.join(', ')}`}</p> : null}
+        </article>
+
+        <article style={infoCardStyle}>
           <h3 style={{ marginTop: 0 }}>来源追溯</h3>
           {salesOrder.sourceQuoteOrderId ? (
             <Link
@@ -1184,7 +1068,48 @@ export default async function AppSalesOrderDetailPage({
           )}
         </article>
 
-        <AuditLogTable session={session} items={auditLogs?.items ?? []} />
+        {salesOrder.versionHistory?.length ? (
+          <details style={infoCardStyle}>
+            <summary style={{ cursor: 'pointer' }}><h3 style={{ display: 'inline', margin: 0 }}>版本时间线</h3></summary>
+            <div style={tableWrapStyle}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={headCellStyle}>版本 Version</th>
+                    <th style={headCellStyle}>状态 Status</th>
+                    <th style={headCellStyle}>创建时间 Created At</th>
+                    <th style={headCellStyle}>变更原因 Change Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {salesOrder.versionHistory.map((entry) => (
+                    <tr key={`${entry.versionNo}-${entry.createdAt}`}>
+                      <td style={cellStyle}>{`V${entry.versionNo}`}</td>
+                      <td style={cellStyle}>{formatSalesOrderStatus(entry.status)}</td>
+                      <td style={cellStyle}>{entry.createdAt}</td>
+                      <td style={cellStyle}>{entry.changeReason ?? '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        ) : null}
+
+        {salesOrder.title?.includes(salesOrder.salesNo) ? (
+          <details style={infoCardStyle}>
+            <summary style={{ cursor: 'pointer' }}>原始订单标题</summary>
+            <p style={valueStyle}>{salesOrder.title}</p>
+          </details>
+        ) : null}
+        {canViewFormalAuditCenter(session) && !auditLogs ? (
+          <p role="alert">审计日志暂不可用，请刷新重试。</p>
+        ) : canViewFormalAuditCenter(session) ? (
+          <details style={infoCardStyle}>
+            <summary style={{ cursor: 'pointer' }}>审计日志</summary>
+            <AuditLogTable session={session} items={auditLogs?.items ?? []} collapseChanges />
+          </details>
+        ) : null}
       </section>
     </AppShell>
   );

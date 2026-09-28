@@ -1,3 +1,5 @@
+import { DataLoadError } from '../../_components/data-load-error';
+import { DataScopeNote } from '../../_components/data-scope-note';
 import Link from 'next/link';
 import {
   formatSampleOrderStatus,
@@ -7,7 +9,6 @@ import {
   sampleOrderStatuses,
 } from '@erp/shared';
 import { AuditLogTable } from '../../_components/audit-log-table';
-import { getSampleOrderPreviewResponse } from '../../../samples/sample-order-preview';
 import { AppShell } from '../../_components/app-shell';
 import { FilterPanel } from '../../_components/filter-panel';
 import { FormalPagination } from '../../_components/formal-pagination';
@@ -223,21 +224,25 @@ export default async function AppSampleOrdersPage({
   if (!canViewSalesSamples && !canViewPurchaseSamples) {
     return (
       <AppShell
-        title="正式样品单"
+        title="样品单"
         subtitle="当前角色不在销售或采购域内，不能查看样品单。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限访问正式样品单</h2>
+          <h2>无权限访问样品单</h2>
           <p>请切换到销售、销售主管、采购、采购主管或老板视角后再查看。</p>
         </section>
       </AppShell>
     );
   }
 
-  const result =
-    (await loadSampleList(sampleSearchParams, session)) ??
-    getSampleOrderPreviewResponse(query);
+  const result = await loadSampleList(sampleSearchParams, session);
+  if (!result) {
+    return <AppShell title="样品单" session={session}>
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
+      <DataLoadError label="样品单列表" />
+    </AppShell>;
+  }
   const auditLogs = await loadSampleAuditLogs(session);
   const visibleItems = canViewPurchaseSamples && !canViewSalesSamples
     ? filterPurchaseOrderRows(result.items, session)
@@ -275,11 +280,12 @@ export default async function AppSampleOrdersPage({
 
   return (
     <AppShell
-      title="正式样品单"
+      title="样品单"
       subtitle="正式样品页承接确认报价版本后的样品申请、替代版本和取消留痕。"
       session={session}
     >
 
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
       <StatStrip
         items={[
           { label: '全部', value: visibleItems.length },
@@ -338,7 +344,7 @@ export default async function AppSampleOrdersPage({
             >
               {sampleIsReplacementOptions.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {value === 'all' ? '全部' : value === 'yes' ? '是' : value === 'no' ? '否' : value}
                 </option>
               ))}
             </select>
@@ -352,7 +358,7 @@ export default async function AppSampleOrdersPage({
             >
               {sampleIsCancelledOptions.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {value === 'all' ? '全部' : value === 'yes' ? '是' : value === 'no' ? '否' : value}
                 </option>
               ))}
             </select>

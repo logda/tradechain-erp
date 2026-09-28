@@ -16,8 +16,11 @@ describe('ShipmentBatchService prisma document storage', () => {
     process.env.ERP_STORAGE_MODE = 'prisma';
     const createdAt = new Date('2026-07-13T15:00:00.000Z');
     const prismaMock = {
+      $transaction: async (operation: (tx: unknown) => Promise<unknown>) => operation(prismaMock),
+      $queryRaw: jest.fn().mockResolvedValue([]),
       businessDocument: {
         findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({
           id: 401n,
           docNo: 'PENDING-SHIPMENT-401',

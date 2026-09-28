@@ -237,12 +237,12 @@ export default async function AppStockOutPage({
   if (!allowed) {
     return (
       <AppShell
-        title="正式出库单"
+        title="出库单"
         subtitle="当前角色不在运营域内，不能查看出库执行单据。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限访问正式出库单</h2>
+          <h2>无权限访问出库单</h2>
           <p>请切换到采购、采购主管、老板或管理员视角后再查看。</p>
         </section>
       </AppShell>
@@ -263,7 +263,7 @@ export default async function AppStockOutPage({
 
   return (
     <AppShell
-      title="正式出库单"
+      title="出库单"
       subtitle="正式版出库执行列表，承接销售发货、库存扣减与仓库出库追踪。"
       session={session}
     >

@@ -44,14 +44,14 @@ export default async function AppQuoteSourcePage({
   return (
     <AppShell
       title="报价来源字典"
-      subtitle="统一维护正式报价单的来源渠道，用于销售录单时选择。"
+      subtitle="统一维护报价单的来源渠道，用于销售录单时选择。"
       session={session}
     >
       <section style={sectionStyle}>
         <div>
           <h2 style={{ margin: '0 0 10px' }}>来源维护说明</h2>
           <p style={{ margin: 0, color: '#475569', lineHeight: 1.8 }}>
-            支持维护线上、TikTok、展会、转介绍等来源，正式报价单创建页会直接读取这里的启用项。
+            支持维护线上、TikTok、展会、转介绍等来源，报价单创建页会直接读取这里的启用项。
           </p>
         </div>
         {canManageMasterData ? (

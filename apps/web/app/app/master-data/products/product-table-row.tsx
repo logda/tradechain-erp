@@ -86,12 +86,13 @@ const pricingModeLabels: Record<PricingMode, string> = {
 };
 
 const cellStyle = {
-  padding: '14px 12px',
+  padding: '10px 8px',
   borderBottom: '1px solid #e5ebf2',
   borderRight: '1px solid #e5ebf2',
   fontSize: '13px',
   color: '#0f172a',
   verticalAlign: 'top' as const,
+  lineHeight: 1.45,
   background: '#ffffff',
 } satisfies React.CSSProperties;
 
@@ -152,7 +153,7 @@ const subTextStyle = {
 
 const stackCellStyle = {
   display: 'grid',
-  gap: '8px',
+  gap: '4px',
   alignContent: 'start',
 } satisfies React.CSSProperties;
 
@@ -176,10 +177,10 @@ const secondaryValueStyle = {
 } satisfies React.CSSProperties;
 
 const actionStackStyle = {
-  display: 'grid',
-  gap: '8px',
+  display: 'flex',
+  gap: '6px',
+  flexWrap: 'wrap' as const,
   alignItems: 'start',
-  justifyItems: 'start',
 } satisfies React.CSSProperties;
 
 const statusBadgeBaseStyle = {
@@ -196,7 +197,7 @@ const statusBadgeBaseStyle = {
 const editTriggerStyle = {
   border: '1px solid #cbd5e1',
   borderRadius: '999px',
-  padding: '8px 14px',
+  padding: '5px 8px',
   background: '#ffffff',
   color: '#0f172a',
   fontWeight: 700,
@@ -222,7 +223,7 @@ function formatPricingMode(value: PricingMode | undefined) {
 
 function renderMutedValue(value: string | number | null | undefined, suffix?: string) {
   if (value === null || value === undefined || value === '') {
-    return <span style={mutedValueStyle}>未填写</span>;
+    return <span style={mutedValueStyle}>-</span>;
   }
 
   return `${value}${suffix ?? ''}`;
@@ -294,9 +295,10 @@ export function ProductTableRow({
   mutationApiBaseUrl = apiBaseUrl,
 }: ProductTableRowProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [currentItem, setCurrentItem] = useState(item);
   const [isVisible, setIsVisible] = useState(item.status !== 'deleted');
-  const canEditItem = canManageMasterData && currentItem.status !== 'deleted';
+  const canEditItem = !salesView && canManageMasterData && currentItem.status !== 'deleted';
 
   if (!isVisible) {
     return null;
@@ -307,114 +309,32 @@ export function ProductTableRow({
       <tr>
         <td style={isEditing ? rowEditingCellStyle : cellStyle}>
           <div style={stackCellStyle}>
-            <div>
-              <div style={fieldLabelStyle}>产品编码 Product Code</div>
-              <div style={primaryValueStyle}>{currentItem.salesCode || '-'}</div>
-            </div>
-            {!salesView ? <div>
-              <div style={fieldLabelStyle}>采购编码 Purchase</div>
-              <div style={secondaryValueStyle}>{currentItem.purchaseCode || '-'}</div>
-            </div> : null}
+            <div style={primaryValueStyle}>{currentItem.salesCode || currentItem.sku}</div>
+            {!salesView && currentItem.purchaseCode ? <div style={subTextStyle}>{currentItem.purchaseCode}</div> : null}
           </div>
         </td>
         <td style={isEditing ? rowEditingCellStyle : cellStyle}>
           <strong style={primaryValueStyle}>{currentItem.nameCn}</strong>
-        </td>
-        <td style={isEditing ? rowEditingCellStyle : cellStyle}>
-          <div style={secondaryValueStyle}>{currentItem.nameEn}</div>
+          {currentItem.nameEn ? <div style={subTextStyle}>{currentItem.nameEn}</div> : null}
         </td>
         <td style={isEditing ? rowEditingCellStyle : cellStyle}>
           <div style={stackCellStyle}>
-            <div>
-              <div style={fieldLabelStyle}>品牌 Brand</div>
-              <div style={primaryValueStyle}>{renderMutedValue(currentItem.brand)}</div>
-            </div>
-            <div>
-              <div style={fieldLabelStyle}>分类 Category</div>
-              <div style={secondaryValueStyle}>{categoryLabels[currentItem.category]}</div>
-            </div>
-          </div>
-        </td>
-        {!salesView ? <td style={isEditing ? rowEditingCellStyle : cellStyle}>
-          <div style={stackCellStyle}>
-            <div>
-              <div style={fieldLabelStyle}>工厂 Factory</div>
-              <div style={primaryValueStyle}>
-                {renderMutedValue(
-                  formatCounterpartyChineseDisplay(currentItem.factoryName, {
-                    code: currentItem.defaultSupplierCode,
-                  }),
-                )}
-              </div>
-            </div>
-            <div>
-              <div style={fieldLabelStyle}>供应商编码 Supplier Code</div>
-              <div style={secondaryValueStyle}>{renderMutedValue(currentItem.defaultSupplierCode)}</div>
-            </div>
-          </div>
-        </td> : null}
-        <td style={isEditing ? rowEditingCellStyle : cellStyle}>
-          <div style={stackCellStyle}>
-            <div>
-              <div style={fieldLabelStyle}>型号 Model</div>
-              <div style={primaryValueStyle}>{renderMutedValue(currentItem.model)}</div>
-            </div>
-            <div>
-              <div style={fieldLabelStyle}>规格 Spec</div>
-              <div style={secondaryValueStyle}>{renderMutedValue(currentItem.spec)}</div>
-            </div>
-            <div>
-              <div style={fieldLabelStyle}>重量 Weight</div>
-              <div style={secondaryValueStyle}>{renderMutedValue(currentItem.singleWeight, ' kg')}</div>
-            </div>
+            {currentItem.brand ? <div style={primaryValueStyle}>{currentItem.brand}</div> : null}
+            <div style={subTextStyle}>{categoryLabels[currentItem.category]}</div>
           </div>
         </td>
         <td style={isEditing ? rowEditingCellStyle : cellStyle}>
           <div style={stackCellStyle}>
-            <div>
-              <div style={fieldLabelStyle}>装箱规格 Carton Spec</div>
-              <div style={primaryValueStyle}>{renderMutedValue(currentItem.cartonSpec)}</div>
-            </div>
-            <div>
-              <div style={fieldLabelStyle}>装箱数量 Carton Qty</div>
-              <div style={secondaryValueStyle}>{renderMutedValue(currentItem.cartonQuantity)}</div>
-            </div>
-            <div>
-              <div style={fieldLabelStyle}>装箱重量 Carton Weight</div>
-              <div style={secondaryValueStyle}>{renderMutedValue(currentItem.cartonWeight, ' kg')}</div>
-            </div>
+            {currentItem.model ? <div style={primaryValueStyle}>{currentItem.model}</div> : null}
+            {currentItem.spec ? <div style={secondaryValueStyle}>{currentItem.spec}</div> : null}
+            <div style={subTextStyle}>{currentItem.unit}</div>
           </div>
         </td>
         <td style={isEditing ? rowEditingCellStyle : cellStyle}>
-          <div style={primaryValueStyle}>{currentItem.unit}</div>
-        </td>
-        <td style={isEditing ? rowEditingCellStyle : cellStyle}>
           <div style={stackCellStyle}>
-            <div>
-              <div style={fieldLabelStyle}>产品阶段 Product Stage</div>
-              <div style={primaryValueStyle}>{formatProductStage(currentItem.productStage)}</div>
-            </div>
-            <div>
-              <div style={fieldLabelStyle}>定价方式 Pricing Mode</div>
-              <div style={secondaryValueStyle}>{formatPricingMode(currentItem.pricingMode)}</div>
-            </div>
-            <div>
-              <div style={fieldLabelStyle}>阶梯摘要 Tier Summary</div>
-              <div style={secondaryValueStyle}>
-                {summarizeSalePriceTiers(currentItem.salePriceTiers, currentItem.pricingMode)}
-              </div>
-              {formatSalePriceTierDetails(currentItem.salePriceTiers, currentItem.pricingMode).map((entry) => (
-                <div key={entry} style={subTextStyle}>
-                  {entry}
-                </div>
-              ))}
-            </div>
-            <div>
-              <div style={fieldLabelStyle}>{salesView ? '默认销售价' : '默认销售价 / 默认采购价'}</div>
-              <div style={secondaryValueStyle}>
-                {salesView ? `Sale ${currentItem.defaultSalePrice}` : `Sale ${currentItem.defaultSalePrice} / Purchase ${currentItem.defaultPurchasePrice}`}
-              </div>
-            </div>
+            <div style={primaryValueStyle}>{currentItem.defaultSalePrice} {currentItem.currency}</div>
+            <div style={subTextStyle}>{formatProductStage(currentItem.productStage)}</div>
+            <div style={subTextStyle}>{summarizeSalePriceTiers(currentItem.salePriceTiers, currentItem.pricingMode)}</div>
           </div>
         </td>
         <td style={isEditing ? rowEditingCellStyle : cellStyle}>
@@ -422,12 +342,14 @@ export function ProductTableRow({
             {renderStatusBadge(currentItem.status)}
             {currentItem.deactivatedReason ? (
               <span style={subTextStyle}>{currentItem.deactivatedReason}</span>
-            ) : (
-              <span style={subTextStyle}>当前记录可继续参与正式流程。</span>
-            )}
+            ) : null}
           </div>
         </td>
-        {!salesView ? <td style={isEditing ? rowEditingCellStyle : cellStyle}>
+        <td style={isEditing ? rowEditingCellStyle : cellStyle}>
+          <div style={actionStackStyle}>
+            <button type="button" style={editTriggerStyle} aria-expanded={isDetailsOpen} onClick={() => setIsDetailsOpen((current) => !current)}>
+              {isDetailsOpen ? '收起资料' : '查看资料'}
+            </button>
           {canEditItem ? (
             <button
               type="button"
@@ -437,15 +359,11 @@ export function ProductTableRow({
             >
               {isEditing ? '收起编辑' : '编辑'}
             </button>
-          ) : currentItem.status === 'deleted' ? (
-            <span style={mutedValueStyle}>已删除</span>
-          ) : (
-            <span style={mutedValueStyle}>无权限</span>
-          )}
-        </td> : null}
-        {!salesView ? <td style={isEditing ? rowEditingCellStyle : cellStyle}>
-          {canManageMasterData && currentItem.status !== 'deleted' ? (
-            <div style={actionStackStyle}>
+          ) : null}
+          {!salesView && canManageMasterData && currentItem.status !== 'deleted' ? (
+            <details style={{ width: '100%' }}>
+              <summary style={{ cursor: 'pointer', color: '#475569', fontSize: '12px' }}>更多操作</summary>
+              <div style={{ display: 'grid', gap: '8px', marginTop: '8px' }}>
               {currentItem.status === 'active' ? (
                 <MutationActionForm
                   endpoint={`${mutationApiBaseUrl}/products/${currentItem.id}/deactivate`}
@@ -555,17 +473,36 @@ export function ProductTableRow({
                   fields={[{ name: 'operatedBy', value: updatedBy }]}
                 />
               ) : null}
-            </div>
-          ) : currentItem.status === 'deleted' ? (
-            <span style={mutedValueStyle}>已删除，不可再调用</span>
-          ) : (
-            <span style={mutedValueStyle}>无权限</span>
-          )}
-        </td> : null}
+              </div>
+            </details>
+          ) : null}
+          </div>
+        </td>
       </tr>
+      {isDetailsOpen ? <tr>
+        <td style={expandedCellStyle} colSpan={7}>
+          <div style={expandedPanelStyle} role="region" aria-label={`${currentItem.nameCn}产品资料`}>
+            <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
+              <div><dt style={fieldLabelStyle}>产品编码 Product Code</dt><dd style={{ margin: 0 }}>{currentItem.salesCode || currentItem.sku}</dd></div>
+              {!salesView ? <>
+                <div><dt style={fieldLabelStyle}>采购编码 Purchase</dt><dd style={{ margin: 0 }}>{renderMutedValue(currentItem.purchaseCode)}</dd></div>
+                <div><dt style={fieldLabelStyle}>工厂 Factory</dt><dd style={{ margin: 0 }}>{renderMutedValue(formatCounterpartyChineseDisplay(currentItem.factoryName, { code: currentItem.defaultSupplierCode }))}</dd></div>
+                <div><dt style={fieldLabelStyle}>供应商编码 Supplier Code</dt><dd style={{ margin: 0 }}>{renderMutedValue(currentItem.defaultSupplierCode)}</dd></div>
+                <div><dt style={fieldLabelStyle}>默认采购价</dt><dd style={{ margin: 0 }}>{currentItem.defaultPurchasePrice == null ? '-' : `${currentItem.defaultPurchasePrice} ${currentItem.currency}`}</dd></div>
+              </> : null}
+              <div><dt style={fieldLabelStyle}>单个重量 Weight</dt><dd style={{ margin: 0 }}>{renderMutedValue(currentItem.singleWeight, ' kg')}</dd></div>
+              <div><dt style={fieldLabelStyle}>装箱规格 Carton Spec</dt><dd style={{ margin: 0 }}>{renderMutedValue(currentItem.cartonSpec)}</dd></div>
+              <div><dt style={fieldLabelStyle}>装箱数量 Carton Qty</dt><dd style={{ margin: 0 }}>{renderMutedValue(currentItem.cartonQuantity)}</dd></div>
+              <div><dt style={fieldLabelStyle}>装箱重量 Carton Weight</dt><dd style={{ margin: 0 }}>{renderMutedValue(currentItem.cartonWeight, ' kg')}</dd></div>
+              <div><dt style={fieldLabelStyle}>定价方式 Pricing Mode</dt><dd style={{ margin: 0 }}>{formatPricingMode(currentItem.pricingMode)}</dd></div>
+              <div><dt style={fieldLabelStyle}>阶梯售价</dt><dd style={{ margin: 0 }}>{formatSalePriceTierDetails(currentItem.salePriceTiers, currentItem.pricingMode).map((entry) => <div key={entry}>{entry}</div>)}</dd></div>
+            </dl>
+          </div>
+        </td>
+      </tr> : null}
       {isEditing ? (
         <tr>
-          <td style={expandedCellStyle} colSpan={12}>
+          <td style={expandedCellStyle} colSpan={7}>
             <div style={expandedPanelStyle}>
               <div style={expandedHeaderStyle}>
                 <div>

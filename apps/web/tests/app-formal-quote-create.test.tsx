@@ -108,8 +108,8 @@ describe('formal quote create page', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式新建需求和报价' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '返回正式需求和报价列表' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '新建需求和报价' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回需求和报价列表' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('询单日期 Inquiry Date')).toHaveValue(getTodayDateValueForTest());
     expect(screen.queryByLabelText('当前进度 Current Status')).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: '客户录入方式 Customer Mode' })).toBeInTheDocument();
@@ -257,8 +257,8 @@ describe('formal quote create page', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式新建需求和报价' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '无权限创建正式需求和报价' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '新建需求和报价' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '无权限创建需求和报价' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '创建报价' })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();

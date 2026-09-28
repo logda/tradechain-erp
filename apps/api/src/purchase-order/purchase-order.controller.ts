@@ -13,6 +13,7 @@ import {
 import { purchaseOrderListSortFields } from '@erp/shared';
 import { FormalActions, FormalModules, FormalRoles } from '../auth/formal-role.decorator';
 import { FormalRoleGuard } from '../auth/formal-role.guard';
+import { parseAuditBizId } from '../audit/audit-log-query';
 import { CreatePurchaseOrdersFromSalesDto } from './dto/create-purchase-orders-from-sales.dto';
 import { ListPurchaseOrdersQueryDto } from './dto/list-purchase-orders-query.dto';
 import { ResubmitPurchaseOrderDto } from './dto/resubmit-purchase-order.dto';
@@ -68,6 +69,10 @@ export class PurchaseOrderController {
     @Query() query: ListPurchaseOrdersQueryDto,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     const sortBy: (typeof purchaseOrderListSortFields)[number] = purchaseOrderListSortFields.includes(
       query.sortBy as (typeof purchaseOrderListSortFields)[number],
@@ -87,6 +92,10 @@ export class PurchaseOrderController {
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -94,8 +103,8 @@ export class PurchaseOrderController {
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
   @FormalActions('audit.view')
   @Get('audit-logs')
-  listAuditLogs() {
-    return this.purchaseOrderService.listAuditLogs();
+  listAuditLogs(@Query('bizId') bizId?: string) {
+    return this.purchaseOrderService.listAuditLogs(parseAuditBizId(bizId));
   }
 
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
@@ -106,11 +115,15 @@ export class PurchaseOrderController {
     @Body() body: CreatePurchaseOrdersFromSalesDto,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.purchaseOrderService.createFromSalesOrder({
       salesOrderId,
       items: body.items,
-      createdBy: body.createdBy,
+      createdBy: userId ? Number(userId) : body.createdBy,
       salesOrderNo: body.salesOrderNo,
       customerOrderNo: body.customerOrderNo,
       storeName: body.storeName,
@@ -119,9 +132,14 @@ export class PurchaseOrderController {
       shipTo: body.shipTo,
       purchaseOrderAttachments: body.purchaseOrderAttachments,
       ownerName: body.ownerName,
+      ownerId: body.ownerId,
       session: readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     });
   }
@@ -131,11 +149,19 @@ export class PurchaseOrderController {
   listOwnerOptions(
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.purchaseOrderService.listAssignablePurchaseOwners(
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -146,12 +172,20 @@ export class PurchaseOrderController {
     @Param('id', ParseIntPipe) id: number,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.purchaseOrderService.getDetail(
       id,
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -161,15 +195,20 @@ export class PurchaseOrderController {
   @Post(':id/assign-owner')
   assignExistingDirectPurchaseOwner(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { ownerName: string; currentStatus?: string },
+    @Body() body: { ownerName?: string; ownerId?: number; currentStatus?: string },
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.purchaseOrderService.assignExistingDirectPurchaseOwner({
       purchaseOrderId: id,
       ownerName: body.ownerName,
+      ownerId: body.ownerId,
       currentStatus: body.currentStatus,
-      session: readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user }),
+      session: readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user, 'x-erp-user-id': userId, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope, 'x-erp-modules': modules }),
     });
   }
 
@@ -180,10 +219,14 @@ export class PurchaseOrderController {
     @Param('id', ParseIntPipe) id: number,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     const order = await this.purchaseOrderService.getDetail(
       id,
-      readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user }),
+      readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user, 'x-erp-user-id': userId, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope, 'x-erp-modules': modules }),
     );
     if (order.status !== 'pending_purchase_manager_approval' ||
         !order.sourceInquiryId || !this.inquiryService) {
@@ -218,12 +261,16 @@ export class PurchaseOrderController {
     @Body() body: { currentStatus: string; factoryEstimatedDeliveryDate: string },
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.purchaseOrderService.updateFactoryEstimatedDeliveryDate({
       purchaseOrderId: id,
       currentStatus: body.currentStatus,
       factoryEstimatedDeliveryDate: body.factoryEstimatedDeliveryDate,
-      session: readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user }),
+      session: readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user, 'x-erp-user-id': userId, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope, 'x-erp-modules': modules }),
     });
   }
 
@@ -241,6 +288,10 @@ export class PurchaseOrderController {
     } & Record<string, unknown>,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.purchaseOrderService.saveDraft({
       purchaseOrderId: id,
@@ -252,6 +303,10 @@ export class PurchaseOrderController {
       session: readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     });
   }
@@ -264,12 +319,16 @@ export class PurchaseOrderController {
     @Body() body: { currentStatus: string; title?: string },
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.purchaseOrderService.submit({
       purchaseOrderId: id,
       currentStatus: body.currentStatus,
       title: body.title,
-      session: readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user }),
+      session: readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user': user, 'x-erp-user-id': userId, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope, 'x-erp-modules': modules }),
     });
   }
 
@@ -279,9 +338,11 @@ export class PurchaseOrderController {
   approve(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
     return this.purchaseOrderService.approve({
       purchaseOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
     });
   }
@@ -291,11 +352,27 @@ export class PurchaseOrderController {
   @Post(':id/reject')
   reject(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { currentStatus: string },
+    @Body() body: { currentStatus: string; rejectionReason: string },
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.purchaseOrderService.reject({
       purchaseOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
+      rejectionReason: body.rejectionReason,
+      session: readOptionalFormalSession({
+        'x-erp-role': role,
+        'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
+      }),
     });
   }
 
@@ -305,9 +382,11 @@ export class PurchaseOrderController {
   resubmit(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: ResubmitPurchaseOrderDto & { currentStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
     return this.purchaseOrderService.resubmit({
       purchaseOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
       hasShipmentBatches: body.hasShipmentBatches,
       sourceSalesOrderId: body.sourceSalesOrderId,
@@ -323,12 +402,27 @@ export class PurchaseOrderController {
     @Param('id', ParseIntPipe) id: number,
     @Body()
     body: { currentStatus: string; hasShipmentBatches: boolean; cancelReason: string },
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.purchaseOrderService.cancel({
       purchaseOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
       hasShipmentBatches: body.hasShipmentBatches,
       cancelReason: body.cancelReason,
+      session: readOptionalFormalSession({
+        'x-erp-role': role,
+        'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
+      }),
     });
   }
 }

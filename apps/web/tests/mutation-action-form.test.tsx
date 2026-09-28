@@ -22,6 +22,37 @@ describe('MutationActionForm', () => {
     window.history.replaceState({}, '', '/app/sales/orders/1?role=sales&user=Zoe');
   });
 
+  it('marks fields waiting, preserves failure, and marks success before pushing to the created document', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ message: '保存失败' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 601 }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const mounted = render(<MutationActionForm endpoint="http://127.0.0.1:3001/api/stock-in"
+      label="生成收货单" successRedirectBasePath="/app/stock-in"
+      fields={[{ name: 'remark', value: '', display: 'input', label: '备注' }]} />);
+    const form = mounted.container.querySelector('form')!;
+    fireEvent.input(screen.getByLabelText('备注'), { target: { value: '待保存' } });
+    expect(form.dataset.saveState).toBe('waiting');
+    fireEvent.click(screen.getByRole('button', { name: '生成收货单' }));
+    await waitFor(() => expect(form.dataset.saveState).toBe('error'));
+    pushMock.mockImplementationOnce(() => expect(form.dataset.saveState).toBe('saved'));
+    fireEvent.click(screen.getByRole('button', { name: '生成收货单' }));
+    await waitFor(() => expect(form.dataset.saveState).toBe('saved'));
+    expect(pushMock).toHaveBeenCalledWith('/app/stock-in/601');
+  });
+
+  it('disables editing while the submitted snapshot is saving and re-enables it after failure', async () => {
+    let finish!: (value: unknown) => void;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise((resolve) => { finish = resolve; })));
+    render(<MutationActionForm endpoint="http://127.0.0.1:3001/api/stock-in" label="保存"
+      fields={[{ name: 'remark', value: '', display: 'input', label: '备注' }]} />);
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(screen.getByLabelText('备注')).toBeDisabled();
+    await waitFor(() => expect(typeof finish).toBe('function'));
+    finish({ ok: false, status: 503, json: async () => ({ message: '保存失败' }) });
+    await waitFor(() => expect(screen.getByLabelText('备注')).toBeEnabled());
+  });
+
   it('sends the formal role and user headers from the current URL', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

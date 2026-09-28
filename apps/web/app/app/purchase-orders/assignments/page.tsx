@@ -5,7 +5,7 @@ import { canApproveFormalPurchaseOrder } from '../../_lib/formal-access';
 import { buildFormalApiRequestHeaders } from '../../_lib/formal-api-request-headers';
 import { buildFormalRequestHeaders } from '../../_lib/formal-request-headers';
 
-type Assignment = { id: number; salesNo: string; title: string; customerName: string; purchaseOwnerName?: string };
+type Assignment = { id: number; salesNo: string; title: string; customerName: string; purchaseOwnerName?: string; purchaseOwnerId?: number };
 type Owner = { id: number; realName: string; status: string };
 
 export default async function PurchaseAssignmentsPage({
@@ -59,16 +59,17 @@ export default async function PurchaseAssignmentsPage({
               requiredActionLabel="采购主管审批"
               requestHeaders={buildFormalRequestHeaders(session)}
               fields={[{
-                name: 'ownerName',
-                value: item.purchaseOwnerName ?? '',
+                name: 'ownerId',
+                dataType: 'number',
+                value: item.purchaseOwnerId ?? '',
                 display: 'select',
                 label: '采购负责人',
                 required: true,
                 options: [
                   { value: '', label: '请选择采购负责人' },
                   ...owners.filter((owner) => owner.status === 'active' && owner.id > 0 &&
-                    (!item.purchaseOwnerName || owner.realName === item.purchaseOwnerName)).map((owner) => ({
-                    value: owner.realName,
+                    (item.purchaseOwnerId !== undefined ? owner.id === item.purchaseOwnerId : !item.purchaseOwnerName || owner.realName === item.purchaseOwnerName)).map((owner) => ({
+                    value: String(owner.id),
                     label: owner.realName,
                   })),
                 ],

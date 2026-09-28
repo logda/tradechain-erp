@@ -35,6 +35,8 @@ export type QuoteListQuery = Omit<CommonListQuery, 'sortBy'> & {
 };
 
 export type QuoteListItem = {
+  ownerId?: number;
+  createdById?: number;
   documentType?: QuoteDocumentType;
   productSource?: QuoteProductSource;
   moduleLabel: string;

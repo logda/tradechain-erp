@@ -10,6 +10,7 @@ import {
 import { buildSignedFormalRequestHeaders } from '../../../_lib/formal-request-signature';
 import { resolveFormalActionSessionFromForm } from '../../../_lib/formal-action-session';
 import { readMutationRequestHeaders } from '../../../_lib/mutation-request-key';
+import { loadSalesUserOptions } from '../../../_lib/sales-user-options';
 import { resolveFormalUserId } from '../../../_lib/formal-access';
 
 export type SalesOrderFormState = {
@@ -414,14 +415,21 @@ async function attachSalesOrderItemFactoryPicUrls(
   return resolvedItems;
 }
 
-export async function buildCreateSalesOrderPayload(formData: FormData) {
+export async function buildCreateSalesOrderPayload(formData: FormData, actionSession?: SalesOrderActionSession) {
   const accessScopes = parseFormalAccessScopes(
     String(formData.get('access') ?? '') || null,
   );
 
-  const role = normalizeRole(String(formData.get('role') ?? 'boss'));
-  const user = String(formData.get('user') ?? 'Mia');
+  const role = actionSession?.role ?? normalizeRole(String(formData.get('role') ?? 'boss'));
+  const user = actionSession?.user ?? String(formData.get('user') ?? 'Mia');
   const selectedSalesUserId = Number(formData.get('salesUserId'));
+  const liveOwnerOptions = actionSession?.userId !== undefined ? await loadSalesUserOptions(actionSession) : undefined;
+  if (liveOwnerOptions && !liveOwnerOptions.some(owner => owner.id === selectedSalesUserId)) {
+    const existingId = readOptionalNumber(formData, 'salesOrderId');
+    const response = existingId ? await fetch(`${getSalesOrderApiBaseUrl()}/sales-orders/${existingId}`, { cache: 'no-store', headers: { ...buildFormalRequestHeaders(actionSession!), ...buildSignedFormalRequestHeaders(actionSession!) } }) : null;
+    const existing = response?.ok ? await response.json() as { salesUserId?: number } : null;
+    if (existing?.salesUserId !== selectedSalesUserId) throw new Error('请选择有效的销售负责人');
+  }
   const customerEntryMode =
     String(formData.get('customerEntryMode') ?? 'existing') === 'manual'
       ? 'manual'
@@ -455,12 +463,12 @@ export async function buildCreateSalesOrderPayload(formData: FormData) {
         }
       : {}),
     title: readTrimmedString(formData, 'title'),
-    salesUserId: normalizeSalesOwnerId({
+    salesUserId: actionSession?.userId !== undefined ? selectedSalesUserId : normalizeSalesOwnerId({
       role,
       user,
       selectedSalesUserId,
     }),
-    createdBy: resolveFormalUserId(user),
+    createdBy: resolveFormalUserId(actionSession ?? user),
     orderingUnit: readTrimmedString(formData, 'orderingUnit'),
     customerOrderNo: readTrimmedString(formData, 'customerOrderNo'),
     storeName: readTrimmedString(formData, 'storeName'),
@@ -483,7 +491,7 @@ export async function createSalesOrderAction(
 ): Promise<SalesOrderFormState> {
   try {
     const actionSession = await resolveFormalActionSessionFromForm(formData);
-    const payload = await buildCreateSalesOrderPayload(formData);
+    const payload = await buildCreateSalesOrderPayload(formData, actionSession);
     const validationError = validateSalesOrderDraftPayload(payload);
     if (validationError) {
       return { error: validationError };
@@ -566,7 +574,7 @@ export async function autosaveSalesOrderDraftAction(
 
     const actionSession = await resolveFormalActionSessionFromForm(formData);
     const salesOrderId = readOptionalNumber(formData, 'salesOrderId');
-    const payload = await buildCreateSalesOrderPayload(formData);
+    const payload = await buildCreateSalesOrderPayload(formData, actionSession);
     if (!payload.customerName || !payload.items?.length) {
       return { error: null, skipped: true };
     }
@@ -648,7 +656,7 @@ export async function updateSalesOrderDraftAction(
       return { error: '销售单草稿保存失败' };
     }
 
-    const payload = await buildCreateSalesOrderPayload(formData);
+    const payload = await buildCreateSalesOrderPayload(formData, actionSession);
     const validationError = validateSalesOrderDraftPayload(payload);
     if (validationError) {
       return { error: validationError };

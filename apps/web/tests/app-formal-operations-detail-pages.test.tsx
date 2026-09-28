@@ -164,15 +164,16 @@ describe('formal operations detail pages', () => {
     );
 
     expect(
-      screen.getByRole('heading', { name: '正式采购单详情' }),
+      screen.getByRole('heading', { name: '采购单详情' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '返回正式采购单列表' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回采购单列表' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回对应销售单' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '采购单 P202607080101' }),
     ).toBeInTheDocument();
     expect(screen.getByText('星河供应')).toBeInTheDocument();
-    expect(screen.getByText('采购负责人：Zoe')).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: '采购单摘要' })).toHaveTextContent('Zoe');
+    expect(screen.queryByText('采购负责人：Zoe')).not.toBeInTheDocument();
     expect(screen.queryByText('PO-ACME-20260708')).not.toBeInTheDocument();
     expect(screen.queryByText('02 Libuys')).not.toBeInTheDocument();
     expect(screen.getByText('上海货运站')).toBeInTheDocument();
@@ -330,7 +331,7 @@ describe('formal operations detail pages', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式采购单详情' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '采购单详情' })).toBeInTheDocument();
     expect(screen.getByText('来源销售单：S202607080003')).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: '查看来源销售单' }),
@@ -361,7 +362,7 @@ describe('formal operations detail pages', () => {
     );
 
     expect(
-      screen.getByText('无权限访问正式采购单'),
+      screen.getByText('无权限访问采购单'),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: '采购单 P202607080101' }),
@@ -411,9 +412,10 @@ describe('formal operations detail pages', () => {
       screen.getByRole('heading', { name: '发货批次 SH202607080101' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: '打开销售单' }),
+      screen.getByRole('link', { name: '销售单 单号暂不可用 #88' }),
     ).toHaveAttribute('href', '/app/sales/orders/88');
-    expect(screen.queryByRole('link', { name: '打开采购单' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '采购单 单号暂不可用 #21' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('发货台账字段'));
     expect(screen.getByText('SHIP-SALES-001')).toBeInTheDocument();
     expect(screen.getByText('Acme Trading')).toBeInTheDocument();
     expect(
@@ -1124,15 +1126,15 @@ describe('formal operations detail pages', () => {
     );
 
     expect(
-      screen.getByRole('heading', { name: '正式发货批次详情' }),
+      screen.getByRole('heading', { name: '发货批次详情' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '返回正式发货批次列表' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回发货批次列表' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '发货批次 SH202607080101' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '打开销售单' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '销售单 单号暂不可用 #88' })).not.toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: '打开采购单' }),
+      screen.getByRole('link', { name: '采购单 单号暂不可用 #21' }),
     ).toHaveAttribute('href', '/app/purchase-orders/21');
     expect(screen.getByText('货代已发出')).toBeInTheDocument();
     expect(screen.getByText('待发送')).toBeInTheDocument();
@@ -1146,15 +1148,12 @@ describe('formal operations detail pages', () => {
       'href',
       '/app/after-sales/new?salesOrderId=88&purchaseOrderId=21&shipmentBatchId=101',
     );
-    expect(screen.getByRole('heading', { name: '链路追溯' })).toBeInTheDocument();
-    expect(
-      screen.getByText('销售单 #88 → 采购单 #21 → 发货批次 SH202607080101'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('售后入口会自动携带 salesOrderId、purchaseOrderId、shipmentBatchId，避免断链录入。'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '发货台账字段' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '批次概览' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '单据来源' })).toBeInTheDocument();
+    expect(screen.getByText('销售单 #88')).toBeInTheDocument();
+    expect(screen.queryByText(/售后入口会自动携带 salesOrderId/)).not.toBeInTheDocument();
+    expect(screen.getByText('发货台账字段').closest('details')).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('发货台账字段'));
+    expect(screen.queryByRole('heading', { name: '批次概览' })).not.toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: '货运站 Freight Station' })).toBeInTheDocument();
     expect(screen.getByText('SHIP-TEST-001')).toBeInTheDocument();
     expect(screen.getByText('上海目的仓')).toBeInTheDocument();
@@ -1230,7 +1229,7 @@ describe('formal operations detail pages', () => {
     expect(stockOutForm?.querySelector('input[name="warehouseId"]')).toHaveValue('1');
     expect(stockOutForm?.querySelector('input[name="locationId"]')).toHaveValue('11');
     expect(stockOutForm?.querySelector('input[name="createdBy"]')).toHaveValue('2002');
-    expect(JSON.parse(stockOutForm?.querySelector('input[name="items"]')?.value ?? '[]')).toEqual([
+    expect(JSON.parse(stockOutForm?.querySelector<HTMLInputElement>('input[name="items"]')?.value ?? '[]')).toEqual([
       expect.objectContaining({
         productId: 501,
         quantity: 40,
@@ -1390,26 +1389,22 @@ describe('formal operations detail pages', () => {
     );
 
     expect(
-      screen.getByRole('heading', { name: '正式售后单详情' }),
+      screen.getByRole('heading', { name: '售后单详情' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '返回正式售后单列表' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回售后单列表' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: '售后单 AS202607080101' }),
     ).toBeInTheDocument();
+    expect(screen.getByText('销售单 #88（无查看权限）')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /销售单/ })).not.toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: '打开销售单' }),
-    ).toHaveAttribute('href', '/app/sales/orders/88');
-    expect(
-      screen.getByRole('link', { name: '打开采购单' }),
+      screen.getByRole('link', { name: '采购单 单号暂不可用 #21' }),
     ).toHaveAttribute('href', '/app/purchase-orders/21');
     expect(
-      screen.getByRole('link', { name: '打开发货批次' }),
+      screen.getByRole('link', { name: '发货批次 单号暂不可用 #101' }),
     ).toHaveAttribute('href', '/app/shipment-batches/101');
-    expect(screen.getByRole('heading', { name: '链路追溯' })).toBeInTheDocument();
-    expect(screen.getByText('销售单 #88 → 采购单 #21 → 发货批次 #101')).toBeInTheDocument();
-    expect(
-      screen.getByText('来源销售、采购与发货信息会保留在系统追溯字段中，售后明细仅展示处理需要识别的字段。'),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '单据来源' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '链路追溯' })).not.toBeInTheDocument();
     expect(screen.queryByText('来源销售行：1')).not.toBeInTheDocument();
     expect(screen.queryByText('销售行 Sales Line')).not.toBeInTheDocument();
     expect(screen.getByText('客户投诉')).toBeInTheDocument();
@@ -1445,7 +1440,7 @@ describe('formal operations detail pages', () => {
     );
 
     expect(
-      screen.getByText('无权限访问正式售后单'),
+      screen.getByText('无权限访问售后单'),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: '售后单 AS202607080101' }),

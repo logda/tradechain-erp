@@ -101,7 +101,7 @@ export default async function AppLoginPage({ searchParams }: LoginPageProps) {
         <div style={{ display: 'grid', gap: '8px' }}>
           <h1 style={titleStyle}>ERP 登录</h1>
           <p style={subStyle}>
-            提供最小可用登录入口，登录后跳转到正式工作台，并沿用现有角色权限模型。
+            使用员工账号登录，查看有权限处理的业务。
           </p>
         </div>
 
@@ -112,7 +112,7 @@ export default async function AppLoginPage({ searchParams }: LoginPageProps) {
         />
 
         <Link href="/app" style={linkStyle}>
-          登录后进入正式工作台
+          进入工作台
         </Link>
       </section>
     </main>

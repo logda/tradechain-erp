@@ -1,9 +1,11 @@
+import { useListFixtures } from './helpers/list-fixtures';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InquiryService } from '../src/inquiry/inquiry.service';
 
 describe('InquiryService list', () => {
+  useListFixtures('inquiry');
   const previousStorageMode = process.env.ERP_STORAGE_MODE;
 
   afterEach(() => {

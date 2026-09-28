@@ -1,3 +1,5 @@
+import { DataLoadError } from '../../_components/data-load-error';
+import { DataScopeNote } from '../../_components/data-scope-note';
 import Link from 'next/link';
 import {
   formatSalesDocumentSourceMode,
@@ -9,7 +11,6 @@ import {
   salesOrderHasAfterSalesOptions,
   type SalesOrderListResponse,
 } from '@erp/shared';
-import { getSalesOrderPreviewResponse } from '../../../sales-orders/sales-order-preview';
 import { AppShell } from '../../_components/app-shell';
 import { AuditLogTable } from '../../_components/audit-log-table';
 import { FilterPanel } from '../../_components/filter-panel';
@@ -222,20 +223,6 @@ const inputStyle = {
   outlineColor: '#2563eb',
 } satisfies React.CSSProperties;
 
-const chipWrapStyle = {
-  display: 'flex',
-  gap: '10px',
-  flexWrap: 'wrap' as const,
-} satisfies React.CSSProperties;
-
-const chipStyle = {
-  border: '1px solid #d7e0ea',
-  borderRadius: '999px',
-  padding: '6px 10px',
-  fontSize: '13px',
-  background: '#f8fafc',
-} satisfies React.CSSProperties;
-
 const tableStyle = {
   width: '100%',
   borderCollapse: 'separate' as const,
@@ -354,16 +341,6 @@ const sourceBadgeStyle = {
   border: '1px solid #bae6fd',
 } satisfies React.CSSProperties;
 
-const sourceFilterLinkStyle = {
-  display: 'inline-flex',
-  width: 'fit-content',
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 800,
-  fontSize: '12px',
-  borderBottom: '1px solid #94a3b8',
-} satisfies React.CSSProperties;
-
 const statusBadgeStyle = {
   ...badgeBaseStyle,
   maxWidth: '190px',
@@ -448,21 +425,25 @@ export default async function AppSalesOrdersPage({
   if (!canViewFormalModule(session, 'sales')) {
     return (
       <AppShell
-        title="正式销售单"
+        title="销售单"
         subtitle="当前角色不在销售域内，不能查看销售单。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限访问正式销售单</h2>
+          <h2>无权限访问销售单</h2>
           <p>请切换到销售、销售主管或老板视角后再查看。</p>
         </section>
       </AppShell>
     );
   }
 
-  const result =
-    (await loadSalesOrderList(salesOrderSearchParams, session)) ??
-    getSalesOrderPreviewResponse(query);
+  const result = await loadSalesOrderList(salesOrderSearchParams, session);
+  if (!result) {
+    return <AppShell title="销售单" session={session}>
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
+      <DataLoadError label="销售单列表" />
+    </AppShell>;
+  }
   const auditLogs = (await loadSalesOrderAuditLogs(session))?.items ?? [];
   const visibleItems = filterSalesOrderRows(result.items, session);
   const executingCount = visibleItems.filter(
@@ -472,19 +453,6 @@ export default async function AppSalesOrdersPage({
     (item) => item.status === 'pending_sales_manager_approval',
   ).length;
   const afterSalesCount = visibleItems.filter((item) => item.hasAfterSales).length;
-  const appliedFilters = [
-    ['keyword', query.keyword],
-    ['docNo', query.docNo],
-    ['status', query.status],
-    ['customerName', query.customerName],
-    ['ownerName', query.ownerName],
-    ['approvalStatus', query.approvalStatus],
-    ['fulfillmentStatus', query.fulfillmentStatus],
-    ['receiptStatus', query.receiptStatus],
-    ['financeConfirmStatus', query.financeConfirmStatus],
-    ['sourceMode', query.sourceMode !== 'all' ? query.sourceMode : undefined],
-    ['hasAfterSales', query.hasAfterSales !== 'all' ? query.hasAfterSales : undefined],
-  ].filter((entry): entry is [string, string] => Boolean(entry[1]));
   const paginationParams = {
     keyword: query.keyword,
     docNo: query.docNo,
@@ -507,8 +475,7 @@ export default async function AppSalesOrdersPage({
 
   return (
     <AppShell
-      title="正式销售单"
-      subtitle="正式页复用当前销售单查询与来源方式口径，突出筛选、摘要和追溯。"
+      title="销售单"
       session={session}
     >
       <div style={toolbarStyle}>
@@ -530,6 +497,7 @@ export default async function AppSalesOrdersPage({
         </div>
       </div>
 
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
       <StatStrip
         items={[
           { label: '全部', value: visibleItems.length },
@@ -539,10 +507,7 @@ export default async function AppSalesOrdersPage({
         ]}
       />
 
-      <FilterPanel
-        title="当前筛选"
-        subtitle="统一强调来源方式、审批履约、发货和售后标记。"
-      >
+      <FilterPanel title="当前筛选">
         <form method="get" className="erp-filter-form" style={filterFormStyle}>
           <label style={labelStyle}>
             关键词 Keyword
@@ -558,12 +523,12 @@ export default async function AppSalesOrdersPage({
               <option value="">全部</option>
               {salesApprovalStatuses.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {formatSalesOrderStatus(status)}
                 </option>
               ))}
               {salesFulfillmentStatuses.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {formatSalesOrderStatus(status)}
                 </option>
               ))}
             </select>
@@ -637,51 +602,46 @@ export default async function AppSalesOrdersPage({
           </button>
         </form>
 
-        <div style={chipWrapStyle}>
-          {appliedFilters.length === 0 ? (
-            <span style={chipStyle}>默认显示全部</span>
-          ) : (
-            appliedFilters.map(([key, value]) => (
-              <span key={key} style={chipStyle}>
-                {key}: {value}
-              </span>
-            ))
-          )}
-        </div>
       </FilterPanel>
 
       <FormalDataTable title="查询结果" total={result.total}>
         <div style={tableScrollStyle}>
           <table style={tableStyle}>
             <colgroup>
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '15%' }} />
-              <col style={{ width: '14%' }} />
               <col style={{ width: '13%' }} />
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '10%' }} />
+              <col style={{ width: '18%' }} />
               <col style={{ width: '8%' }} />
-              <col style={{ width: '10%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '6%' }} />
             </colgroup>
             <thead>
               <tr>
                 <th style={tableHeadCellStyle}>销售单号 / 标题</th>
+                <th style={tableHeadCellStyle}>产品</th>
+                <th style={tableHeadCellStyle}>单据金额</th>
                 <th style={tableHeadCellStyle}>销售单状态 Status</th>
-                <th style={tableHeadCellStyle}>客户 Customer</th>
-                <th style={tableHeadCellStyle}>客户订单 / 门店</th>
+                <th style={tableHeadCellStyle}>负责人</th>
+                <th style={tableHeadCellStyle}>客户 / 订单 / 门店</th>
                 <th style={tableHeadCellStyle}>订货日期 / 截止日期</th>
                 <th style={tableHeadCellStyle}>来源 Source</th>
-                <th style={tableHeadCellStyle}>负责人</th>
                 <th style={stickyActionHeadCellStyle}>操作</th>
               </tr>
             </thead>
             <tbody>
-              {visibleItems.map((item) => (
-                <tr key={item.detailHref}>
+              {visibleItems.map((item) => {
+                const repeatedTitleValues = [item.docNo, item.counterpartyName, item.counterpartyFullName, ...(item.productNames ?? [])].filter((value): value is string => Boolean(value));
+                const showTitle = item.title && !repeatedTitleValues.some((value) => item.title.includes(value));
+                return <tr key={item.detailHref}>
                   <td style={tableCellStyle}>
-                    <strong style={docNoStyle}>{item.docNo}</strong>
-                    <span style={titleStyle} title={item.title}>{item.title}</span>
+                    <strong style={docNoStyle} title={item.title}>{item.docNo}</strong>
+                    {showTitle ? <span style={titleStyle}>{item.title}</span> : null}
                   </td>
+                  <td style={tableCellStyle}><span style={subtleTextStyle}>{item.productNames?.length ? item.productNames.join('、') : '-'}</span></td>
+                  <td style={tableCellStyle}>{typeof item.amount === 'number' && Number.isFinite(item.amount) ? item.amount : '-'}</td>
                   <td style={tableCellStyle}>
                     <span
                       style={{
@@ -692,21 +652,16 @@ export default async function AppSalesOrdersPage({
                       {formatSalesOrderStatus(item.status)}
                     </span>
                   </td>
-                  <td style={tableCellStyle}>
-                    {formatCounterpartyBilingualDisplay(item.counterpartyName, {
-                      fullName: item.counterpartyFullName,
-                    })}
-                  </td>
+                  <td style={tableCellStyle}>{item.ownerName}</td>
                   <td style={tableCellStyle}>
                     <div style={twoLineCellStyle}>
-                      <span>
-                        <span style={mutedCellLabelStyle}>订单：</span>
-                        {formatListValue(item.customerOrderNo)}
-                      </span>
-                      <span>
-                        <span style={mutedCellLabelStyle}>门店：</span>
-                        {formatListValue(item.storeName)}
-                      </span>
+                      <span>{formatCounterpartyBilingualDisplay(item.counterpartyName, { fullName: item.counterpartyFullName })}</span>
+                      {item.customerOrderNo?.trim() && item.customerOrderNo !== item.docNo ? <span>
+                        <span style={mutedCellLabelStyle}>订单：</span>{item.customerOrderNo}
+                      </span> : null}
+                      {item.storeName?.trim() ? <span>
+                        <span style={mutedCellLabelStyle}>门店：</span>{item.storeName}
+                      </span> : null}
                     </div>
                   </td>
                   <td style={tableCellStyle}>
@@ -722,25 +677,8 @@ export default async function AppSalesOrdersPage({
                     </div>
                   </td>
                   <td style={tableCellStyle}>
-                    <div style={twoLineCellStyle}>
-                      <span style={subtleTextStyle}>{item.sourceSummary}</span>
-                      <span style={sourceBadgeStyle}>
-                        {formatSalesDocumentSourceMode(
-                          resolveSalesDocumentSourceMode(item.sourceSummary),
-                        )}
-                      </span>
-                    </div>
-                    <Link
-                      href={`/app/sales/orders?sourceMode=${resolveSalesDocumentSourceMode(item.sourceSummary)}`}
-                      style={sourceFilterLinkStyle}
-                      aria-label={`按来源方式筛选 ${formatSalesDocumentSourceMode(
-                        resolveSalesDocumentSourceMode(item.sourceSummary),
-                      )}`}
-                    >
-                      筛选此来源
-                    </Link>
+                    <span style={sourceBadgeStyle} title={item.sourceSummary}>{formatSalesDocumentSourceMode(resolveSalesDocumentSourceMode(item.sourceSummary))}</span>
                   </td>
-                  <td style={tableCellStyle}>{item.ownerName}</td>
                   <td style={stickyActionCellStyle}>
                     <Link
                       href={toFormalSalesOrderDetailHref(item.detailHref)}
@@ -750,8 +688,8 @@ export default async function AppSalesOrdersPage({
                       详情
                     </Link>
                   </td>
-                </tr>
-              ))}
+                </tr>;
+              })}
             </tbody>
           </table>
         </div>

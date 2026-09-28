@@ -778,10 +778,18 @@ describe('PurchaseOrderService', () => {
 
   it('rejects a pending purchase order back to draft', async () => {
     const service = new PurchaseOrderService();
+    const created = await service.createFromSalesOrder({
+      salesOrderId: 88,
+      createdBy: 2001,
+      items: [{ salesItemId: 1, supplierId: 3001, productId: 501, quantity: 10, unitPrice: 12.5 }],
+    });
+    const purchaseOrderId = created.purchaseOrders[0].id;
+    await service.submit({ purchaseOrderId, currentStatus: 'draft' });
 
     const result = await service.reject({
-      purchaseOrderId: 19,
+      purchaseOrderId,
       currentStatus: 'pending_purchase_manager_approval',
+      rejectionReason: '请核对供应商交期后再提交',
     });
 
     expect(result.status).toBe('draft');
@@ -886,9 +894,17 @@ describe('PurchaseOrderService', () => {
 
   it('cancels an unshipped purchasing purchase order', async () => {
     const service = new PurchaseOrderService();
+    const created = await service.createFromSalesOrder({
+      salesOrderId: 88,
+      createdBy: 2001,
+      items: [{ salesItemId: 1, supplierId: 3001, productId: 501, quantity: 10, unitPrice: 12.5 }],
+    });
+    const purchaseOrderId = created.purchaseOrders[0].id;
+    await service.submit({ purchaseOrderId, currentStatus: 'draft' });
+    await service.approve({ purchaseOrderId, currentStatus: 'pending_purchase_manager_approval' });
 
     const result = await service.cancel({
-      purchaseOrderId: 19,
+      purchaseOrderId,
       currentStatus: 'purchasing',
       hasShipmentBatches: false,
       cancelReason: '供应商交期变化，采购单作废',

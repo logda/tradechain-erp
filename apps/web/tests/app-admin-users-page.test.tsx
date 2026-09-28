@@ -456,7 +456,7 @@ describe('admin users page', () => {
       expect(screen.getByText('新增成功，已同步到当前列表。')).toBeInTheDocument();
     });
     expect(screen.queryByText('新增成功，请刷新或继续在当前页查看最新用户。')).not.toBeInTheDocument();
-    expect(screen.getByText('第 1 / 1 页，共 2 条')).toBeInTheDocument();
+    expect(screen.getByText(/共 2 条/)).toBeInTheDocument();
   });
 
   it('updates the current row locally after role changes and activation toggles', async () => {

@@ -1,3 +1,4 @@
+import { matchesFormalUser, type FormalSession, type FormalOwnedItem } from '../auth/formal-session';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { AfterSalesService } from '../after-sales/after-sales.service';
 import { InquiryService } from '../inquiry/inquiry.service';
@@ -6,6 +7,9 @@ import { QuoteService } from '../quote/quote.service';
 import { SampleOrderService } from '../sample-order/sample-order.service';
 import { SalesOrderService } from '../sales-order/sales-order.service';
 import { ShipmentBatchService } from '../shipment-batch/shipment-batch.service';
+import { resolveFormalUserName } from '../auth/formal-user-name';
+import { PrismaService } from '../storage/prisma.service';
+import { resolveStorageMode } from '../storage/storage-mode';
 
 export type FormalTodoDomain = 'sales' | 'purchase' | 'operations' | 'after_sales';
 
@@ -17,10 +21,7 @@ export type FormalTodoRole =
   | 'purchase_manager'
   | 'purchase';
 
-export type FormalTodoListQuery = {
-  role?: FormalTodoRole;
-  user?: string;
-};
+export type FormalTodoListQuery = FormalSession;
 
 export type FormalTodoItem = {
   id: string;
@@ -30,9 +31,16 @@ export type FormalTodoItem = {
   moduleLabel: string;
   statusLabel: string;
   ownerName: string;
+  ownerId?: number;
+  createdById?: number;
   href: string;
   priority: 'high' | 'medium' | 'low';
   description: string;
+  relation: 'action' | 'following';
+  nextAction: string;
+  handlerLabel: string;
+  dueDate?: string;
+  dueInDays?: number;
   createdAt?: string;
   productNames?: string[];
   customerName?: string;
@@ -47,19 +55,28 @@ export type FormalTodoResponse = {
   items: FormalTodoItem[];
   total: number;
   closedTotal: number;
+  actionTotal: number;
+  followingTotal: number;
+  generatedAt: string;
 };
+
+type FormalTodoDraft = Omit<FormalTodoItem, 'relation' | 'nextAction' | 'handlerLabel'>;
 
 type ListResponse<T> = {
   items: T[];
+  total?: number;
 };
 
-type LifecycleTrackedItem = {
+type LifecycleTrackedItem = FormalOwnedItem & {
   ownerName?: string;
   lifecycleStatus?: 'open' | 'auto_closed' | 'voided';
   closeReason?: string;
+  docNo?: string;
+  inquiryNo?: string;
+  detailHref?: string;
 };
 
-type TodoSourceContext = {
+type TodoSourceContext = FormalOwnedItem & {
   docNo?: string;
   inquiryNo?: string;
   createdAt?: string;
@@ -91,9 +108,14 @@ function formalDetailHref(detailHref: string, formalPrefix: string) {
   return id ? `${formalPrefix}/${id}` : formalPrefix;
 }
 
-function canSeeFormalTodo(query: FormalTodoListQuery | undefined, item: FormalTodoItem) {
+function canSeeFormalTodo(query: FormalTodoListQuery | undefined, item: FormalTodoDraft) {
   const role = query?.role;
-  const user = query?.user;
+  const ownsItem = query?.dataScope === 'all' || query?.dataScope === (item.domain === 'sales' ? 'sales_team' : 'purchase_team') || matchesFormalUser(query ?? {}, item);
+  if (query?.modules) {
+    const moduleCode = item.domain === 'sales' ? 'sales' : item.domain === 'purchase' ? 'purchase' : 'operations';
+    if (!query.modules.includes(moduleCode)) return false;
+  }
+  if (query?.dataScope?.startsWith('own_') && !ownsItem && item.visibility !== 'purchase_team') return false;
 
   if (!role || role === 'admin' || role === 'boss') {
     return true;
@@ -107,7 +129,7 @@ function canSeeFormalTodo(query: FormalTodoListQuery | undefined, item: FormalTo
   }
 
   if (role === 'sales') {
-    return item.domain === 'sales' && item.ownerName === user;
+    return item.domain === 'sales' && ownsItem;
   }
 
   if (role === 'purchase_manager') {
@@ -122,12 +144,55 @@ function canSeeFormalTodo(query: FormalTodoListQuery | undefined, item: FormalTo
     (item.domain === 'purchase' ||
       item.domain === 'operations' ||
       item.domain === 'after_sales') &&
-    (item.ownerName === user || item.visibility === 'purchase_team')
+    (ownsItem || item.visibility === 'purchase_team')
   );
 }
 
 function isClosedLifecycleStatus(value?: string) {
   return value === 'auto_closed' || value === 'voided';
+}
+
+async function readAllPages<T>(load: (page: number) => Promise<ListResponse<T>>) {
+  const items: T[] = [];
+  for (let page = 1; ; page += 1) {
+    const result = await load(page);
+    items.push(...result.items);
+    if (!result.items.length || (result.total !== undefined
+      ? items.length >= result.total : result.items.length < 100)) return { items };
+  }
+}
+
+function calendarDay(value?: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+    ? date.getTime() / 86_400_000 : undefined;
+}
+
+function actionForTodo(item: FormalTodoDraft) {
+  const salesRoles: FormalTodoRole[] = ['admin', 'boss', 'sales_manager', 'sales'];
+  const purchaseRoles: FormalTodoRole[] = ['admin', 'boss', 'purchase_manager', 'purchase'];
+  const salesApprovalRoles: FormalTodoRole[] = ['admin', 'boss', 'sales_manager'];
+  const purchaseApprovalRoles: FormalTodoRole[] = ['admin', 'boss', 'purchase_manager'];
+  const bossRoles: FormalTodoRole[] = ['admin', 'boss'];
+  if (item.id.startsWith('quote-feedback-')) return { roles: salesRoles, actions: ['sales.quote.write', 'boss.confirm'], nextAction: '跟进客户反馈', handlerLabel: item.ownerName || '销售负责人' };
+  if (item.id.startsWith('quote-')) return { roles: bossRoles, actions: ['boss.confirm'], nextAction: '确认报价价格', handlerLabel: '老板' };
+  if (item.id.startsWith('inquiry-work-')) return { roles: purchaseRoles, actions: ['sales.inquiry.submit'], nextAction: '录入供应商报价并提交比价', handlerLabel: '采购团队', module: 'purchase' };
+  if (item.id.startsWith('inquiry-')) return { roles: bossRoles, actions: ['boss.confirm'], nextAction: '确认询价最终售价', handlerLabel: '老板', module: 'purchase' };
+  if (item.id.startsWith('sample-')) {
+    if (item.statusLabel === '待样品审批') return { roles: salesApprovalRoles, actions: ['sales.sample.approve'], nextAction: '审批样品申请', handlerLabel: '销售主管' };
+    if (item.domain === 'purchase') return { roles: ['admin', 'purchase_manager', 'purchase'] as FormalTodoRole[], actions: ['purchase.sample.execute'], nextAction: item.statusLabel === '待打样' ? '安排打样' : '完成打样并寄样', handlerLabel: '采购团队' };
+    return { roles: salesRoles, actions: ['sales.sample.execute'], nextAction: '跟进客户确认样品', handlerLabel: item.ownerName || '销售负责人' };
+  }
+  if (item.id.startsWith('sales-rejected-')) return { roles: salesRoles, actions: ['sales.order.write'], nextAction: '修改销售单并重新提交', handlerLabel: item.ownerName || '销售负责人' };
+  if (item.id.startsWith('sales-')) return { roles: salesApprovalRoles, actions: ['sales.order.write'], nextAction: '审批销售单', handlerLabel: '销售主管' };
+  if (item.id.startsWith('purchase-assignment-') || item.statusLabel === '待分配') return { roles: purchaseApprovalRoles, actions: ['purchase.order.approve'], nextAction: '指定采购负责人', handlerLabel: '采购主管' };
+  if (item.id.startsWith('purchase-claim-')) return { roles: purchaseRoles, actions: ['purchase.order.submit'], nextAction: '补齐采购信息并提交审批', handlerLabel: item.ownerName || '采购负责人' };
+  if (item.id.startsWith('purchase-eta-')) return { roles: purchaseRoles, actions: ['purchase.order.submit'], nextAction: '跟进供应商交付', handlerLabel: item.ownerName || '采购负责人' };
+  if (item.id.startsWith('purchase-')) return { roles: purchaseApprovalRoles, actions: ['purchase.order.approve'], nextAction: '审批采购单', handlerLabel: '采购主管' };
+  if (item.id.startsWith('shipment-')) return { roles: purchaseRoles, actions: ['shipment.update'], nextAction: item.statusLabel === '异常待处理' ? '处理发货异常' : '发送发货回单', handlerLabel: item.ownerName || '发货负责人' };
+  if (item.id.startsWith('after-sales-approval-')) return { roles: purchaseApprovalRoles, actions: ['purchase.order.approve'], nextAction: '审批售后处理方案', handlerLabel: '采购主管' };
+  return { roles: bossRoles, actions: ['finance.confirm'], nextAction: '复核售后财务并确认', handlerLabel: '老板 / 财务' };
 }
 
 @Injectable()
@@ -149,6 +214,9 @@ export class FormalTodoService {
     @Optional()
     @Inject(SampleOrderService)
     private readonly sampleOrderService?: Pick<SampleOrderService, 'list'> & Partial<Pick<SampleOrderService, 'getDetail'>>,
+    @Optional()
+    @Inject(PrismaService)
+    private readonly prisma?: PrismaService,
   ) {}
 
   async listFormalTodos(
@@ -164,34 +232,34 @@ export class FormalTodoService {
       sampleOrders,
     ] =
       await Promise.all([
-        this.quoteService.list(
-          { page: 1, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
+        readAllPages(page => this.quoteService.list(
+          { page, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
           query,
-        ),
-        this.salesOrderService.list(
-          { page: 1, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
+        )),
+        readAllPages(page => this.salesOrderService.list(
+          { page, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
           query,
-        ),
-        this.purchaseOrderService.list(
-          { page: 1, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
+        )),
+        readAllPages(page => this.purchaseOrderService.list(
+          { page, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
           query,
-        ),
-        this.shipmentBatchService.list(
-          { page: 1, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
+        )),
+        readAllPages(page => this.shipmentBatchService.list(
+          { page, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
           query,
-        ),
-        this.afterSalesService.list(
-          { page: 1, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
+        )),
+        readAllPages(page => this.afterSalesService.list(
+          { page, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
           query,
-        ),
+        )),
         this.inquiryService
-          ? this.inquiryService.list({ page: 1, pageSize: 100 }, query)
+          ? readAllPages(page => this.inquiryService!.list({ page, pageSize: 100 }, query))
           : Promise.resolve({ items: [] }),
         this.sampleOrderService
-          ? this.sampleOrderService.list(
-              { page: 1, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
+          ? readAllPages(page => this.sampleOrderService!.list(
+              { page, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' },
               query,
-            )
+            ))
           : Promise.resolve({ items: [] }),
       ]) as [
         ListResponse<{
@@ -273,8 +341,8 @@ export class FormalTodoService {
         }>,
       ];
 
-    const items: FormalTodoItem[] = [];
-    let closedTotal = 0;
+    const items: FormalTodoDraft[] = [];
+    const closedSources = new Set<string>();
 
     const countClosed = (item: LifecycleTrackedItem, domain: FormalTodoDomain) => {
       if (!isClosedLifecycleStatus(item.lifecycleStatus)) {
@@ -284,11 +352,13 @@ export class FormalTodoService {
       const syntheticTodo = {
         domain,
         ownerName: item.ownerName ?? '',
+        ownerId: item.ownerId ?? item.salesUserId ?? item.ownerUserId,
+        createdById: item.createdById,
         visibility: undefined,
       } as FormalTodoItem;
 
       if (canSeeFormalTodo(query, syntheticTodo)) {
-        closedTotal += 1;
+        closedSources.add(`${domain}:${item.detailHref ?? item.docNo ?? item.inquiryNo}`);
       }
 
       return true;
@@ -359,11 +429,7 @@ export class FormalTodoService {
     inquiries.items
       .filter((item) =>
         !countClosed(
-          {
-            ownerName: item.createdBy,
-            lifecycleStatus: item.lifecycleStatus,
-            closeReason: item.closeReason,
-          },
+          { ...item, ownerName: item.createdBy },
           'sales',
         ),
       )
@@ -537,22 +603,27 @@ export class FormalTodoService {
       });
 
     const today = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const todayDay = calendarDay(today.toISOString().slice(0, 10))!;
     const reminderEnd = new Date(today);
     reminderEnd.setUTCDate(reminderEnd.getUTCDate() + 3);
     const reminderEndDate = reminderEnd.toISOString().slice(0, 10);
     purchaseOrders.items
       .filter((item) => !isClosedLifecycleStatus(item.lifecycleStatus))
       .filter((item) => item.status === 'purchasing' || item.status.startsWith('partial_'))
-      .filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.factoryEstimatedDeliveryDate ?? ''))
+      .filter((item) => calendarDay(item.factoryEstimatedDeliveryDate) !== undefined)
       .filter((item) => item.factoryEstimatedDeliveryDate! <= reminderEndDate)
       .forEach((item) => {
+        const dueInDays = calendarDay(item.factoryEstimatedDeliveryDate)! - todayDay;
         items.push({
           id: `purchase-eta-${item.docNo}`,
           docNo: item.docNo,
           title: '工厂交期提醒',
           domain: 'purchase',
           moduleLabel: '采购单',
-          statusLabel: '临近交期',
+          statusLabel: dueInDays < 0 ? `已逾期 ${-dueInDays} 天`
+            : dueInDays === 0 ? '今天到期' : `还有 ${dueInDays} 天`,
+          dueDate: item.factoryEstimatedDeliveryDate,
+          dueInDays,
           ownerName: item.ownerName ?? '',
           href: formalDetailHref(item.detailHref, '/app/purchase-orders'),
           priority: 'medium',
@@ -621,7 +692,12 @@ export class FormalTodoService {
       ...shipmentBatches.items, ...afterSalesOrders.items,
       ...inquiries.items, ...sampleOrders.items,
     ] as unknown as TodoSourceContext[];
-    const visibleItems = await Promise.all(items
+    const uniqueItems = [...new Map(items.map(item => [item.id, item])).values()];
+    const visibleItems = await Promise.all(uniqueItems
+      .map(item => {
+        const source = sources.find(entry => (entry.docNo ?? entry.inquiryNo) === item.docNo);
+        return { ...item, ownerId: source?.ownerId ?? source?.salesUserId ?? (source?.ownerUserId == null ? undefined : Number(source.ownerUserId)), createdById: source?.createdById ?? undefined };
+      })
       .filter((item) => canSeeFormalTodo(query, item))
       .map(async (item) => {
         const source = sources.find((entry) => (entry.docNo ?? entry.inquiryNo) === item.docNo);
@@ -646,7 +722,19 @@ export class FormalTodoService {
           }
         }
         const detailData = detailContext(detail);
+        const action = actionForTodo(item);
+        const canAct = (!query?.role || action.roles.includes(query.role))
+          && (query?.actions === undefined || action.actions.some(value => query.actions!.includes(value)))
+          && (!action.module || query?.modules === undefined || query.modules.includes(action.module));
+        let handlerLabel = action.handlerLabel;
+        if (item.ownerName && action.handlerLabel === item.ownerName && item.ownerId !== undefined
+          && (resolveStorageMode() !== 'prisma' || this.prisma)) {
+          handlerLabel = await resolveFormalUserName(item.ownerId, this.prisma);
+        }
         return {
+          relation: canAct ? 'action' as const : 'following' as const,
+          nextAction: action.nextAction,
+          handlerLabel,
           ...item,
           createdAt: item.createdAt ?? source?.createdAt,
           customerName: item.customerName ?? source?.customerName ?? source?.counterpartyName,
@@ -664,7 +752,10 @@ export class FormalTodoService {
     return {
       items: visibleItems,
       total: visibleItems.length,
-      closedTotal,
+      closedTotal: closedSources.size,
+      actionTotal: visibleItems.filter(item => item.relation === 'action').length,
+      followingTotal: visibleItems.filter(item => item.relation === 'following').length,
+      generatedAt: new Date().toISOString(),
     };
   }
 }

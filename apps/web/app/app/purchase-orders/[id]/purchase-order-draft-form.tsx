@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, type ReactNode, useId, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CounterpartyPicker,
@@ -146,6 +146,12 @@ export function PurchaseOrderDraftForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const attempt = useMutationAttempt();
   const draftFormId = useId();
+  const formRef = useRef<HTMLFormElement | null>(null);
+
+  function markEdited() {
+    if (formRef.current) formRef.current.dataset.saveState = 'waiting';
+    attempt.resetAfterEdit();
+  }
 
   const selectedSupplier = useMemo(
     () =>
@@ -170,8 +176,10 @@ export function PurchaseOrderDraftForm({
     const requestKey = attempt.begin();
     if (!requestKey) return;
     setIsSubmitting(true);
+    const form = event.currentTarget;
+    form.dataset.saveState = 'saving';
 
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     const fields: MutationField[] = [
       { name: 'currentStatus', value: currentStatus },
       { name: 'ownerName', value: currentOwnerName },
@@ -193,15 +201,18 @@ export function PurchaseOrderDraftForm({
         requestKey,
       );
       if (!result.ok) {
+        form.dataset.saveState = 'error';
         attempt.fail();
         setMessage({ error: result.error, success: null });
         return;
       }
 
+      form.dataset.saveState = 'saved';
       setMessage({ error: null, success: '采购单草稿已保存' });
       attempt.succeed();
       router.refresh?.();
     } catch (error) {
+      form.dataset.saveState = 'error';
       attempt.fail();
       setMessage({ error: formatUnexpectedActionError(error), success: null });
     } finally {
@@ -211,7 +222,8 @@ export function PurchaseOrderDraftForm({
 
   return (
     <>
-      <form id={draftFormId} onSubmit={handleSubmit} onChangeCapture={attempt.resetAfterEdit} style={{ ...formalActionFormStyle, width: '100%' }}>
+      <form ref={formRef} id={draftFormId} onSubmit={handleSubmit} onInputCapture={markEdited} onChangeCapture={markEdited} style={{ ...formalActionFormStyle, width: '100%' }}>
+      <fieldset disabled={isSubmitting} style={{ display: 'contents', border: 0, padding: 0, margin: 0 }}>
       <input name="currentStatus" type="hidden" value={currentStatus} />
       <input name="ownerName" type="hidden" value={currentOwnerName} />
       <input name="supplierId" type="hidden" value={supplierIdValue} />
@@ -233,7 +245,7 @@ export function PurchaseOrderDraftForm({
               type="button"
               aria-pressed={supplierMode === 'counterparty'}
               style={buildModeButtonStyle(supplierMode === 'counterparty')}
-              onClick={() => setSupplierMode('counterparty')}
+              onClick={() => { markEdited(); setSupplierMode('counterparty'); }}
             >
               从往来单位选择
             </button>
@@ -241,7 +253,7 @@ export function PurchaseOrderDraftForm({
               type="button"
               aria-pressed={supplierMode === 'manual'}
               style={buildModeButtonStyle(supplierMode === 'manual')}
-              onClick={() => setSupplierMode('manual')}
+              onClick={() => { markEdited(); setSupplierMode('manual'); }}
             >
               手工填写
             </button>
@@ -273,7 +285,7 @@ export function PurchaseOrderDraftForm({
               nameOrder="chinese-english"
               options={supplierOptions}
               selectedId={selectedSupplierId}
-              onSelect={(option) => setSelectedSupplierId(String(option.id))}
+              onSelect={(option) => { markEdited(); setSelectedSupplierId(String(option.id)); }}
             />
           </label>
         ) : (
@@ -309,9 +321,10 @@ export function PurchaseOrderDraftForm({
 
       {message.error ? <p style={{ margin: 0, color: '#dc2626' }}>{message.error}</p> : null}
       {message.success ? <p style={{ margin: 0, color: '#15803d' }}>{message.success}</p> : null}
-
+      </fieldset>
       </form>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '12px' }}>
+        <fieldset disabled={isSubmitting} style={{ display: 'contents', border: 0, padding: 0, margin: 0 }}>
         <button
           type="submit"
           form={draftFormId}
@@ -321,6 +334,7 @@ export function PurchaseOrderDraftForm({
           {isSubmitting ? '保存中...' : '保存草稿'}
         </button>
         {submitAction}
+        </fieldset>
       </div>
     </>
   );

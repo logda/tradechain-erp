@@ -106,7 +106,7 @@ describe('app login page', () => {
   it('redirects to the formal workspace only when the API accepts its cookie', async () => {
     cookieGetMock.mockReturnValue({ value: 'valid-ticket' });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
-      role: 'sales', user: 'Zoe', username: 'zoe',
+      role: 'sales', user: 'Zoe', userId: 3, username: 'zoe',
       accessScopes: { modules: ['sales'], dataScope: 'own_sales', actions: [] },
     }) }));
 

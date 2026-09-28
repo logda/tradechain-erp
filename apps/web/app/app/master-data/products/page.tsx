@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import { AuditLogTable } from '../../_components/audit-log-table';
 import { canViewFormalModule, resolveDemoSession } from '../../_lib/demo-session';
@@ -139,76 +138,6 @@ const sectionStyle = {
   background:
     'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)',
   boxShadow: '0 18px 40px rgba(15, 23, 42, 0.05)',
-} satisfies React.CSSProperties;
-
-const toolbarStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '16px',
-  flexWrap: 'wrap' as const,
-  alignItems: 'flex-start',
-} satisfies React.CSSProperties;
-
-const linkStyle = {
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
-const heroSectionStyle = {
-  ...sectionStyle,
-  padding: '26px',
-  background:
-    'radial-gradient(circle at top left, rgba(15,118,110,0.12) 0%, rgba(255,255,255,0.98) 32%, rgba(248,250,252,0.96) 100%)',
-} satisfies React.CSSProperties;
-
-const heroTitleWrapStyle = {
-  display: 'grid',
-  gap: '10px',
-  alignContent: 'start',
-} satisfies React.CSSProperties;
-
-const heroEyebrowStyle = {
-  margin: 0,
-  fontSize: '12px',
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase' as const,
-  color: '#0f766e',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
-const heroTitleStyle = {
-  margin: 0,
-  fontSize: '30px',
-  lineHeight: 1.12,
-  color: '#0f172a',
-} satisfies React.CSSProperties;
-
-const heroCopyStyle = {
-  margin: 0,
-  color: '#475569',
-  lineHeight: 1.8,
-  fontSize: '14px',
-  maxWidth: '860px',
-} satisfies React.CSSProperties;
-
-const heroActionWrapStyle = {
-  display: 'flex',
-  gap: '10px',
-  flexWrap: 'wrap' as const,
-  alignItems: 'center',
-} satisfies React.CSSProperties;
-
-const heroMetaBadgeStyle = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  border: '1px solid #cbd5e1',
-  borderRadius: '999px',
-  padding: '8px 12px',
-  background: '#ffffff',
-  color: '#334155',
-  fontSize: '12px',
-  fontWeight: 700,
 } satisfies React.CSSProperties;
 
 const sectionHeadingStyle = {
@@ -556,29 +485,15 @@ export default async function AppProductsPage({
   return (
     <AppShell
       title="商品 / SKU 主数据"
-      subtitle="统一维护 SKU、中文名、英文名、分类、单位、价格，报价和销售采购明细直接复用。"
+      subtitle="查找产品，维护编码、规格与价格。"
       session={session}
     >
-      <section style={heroSectionStyle}>
-        <div style={toolbarStyle}>
-          <div style={heroTitleWrapStyle}>
-            <p style={heroEyebrowStyle}>Product Library</p>
-            <h3 style={heroTitleStyle}>产品资料总览</h3>
-            <p style={heroCopyStyle}>
-              这里展示产品资料、编码、包装和价格，供后续单据复用。
-            </p>
-          </div>
-          <div style={heroActionWrapStyle}>
-            {canManageMasterData ? <Link href="/app/master-data/product-code-rule" style={linkStyle}>产品编码规则设置</Link> : null}
-            <span style={heroMetaBadgeStyle}>{canManageMasterData ? '可维护产品' : '产品只读'}</span>
-          </div>
-        </div>
-      </section>
-
       <ProductMasterDataClient
+        key={`${session.userId ?? session.user}:${session.role}:${session.accessScopes?.dataScope ?? 'default'}:${JSON.stringify(query)}`}
         initialItems={visibleProductItems}
         initialTotal={productResult.total}
-        initialQuery={query}
+        initialQuery={{ ...query, page: productResult.page, pageSize: productResult.pageSize }}
+        hasExplicitQuery={['keyword', 'status', 'category', 'ownerName', 'productStage', 'pricingMode', 'page', 'pageSize'].some((name) => resolvedSearchParams[name] !== undefined)}
         canManageMasterData={canManageMasterData}
         canConfigureFields={canConfigureFields}
         salesView={salesView}

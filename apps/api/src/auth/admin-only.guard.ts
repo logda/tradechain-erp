@@ -45,6 +45,9 @@ export class AdminOnlyGuard implements CanActivate {
     if (signedSession) {
       request.headers['x-erp-role'] = signedSession.role;
       request.headers['x-erp-user'] = signedSession.user;
+      request.headers['x-erp-legacy-user-ids'] = signedSession.legacyUserIds.join(',');
+      request.headers['x-erp-user-id'] = signedSession.userId === undefined ? undefined : String(signedSession.userId);
+      request.headers['x-erp-data-scope'] = signedSession.dataScope;
       request.headers['x-erp-modules'] = signedSession.modules.join(',');
       request.headers['x-erp-actions'] = signedSession.actions.join(',');
     }

@@ -26,6 +26,8 @@ export type SampleListQuery = CommonListQuery<SampleListSortField> & {
 };
 
 export type SampleListItem = {
+  ownerId?: number;
+  createdById?: number;
   moduleLabel: string;
   docNo: string;
   title: string;

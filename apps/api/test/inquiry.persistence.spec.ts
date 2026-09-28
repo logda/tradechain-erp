@@ -1,6 +1,8 @@
+import { useListFixtures } from './helpers/list-fixtures';
 import { InquiryService } from '../src/inquiry/inquiry.service';
 
 describe('InquiryService runtime persistence', () => {
+  useListFixtures('inquiry');
   it('persists inquiry status transitions in runtime mode', async () => {
     delete process.env.ERP_STORAGE_MODE;
     const service = new InquiryService();

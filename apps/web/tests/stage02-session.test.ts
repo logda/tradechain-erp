@@ -10,6 +10,7 @@ const profile = {
   role: 'sales',
   user: 'Zoe',
   username: 'zoe',
+  userId: 3,
   accessScopes: { modules: ['sales'], dataScope: 'own_sales', actions: [] },
 };
 
@@ -43,7 +44,7 @@ describe('正式工作台会话入口', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => profile }));
     const access = encodeURIComponent(JSON.stringify(profile.accessScopes));
     const request = new NextRequest(
-      `http://127.0.0.1:3000/app/sales/quotes?role=sales&user=Zoe&username=zoe&access=${encodeURIComponent(access)}`,
+      `http://127.0.0.1:3000/app/sales/quotes?role=sales&user=Zoe&username=zoe&userId=3&access=${encodeURIComponent(access)}`,
       { headers: { cookie: 'erp_formal_session=signed-ticket' } },
     );
     const response = await middleware(request);
@@ -55,7 +56,7 @@ describe('正式工作台会话入口', () => {
   it('框架解码内部权限参数后仍识别为当前会话', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => profile }));
     const params = new URLSearchParams({
-      role: profile.role, user: profile.user, username: profile.username,
+      role: profile.role, user: profile.user, username: profile.username, userId: String(profile.userId),
       access: JSON.stringify(profile.accessScopes),
     });
     const request = new NextRequest(`http://127.0.0.1:3000/app?${params}`, {

@@ -3,6 +3,7 @@ import { AfterSalesService } from '../src/after-sales/after-sales.service';
 import { PurchaseOrderService } from '../src/purchase-order/purchase-order.service';
 import { SalesOrderService } from '../src/sales-order/sales-order.service';
 import { ShipmentBatchService } from '../src/shipment-batch/shipment-batch.service';
+import { resolvePurchaseOrderStore } from '../src/purchase-order/purchase-order.store';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -35,14 +36,9 @@ describe('ReportService', () => {
       financeReviewing: 0,
       closedThisMonth: 0,
     });
-    expect(grossProfit.totalRevenue).toBe(0);
-    expect(grossProfit.totalProcurementCost).toBe(0);
-    expect(grossProfit.totalAfterSalesCost).toBe(0);
-    expect(grossProfit.grossProfit).toBe(
-      grossProfit.totalRevenue -
-        grossProfit.totalProcurementCost -
-        grossProfit.totalAfterSalesCost,
-    );
+    expect(grossProfit).toMatchObject({ totalRevenue: null, totalProcurementCost: null,
+      totalAfterSalesCost: null, grossProfit: null, grossMargin: null,
+      amountDifference: null, calculationStatus: 'incomplete', sourceDocuments: [] });
     expect(periodSummary).toMatchObject({
       salesOrdersCreated: 0,
       purchaseOrdersCreated: 0,
@@ -66,12 +62,13 @@ describe('ReportService', () => {
       const salesOrder = await salesService.create({
         customerName: 'Acme Trading',
         title: 'Acme report rollup order',
+        items: [{ lineNo: 1, productId: 501, sku: 'A', productName: 'A', unit: '件', quantity: 10, salePrice: 20, amount: 200 }],
         salesUserId: 2001,
         createdBy: 2001,
       });
-      expect(salesOrder.items).toEqual([]);
+      expect(salesOrder.items).toHaveLength(1);
 
-      await purchaseService.createFromSalesOrder({
+      const createdPurchases = await purchaseService.createFromSalesOrder({
         salesOrderId: salesOrder.id,
         createdBy: 2002,
         items: [
@@ -84,6 +81,9 @@ describe('ReportService', () => {
           },
         ],
       });
+
+      const purchaseOrder = resolvePurchaseOrderStore().getPurchaseOrder(createdPurchases.purchaseOrders[0].id)!;
+      resolvePurchaseOrderStore().upsertPurchaseOrder({ ...purchaseOrder, status: 'purchasing' });
 
       await shipmentService.create({
         salesOrderId: salesOrder.id,
@@ -115,7 +115,8 @@ describe('ReportService', () => {
         totals: {
           salesOrderCount: 1,
           submittedAmount: 0,
-          shippedAmount: 0,
+          shippedAmount: 200,
+          voidedAmount: 0,
         },
         afterSalesOverview: {
           openCases: 1,

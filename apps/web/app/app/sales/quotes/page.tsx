@@ -1,3 +1,5 @@
+import { DataLoadError } from '../../_components/data-load-error';
+import { DataScopeNote } from '../../_components/data-scope-note';
 import Link from 'next/link';
 import {
   quoteBossConfirmedOptions,
@@ -7,7 +9,6 @@ import {
   QUOTE_STATUSES,
 } from '@erp/shared';
 import { ConvertQuoteForm } from '../../../quotes/[id]/convert-quote-form';
-import { getQuotePreviewResponse } from '../../../quotes/quote-preview';
 import { AppShell } from '../../_components/app-shell';
 import { AuditLogTable } from '../../_components/audit-log-table';
 import { FilterPanel } from '../../_components/filter-panel';
@@ -293,20 +294,25 @@ export default async function AppQuoteListPage({
   if (!canViewFormalModule(session, 'sales')) {
     return (
       <AppShell
-        title="正式需求和报价"
+        title="需求和报价"
         subtitle="当前角色不在销售域内，不能查看需求和报价。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限访问正式需求和报价</h2>
+          <h2>无权限访问需求和报价</h2>
           <p>请切换到销售、销售主管或老板视角后再查看。</p>
         </section>
       </AppShell>
     );
   }
 
-  const result =
-    (await loadQuoteList(quoteSearchParams, session)) ?? getQuotePreviewResponse(query);
+  const result = await loadQuoteList(quoteSearchParams, session);
+  if (!result) {
+    return <AppShell title="需求和报价" session={session}>
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
+      <DataLoadError label="需求和报价列表" />
+    </AppShell>;
+  }
   const auditLogs = (await loadQuoteAuditLogs(session))?.items ?? [];
   const sourceOptions = await loadQuoteSourceOptions(session);
   const formatQuoteSourceType = (value: string | undefined) => {
@@ -350,7 +356,7 @@ export default async function AppQuoteListPage({
 
   return (
     <AppShell
-      title="正式需求和报价"
+      title="需求和报价"
       subtitle="复用当前单据数据口径，以正式工作台样式承载筛选、摘要与列表。"
       session={session}
     >
@@ -365,6 +371,7 @@ export default async function AppQuoteListPage({
         </div>
       ) : null}
 
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
       <StatStrip
         items={[
           { label: '全部', value: visibleItems.length },
@@ -434,7 +441,7 @@ export default async function AppQuoteListPage({
             >
               {quoteBossConfirmedOptions.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {value === 'all' ? '全部' : value === 'yes' ? '是' : value === 'no' ? '否' : value}
                 </option>
               ))}
             </select>

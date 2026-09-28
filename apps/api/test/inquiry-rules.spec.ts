@@ -1,3 +1,4 @@
+import { useListFixtures } from './helpers/list-fixtures';
 import { ParseIntPipe } from '@nestjs/common';
 import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { InquiryController } from '../src/inquiry/inquiry.controller';
@@ -5,6 +6,7 @@ import type { InquiryListItem } from '../src/inquiry/inquiry-list.data';
 import { InquiryService } from '../src/inquiry/inquiry.service';
 
 describe('InquiryService', () => {
+  useListFixtures('inquiry');
   it('rejects boss submission when any item has fewer than two suppliers', async () => {
     const service = new InquiryService();
 

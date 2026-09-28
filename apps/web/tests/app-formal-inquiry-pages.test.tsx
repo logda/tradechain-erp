@@ -185,7 +185,7 @@ describe('formal inquiry pages', () => {
         }),
       }),
     );
-    expect(screen.getByRole('heading', { name: '正式询价单' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '询价单' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回销售中心' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '进入需求/报价模块' })).not.toBeInTheDocument();
@@ -380,7 +380,7 @@ describe('formal inquiry pages', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式询价详情' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '询价详情' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回正式询价列表' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回销售中心' })).not.toBeInTheDocument();
@@ -784,8 +784,8 @@ describe('formal inquiry pages', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式询价单' })).toBeInTheDocument();
-    expect(screen.queryByText('无权限访问正式询价单')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '询价单' })).toBeInTheDocument();
+    expect(screen.queryByText('无权限访问询价单')).not.toBeInTheDocument();
     expect(screen.getByText('IQ-PURCHASE-001')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '进入需求/报价模块' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回销售中心' })).not.toBeInTheDocument();
@@ -817,7 +817,7 @@ describe('formal inquiry pages', () => {
       </>,
     );
 
-    expect(screen.getByText('无权限访问正式询价单')).toBeInTheDocument();
+    expect(screen.getByText('无权限访问询价单')).toBeInTheDocument();
     expect(screen.queryByText('IQ202607080001')).not.toBeInTheDocument();
   });
 
@@ -853,7 +853,7 @@ describe('formal inquiry pages', () => {
       </>,
     );
 
-    expect(screen.getByText('无权限访问正式询价单')).toBeInTheDocument();
+    expect(screen.getByText('无权限访问询价单')).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: '询价单 IQ202607080015' }),
     ).not.toBeInTheDocument();
@@ -909,8 +909,8 @@ describe('formal inquiry pages', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式询价详情' })).toBeInTheDocument();
-    expect(screen.queryByText('无权限访问正式询价单')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '询价详情' })).toBeInTheDocument();
+    expect(screen.queryByText('无权限访问询价单')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '提交比价' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '比价明细' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '比价明细' }).compareDocumentPosition(

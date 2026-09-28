@@ -361,7 +361,7 @@ export default async function AppInventoryPage({
           </p>
           <div style={actionWrapStyle}>
             <Link href="/app/purchase-orders" style={actionLinkStyle}>
-              回到正式采购单
+              回到采购单
             </Link>
             <Link href="/app/shipment-batches" style={actionLinkStyle}>
               查看发货批次

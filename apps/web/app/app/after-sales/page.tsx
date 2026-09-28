@@ -1,3 +1,5 @@
+import { DataLoadError } from '../_components/data-load-error';
+import { DataScopeNote } from '../_components/data-scope-note';
 import Link from 'next/link';
 import {
   afterSalesStatuses,
@@ -6,7 +8,6 @@ import {
   receiptCollectionStatuses,
   type AfterSalesListResponse,
 } from '@erp/shared';
-import { getAfterSalesPreviewResponse } from '../../after-sales/after-sales-preview';
 import { AppShell } from '../_components/app-shell';
 import { AuditLogTable } from '../_components/audit-log-table';
 import { FilterPanel } from '../_components/filter-panel';
@@ -22,6 +23,8 @@ import { hasValidAuditLogResponse, type AuditLogResponse } from '../_lib/audit-l
 import { formatCounterpartyChineseDisplay } from '../_lib/counterparty-display';
 import { canUseFormalAfterSalesProcessActions } from '../_lib/formal-access';
 import { buildFormalApiRequestHeaders } from '../_lib/formal-api-request-headers';
+
+const afterSalesOptionLabels: Record<string, string> = { pending_submit: '待提交', pending_approval: '待审批', processing: '处理中', finance_reviewing: '财务复核中', finished: '待关闭', closed: '已关闭', pending: '待确认', confirmed: '已确认', unpaid: '未收款', deposit_received: '已收定金', fully_paid: '已收全款', prepaid_deducted: '预付款已抵扣', customer_complaint: '客户投诉', return: '退货', refund: '退款', rework: '返工' };
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -230,21 +233,25 @@ export default async function AppAfterSalesPage({
   if (!canViewFormalModule(session, 'operations')) {
     return (
       <AppShell
-        title="正式售后单"
+        title="售后单"
         subtitle="当前角色不在采购履约域内，不能查看售后单。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限访问正式售后单</h2>
+          <h2>无权限访问售后单</h2>
           <p>请切换到采购、采购主管或老板视角后再查看。</p>
         </section>
       </AppShell>
     );
   }
 
-  const result =
-    (await loadAfterSalesList(afterSalesSearchParams, session)) ??
-    getAfterSalesPreviewResponse(query);
+  const result = await loadAfterSalesList(afterSalesSearchParams, session);
+  if (!result) {
+    return <AppShell title="售后单" session={session}>
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
+      <DataLoadError label="售后单列表" />
+    </AppShell>;
+  }
   const auditLogs = (await loadAfterSalesAuditLogs(session))?.items ?? [];
   const visibleItems = filterOperationsRows(result.items, session);
   const processingCount = visibleItems.filter(
@@ -288,7 +295,7 @@ export default async function AppAfterSalesPage({
 
   return (
     <AppShell
-      title="正式售后单"
+      title="售后单"
       subtitle="正式售后页承接客诉、退款、返工与财务复核，突出售后闭环与资金确认。"
       session={session}
     >
@@ -305,6 +312,7 @@ export default async function AppAfterSalesPage({
         </div>
       </div>
 
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
       <StatStrip
         items={[
           { label: '全部', value: visibleItems.length },
@@ -333,7 +341,7 @@ export default async function AppAfterSalesPage({
               <option value="">全部</option>
               {afterSalesStatuses.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {`${status} / ${afterSalesOptionLabels[status] ?? status}`}
                 </option>
               ))}
             </select>
@@ -364,7 +372,7 @@ export default async function AppAfterSalesPage({
               <option value="">全部</option>
               {afterSalesTypeOptions.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {`${value} / ${afterSalesOptionLabels[value] ?? value}`}
                 </option>
               ))}
             </select>
@@ -379,7 +387,7 @@ export default async function AppAfterSalesPage({
               <option value="">全部</option>
               {financeConfirmStatuses.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {`${status} / ${afterSalesOptionLabels[status] ?? status}`}
                 </option>
               ))}
             </select>
@@ -394,7 +402,7 @@ export default async function AppAfterSalesPage({
               <option value="">全部</option>
               {receiptCollectionStatuses.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {`${status} / ${afterSalesOptionLabels[status] ?? status}`}
                 </option>
               ))}
             </select>

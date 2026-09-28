@@ -114,6 +114,7 @@ export async function createFormalShipmentBatchAction(
   try {
     const payload = await buildCreateFormalShipmentBatchPayload(formData);
     const actionSession = await resolveFormalActionSessionFromForm(formData);
+    if (actionSession.userId !== undefined) payload.createdBy = actionSession.userId;
     const response = await fetch(`${getShipmentBatchApiBaseUrl()}/shipment-batches`, {
       method: 'POST',
       headers: {

@@ -271,11 +271,11 @@ export default async function AppWarehousesPage({
         <section style={cardStyle}>
           <h2 style={cardTitleStyle}>仓储协同说明</h2>
           <p style={cardMetaStyle}>
-            这一页用于老板演示正式版仓储主数据基础盘点。仓库定义稳定后，收货、出库和库存台账会基于这里的仓库与库位进行归集。
+            维护仓库和库位，查询可用状态。
           </p>
           <div style={quickActionStyle}>
             <Link href="/app/purchase-orders" style={quickActionLinkStyle}>
-              回到正式采购单
+              回到采购单
             </Link>
             <Link href="/app/shipment-batches" style={quickActionLinkStyle}>
               查看发货批次

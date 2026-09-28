@@ -5,17 +5,18 @@ import { AppShell } from '../../_components/app-shell';
 import { MutationActionForm } from '../../_components/mutation-action-form';
 import {
   canViewFormalModule,
+  canViewFormalAuditCenter,
   resolveDemoSession,
+  type DemoSession,
 } from '../../_lib/demo-session';
 import {
   canUseFormalAfterSalesProcessActions,
   canUseFormalShipmentUpdateActions,
   canViewFormalShipmentBatchDetail,
   canViewFormalShipmentBatchModule,
-  getFormalDetailAccessDeniedLabel,
   resolveFormalUserId,
 } from '../../_lib/formal-access';
-import { hasValidAuditLogResponse, type AuditLogResponse } from '../../_lib/audit-log';
+import { hasValidUnifiedAuditLogResponse } from '../../_lib/audit-log';
 import { buildFormalRequestHeaders } from '../../_lib/formal-request-headers';
 import { buildSignedFormalRequestHeaders } from '../../_lib/formal-request-signature';
 
@@ -123,10 +124,11 @@ async function loadShipmentBatchDetail(id: string, session: { role: string; user
   }
 }
 
-async function loadShipmentBatchAuditLogs(session: { role: string; user: string }) {
+async function loadShipmentBatchAuditLogs(id: string, session: DemoSession) {
+  if (!canViewFormalAuditCenter(session)) return null;
   try {
     const response = await fetch(
-      `${getShipmentBatchApiBaseUrl()}/shipment-batches/audit-logs`,
+      `${getShipmentBatchApiBaseUrl()}/audit-logs?bizType=shipment_batch&bizId=${encodeURIComponent(id)}`,
       {
         cache: 'no-store',
         headers: {
@@ -141,7 +143,30 @@ async function loadShipmentBatchAuditLogs(session: { role: string; user: string 
     }
 
     const result = (await response.json().catch(() => null)) as unknown;
-    return hasValidAuditLogResponse(result) ? result : null;
+    return hasValidUnifiedAuditLogResponse(result) && !result.modules.some((module) => module.failed)
+      ? { items: result.items.filter((item) => item.bizType === 'shipment_batch' && item.bizId === Number(id)) }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadSourceDocumentNo(module: 'sales' | 'purchase', id: number, session: DemoSession): Promise<string | null> {
+  if (!canViewFormalModule(session, module)) return null;
+  const path = module === 'sales' ? 'sales-orders' : 'purchase-orders';
+  const field = module === 'sales' ? 'salesNo' : 'purchaseNo';
+  try {
+    const response = await fetch(`${getShipmentBatchApiBaseUrl()}/${path}/${id}`, {
+      cache: 'no-store',
+      headers: {
+        ...buildFormalRequestHeaders(session),
+        ...buildSignedFormalRequestHeaders(session),
+      },
+    });
+    if (!response.ok) return null;
+    const result = await response.json();
+    return result?.id === id && typeof result[field] === 'string' && result[field].trim()
+      ? result[field].trim() : null;
   } catch {
     return null;
   }
@@ -217,7 +242,6 @@ function buildReceiptDraft(shipmentBatch: ShipmentBatchDetail, createdBy: number
       shipmentBatch.receiptDocUrl ??
       `https://files.example.com/${shipmentBatch.batchNo}.pdf`,
     sentBy: createdBy,
-    reason: shipmentBatch.exceptionReason ?? '货物破损，需要人工跟进',
   };
 }
 
@@ -234,14 +258,6 @@ const heroCardStyle = {
   boxShadow: '0 18px 56px rgba(15, 23, 42, 0.08)',
 } satisfies React.CSSProperties;
 
-const heroEyebrowStyle = {
-  margin: 0,
-  fontSize: '12px',
-  letterSpacing: '0.12em',
-  textTransform: 'uppercase' as const,
-  color: '#64748b',
-} satisfies React.CSSProperties;
-
 const heroTitleStyle = {
   margin: '10px 0 8px',
   fontSize: '32px',
@@ -256,37 +272,12 @@ const heroSubStyle = {
   lineHeight: 1.7,
 } satisfies React.CSSProperties;
 
-const heroActionStyle = {
-  display: 'flex',
-  gap: '12px',
-  flexWrap: 'wrap' as const,
-  marginTop: '18px',
-} satisfies React.CSSProperties;
-
-const heroActionLinkStyle = {
-  border: '1px solid #0f172a',
-  borderRadius: '12px',
-  padding: '10px 14px',
-  background: '#0f172a',
-  color: '#ffffff',
-  textDecoration: 'none',
-  fontWeight: 700,
-} satisfies React.CSSProperties;
-
 const infoCardStyle = {
   border: '1px solid #d8e1ea',
   borderRadius: '18px',
   padding: '18px',
   background: 'rgba(255,255,255,0.92)',
   boxShadow: '0 12px 36px rgba(15, 23, 42, 0.05)',
-} satisfies React.CSSProperties;
-
-const valueStyle = {
-  margin: '10px 0 0',
-  fontSize: '18px',
-  fontWeight: 700,
-  color: '#0f172a',
-  whiteSpace: 'pre-line' as const,
 } satisfies React.CSSProperties;
 
 const actionPanelStyle = {
@@ -392,14 +383,14 @@ export default async function AppShipmentBatchDetailPage({
   if (!canViewFormalShipmentBatchModule(session)) {
     return (
       <AppShell
-        title="正式发货批次详情"
-        subtitle="正式发货详情页承接销售和采购共同需要查看的发货字段。"
+        title="发货批次详情"
+        subtitle="查看发货批次。"
         session={session}
       >
         <section style={detailLayoutStyle}>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>
-              {getFormalDetailAccessDeniedLabel('shipment_batch')}
+              无权限访问发货批次
             </h3>
             <p style={heroSubStyle}>当前登录账号没有权限查看这张发货批次。</p>
           </div>
@@ -408,11 +399,11 @@ export default async function AppShipmentBatchDetailPage({
     );
   }
 
-  const createdBy = resolveFormalUserId(session.user);
+  const createdBy = resolveFormalUserId(session);
   const { id } = await params;
   const [shipmentBatch, auditLogs] = await Promise.all([
     loadShipmentBatchDetail(id, session),
-    loadShipmentBatchAuditLogs(session),
+    loadShipmentBatchAuditLogs(id, session),
   ]);
   const afterSalesDraft = shipmentBatch
     ? buildAfterSalesDraft(shipmentBatch, createdBy)
@@ -421,14 +412,14 @@ export default async function AppShipmentBatchDetailPage({
   if (!shipmentBatch) {
     return (
       <AppShell
-        title="正式发货批次详情"
-        subtitle="正式发货详情页承接批次状态、异常与回单发送跟踪。"
+        title="发货批次详情"
+        subtitle="查看发货批次。"
         session={session}
       >
         <section style={detailLayoutStyle}>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>发货批次详情加载失败</h3>
-            <p style={heroSubStyle}>请返回正式发货批次列表后重试。</p>
+            <p style={heroSubStyle}>请返回发货批次列表后重试。</p>
           </div>
         </section>
       </AppShell>
@@ -438,14 +429,14 @@ export default async function AppShipmentBatchDetailPage({
   if (!canViewFormalShipmentBatchDetail(session)) {
     return (
       <AppShell
-        title="正式发货批次详情"
-        subtitle="正式发货详情页承接批次状态、异常与回单发送跟踪。"
+        title="发货批次详情"
+        subtitle="查看发货批次。"
         session={session}
       >
         <section style={detailLayoutStyle}>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>
-              {getFormalDetailAccessDeniedLabel('shipment_batch')}
+              无权限访问发货批次
             </h3>
             <p style={heroSubStyle}>当前登录账号没有权限查看这张发货批次。</p>
           </div>
@@ -460,91 +451,51 @@ export default async function AppShipmentBatchDetailPage({
   const canOpenPurchaseOrder = canViewFormalModule(session, 'purchase');
   const actionRequestHeaders = buildFormalRequestHeaders(session);
   const stockOutDraft = buildStockOutDraft(shipmentBatch, createdBy);
+  const [salesNo, purchaseNo] = await Promise.all([
+    loadSourceDocumentNo('sales', shipmentBatch.salesOrderId, session),
+    loadSourceDocumentNo('purchase', shipmentBatch.purchaseOrderId, session),
+  ]);
 
   return (
     <AppShell
-      title="正式发货批次详情"
-      subtitle="展示批次状态、货代节点、异常原因和回单发送状态，承接销售与售后之间的履约闭环。"
+      title="发货批次详情"
+      tabLabel={shipmentBatch.batchNo}
+      subtitle="查看发货明细、物流进度与回单。"
       session={session}
     >
       <section style={detailLayoutStyle}>
 
-        <article style={heroCardStyle}>
-          <p style={heroEyebrowStyle}>Shipment Batch Detail / 发货批次详情</p>
-          <h3 style={heroTitleStyle}>{`发货批次 ${shipmentBatch.batchNo}`}</h3>
-          <p style={heroSubStyle}>
-            当前页面已经接通销售单、采购单、回单和售后入口，便于追踪多批次发货的完整履约路径。
-          </p>
-          <div style={heroActionStyle}>
-            {canOpenSalesOrder ? (
-              <Link
-                href={`/app/sales/orders/${shipmentBatch.salesOrderId}`}
-                style={heroActionLinkStyle}
-              >
-                打开销售单
-              </Link>
-            ) : null}
-            {canOpenPurchaseOrder ? (
-              <Link
-                href={`/app/purchase-orders/${shipmentBatch.purchaseOrderId}`}
-                style={heroActionLinkStyle}
-              >
-                打开采购单
-              </Link>
-            ) : null}
+        <article style={infoCardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0, fontSize: '22px', color: '#0f172a' }}>{`发货批次 ${shipmentBatch.batchNo}`}</h3>
             {canProcessAfterSales ? (
               <Link
                 href={`/app/after-sales/new?salesOrderId=${shipmentBatch.salesOrderId}&purchaseOrderId=${shipmentBatch.purchaseOrderId}&shipmentBatchId=${shipmentBatch.id}`}
-                style={heroActionLinkStyle}
+                style={subtleLinkStyle}
               >
                 打开售后单页
               </Link>
             ) : null}
           </div>
-        </article>
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>批次概览</h3>
-          <ShipmentFieldTable fields={[
-            ['状态 Status', formatShipmentStageLabel(shipmentBatch.status)],
-            ['回单发送 Receipt', formatReceiptLabel(shipmentBatch.receiptSendStatus)],
-            ['批次编号 Batch No', shipmentBatch.batchNo],
-            ['销售单 Sales Order', canOpenSalesOrder ? <Link href={`/app/sales/orders/${shipmentBatch.salesOrderId}`} style={subtleLinkStyle}>#{shipmentBatch.salesOrderId}</Link> : `#${shipmentBatch.salesOrderId}`],
-            ['采购单 Purchase Order', canOpenPurchaseOrder ? <Link href={`/app/purchase-orders/${shipmentBatch.purchaseOrderId}`} style={subtleLinkStyle}>#{shipmentBatch.purchaseOrderId}</Link> : `#${shipmentBatch.purchaseOrderId}`],
-            ['回单地址 Receipt URL', shipmentBatch.receiptDocUrl ? <Link href={shipmentBatch.receiptDocUrl} style={subtleLinkStyle}>{shipmentBatch.receiptDocUrl}</Link> : '未上传'],
-            ['异常原因 Exception', shipmentBatch.hasException ? formatShipmentValue(shipmentBatch.exceptionReason) : '暂无异常标记'],
-            ['回单发送人 Receipt Sender', formatUserDisplay(shipmentBatch.receiptSentBy)],
-          ]} />
-        </article>
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>发货台账字段</h3>
-          <ShipmentFieldTable fields={[
-            ['工厂发货日期 Factory Ship Date', formatShipmentValue(shipmentBatch.factoryShipDate)],
-            ['发货编码 Shipping Code', shipmentBatch.shippingCodeItems?.length ? <div>{shipmentBatch.shippingCodeItems.map((item) => <div key={`${item.code}-${item.quantity}`}>{item.code} · {item.quantity}</div>)}</div> : formatShipmentValue(shipmentBatch.shippingCode)],
-            ['到货目的地 Destination', formatShipmentValue(shipmentBatch.destination)],
-            ['订单号 Order No', `#${shipmentBatch.salesOrderId}`],
-            ['唛头 Mark', formatShipmentValue(shipmentBatch.shippingMark)],
-            ['客户 Customer', formatShipmentValue(shipmentBatch.customerName)],
-            ['货物名称 Goods Name', formatShipmentValue(shipmentBatch.goodsName)],
-            ['总件数 Total Packages', formatShipmentValue(shipmentBatch.totalPackages)],
-            ['采购单位 Purchasing Unit', formatShipmentValue(shipmentBatch.purchasingUnit)],
-            ['货运站 Freight Station', formatShipmentValue(shipmentBatch.freightStation)],
-            ['入仓单 Warehouse Entry No', formatShipmentValue(shipmentBatch.warehouseEntryNo)],
-            ['到货情况 Arrival Status', formatShipmentValue(shipmentBatch.arrivalStatus)],
-            ['货代发货日期 Forwarder Ship Date', formatShipmentValue(shipmentBatch.forwarderShipDate)],
-            ['预计到货时间 Estimated Arrival', formatShipmentValue(shipmentBatch.estimatedArrivalDate)],
-            ['备注 Remark', formatShipmentValue(shipmentBatch.remark)],
-          ]} />
-        </article>
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>链路追溯</h3>
-          <p style={valueStyle}>
-            {`销售单 #${shipmentBatch.salesOrderId} → 采购单 #${shipmentBatch.purchaseOrderId} → 发货批次 ${shipmentBatch.batchNo}`}
+          <nav aria-label="单据来源" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px', fontSize: '13px' }}>
+            {canOpenSalesOrder ? <Link href={`/app/sales/orders/${shipmentBatch.salesOrderId}`} style={subtleLinkStyle}>
+              销售单 {salesNo ?? `单号暂不可用 #${shipmentBatch.salesOrderId}`}
+            </Link> : <span>销售单 #{shipmentBatch.salesOrderId}</span>}
+            <span aria-hidden="true">→</span>
+            {canOpenPurchaseOrder ? <Link href={`/app/purchase-orders/${shipmentBatch.purchaseOrderId}`} style={subtleLinkStyle}>
+              采购单 {purchaseNo ?? `单号暂不可用 #${shipmentBatch.purchaseOrderId}`}
+            </Link> : <span>采购单 #{shipmentBatch.purchaseOrderId}</span>}
+          </nav>
+          <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginTop: '12px', color: '#475569', fontSize: '13px' }}>
+            <span>状态：<strong>{formatShipmentStageLabel(shipmentBatch.status)}</strong></span>
+            <span>回单：<strong>{formatReceiptLabel(shipmentBatch.receiptSendStatus)}</strong></span>
+            <span>发送人：<span>{formatUserDisplay(shipmentBatch.receiptSentBy)}</span></span>
+          </div>
+          <p style={{ margin: '10px 0 0', fontSize: '13px' }}>
+            回单地址：{shipmentBatch.receiptDocUrl ? <Link href={shipmentBatch.receiptDocUrl} style={subtleLinkStyle}>{shipmentBatch.receiptDocUrl}</Link> : '未上传'}
           </p>
-          <p style={heroSubStyle}>
-            售后入口会自动携带 salesOrderId、purchaseOrderId、shipmentBatchId，避免断链录入。
+          <p style={{ margin: '10px 0 0', color: shipmentBatch.hasException ? '#b91c1c' : '#64748b', fontSize: '13px' }}>
+            {shipmentBatch.hasException ? formatShipmentValue(shipmentBatch.exceptionReason) : '暂无异常标记'}
           </p>
         </article>
 
@@ -681,7 +632,11 @@ export default async function AppShipmentBatchDetailPage({
                   },
                   {
                     name: 'reason',
-                    value: buildReceiptDraft(shipmentBatch, createdBy).reason,
+                    value: '',
+                    display: 'input',
+                    label: '异常原因',
+                    required: true,
+                    helpText: '请填写实际发生的异常，例如物流延误，并说明需要跟进的事项。',
                   },
                 ]}
               />
@@ -780,7 +735,36 @@ export default async function AppShipmentBatchDetailPage({
           </div>
         </article>
 
-        <AuditLogTable session={session} items={auditLogs?.items ?? []} />
+        <details style={infoCardStyle}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#334155' }}>发货台账字段</summary>
+          <div style={{ marginTop: '12px' }}>
+            <ShipmentFieldTable fields={[
+              ['工厂发货日期 Factory Ship Date', formatShipmentValue(shipmentBatch.factoryShipDate)],
+              ['发货编码 Shipping Code', shipmentBatch.shippingCodeItems?.length ? <div>{shipmentBatch.shippingCodeItems.map((item) => <div key={`${item.code}-${item.quantity}`}>{item.code} · {item.quantity}</div>)}</div> : formatShipmentValue(shipmentBatch.shippingCode)],
+              ['到货目的地 Destination', formatShipmentValue(shipmentBatch.destination)],
+              ['唛头 Mark', formatShipmentValue(shipmentBatch.shippingMark)],
+              ['客户 Customer', formatShipmentValue(shipmentBatch.customerName)],
+              ['货物名称 Goods Name', formatShipmentValue(shipmentBatch.goodsName)],
+              ['总件数 Total Packages', formatShipmentValue(shipmentBatch.totalPackages)],
+              ['采购单位 Purchasing Unit', formatShipmentValue(shipmentBatch.purchasingUnit)],
+              ['货运站 Freight Station', formatShipmentValue(shipmentBatch.freightStation)],
+              ['入仓单 Warehouse Entry No', formatShipmentValue(shipmentBatch.warehouseEntryNo)],
+              ['到货情况 Arrival Status', formatShipmentValue(shipmentBatch.arrivalStatus)],
+              ['货代发货日期 Forwarder Ship Date', formatShipmentValue(shipmentBatch.forwarderShipDate)],
+              ['预计到货时间 Estimated Arrival', formatShipmentValue(shipmentBatch.estimatedArrivalDate)],
+              ['备注 Remark', formatShipmentValue(shipmentBatch.remark)],
+            ]} />
+          </div>
+        </details>
+
+        {canViewFormalAuditCenter(session) && !auditLogs ? (
+          <p role="alert">审计日志暂不可用，请刷新重试。</p>
+        ) : canViewFormalAuditCenter(session) ? (
+          <details style={infoCardStyle}>
+            <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#334155' }}>操作历史</summary>
+            <AuditLogTable session={session} items={auditLogs?.items ?? []} collapseChanges />
+          </details>
+        ) : null}
       </section>
     </AppShell>
   );

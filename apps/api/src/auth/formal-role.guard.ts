@@ -88,6 +88,9 @@ export function readSignedFormalSession(headers: Record<string, string | string[
       role?: unknown;
       user?: unknown;
       username?: unknown;
+      userId?: unknown;
+      legacyUserIds?: unknown;
+      dataScope?: unknown;
       modules?: unknown;
       actions?: unknown;
       exp?: unknown;
@@ -98,7 +101,12 @@ export function readSignedFormalSession(headers: Record<string, string | string[
       typeof parsed.user !== 'string' ||
       (isStrictFormalSessionMode() &&
         (typeof parsed.username !== 'string' || !parsed.username.trim() ||
-          typeof parsed.exp !== 'number')) ||
+          typeof parsed.exp !== 'number' ||
+          typeof parsed.userId !== 'number' || !Number.isSafeInteger(parsed.userId) || parsed.userId <= 0 ||
+          typeof parsed.dataScope !== 'string')) ||
+      (parsed.legacyUserIds !== undefined && (!Array.isArray(parsed.legacyUserIds) || parsed.legacyUserIds.some(id => !Number.isSafeInteger(id) || Number(id) <= 0))) ||
+      (parsed.userId !== undefined && (typeof parsed.userId !== 'number' || !Number.isSafeInteger(parsed.userId) || parsed.userId <= 0)) ||
+      (parsed.dataScope !== undefined && typeof parsed.dataScope !== 'string') ||
       (parsed.modules !== undefined &&
         (!Array.isArray(parsed.modules) ||
           parsed.modules.some((moduleCode) => typeof moduleCode !== 'string'))) ||
@@ -114,6 +122,9 @@ export function readSignedFormalSession(headers: Record<string, string | string[
     return {
       role: parsed.role as FormalRole,
       user: parsed.user,
+      legacyUserIds: Array.isArray(parsed.legacyUserIds) ? parsed.legacyUserIds as number[] : [],
+      userId: typeof parsed.userId === 'number' ? parsed.userId : undefined,
+      dataScope: typeof parsed.dataScope === 'string' ? parsed.dataScope : undefined,
       modules: Array.isArray(parsed.modules) ? parsed.modules : [],
       actions: Array.isArray(parsed.actions) ? parsed.actions : [],
     };
@@ -150,6 +161,9 @@ export class FormalRoleGuard implements CanActivate {
     if (signedSession) {
       request.headers['x-erp-role'] = signedSession.role;
       request.headers['x-erp-user'] = signedSession.user;
+      request.headers['x-erp-legacy-user-ids'] = signedSession.legacyUserIds.join(',');
+      request.headers['x-erp-user-id'] = signedSession.userId === undefined ? undefined : String(signedSession.userId);
+      request.headers['x-erp-data-scope'] = signedSession.dataScope;
       request.headers['x-erp-modules'] = signedSession.modules.join(',');
       request.headers['x-erp-actions'] = signedSession.actions.join(',');
     }

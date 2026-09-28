@@ -8,7 +8,9 @@ import { PurchaseOrderDraftForm } from './purchase-order-draft-form';
 import { PurchaseShipmentActionForm } from './purchase-shipment-action-form';
 import {
   canViewFormalModule,
+  canViewFormalAuditCenter,
   resolveDemoSession,
+  type DemoSession,
 } from '../../_lib/demo-session';
 import {
   canApproveFormalPurchaseOrder,
@@ -18,7 +20,7 @@ import {
   getFormalDetailAccessDeniedLabel,
   resolveFormalUserId,
 } from '../../_lib/formal-access';
-import { hasValidAuditLogResponse, type AuditLogResponse } from '../../_lib/audit-log';
+import { hasValidUnifiedAuditLogResponse } from '../../_lib/audit-log';
 import { formatCounterpartyChineseDisplay } from '../../_lib/counterparty-display';
 import {
   loadActiveCounterpartyOptions,
@@ -48,6 +50,7 @@ type PurchaseOrderDetail = {
   supplierId?: number;
   supplierName?: string;
   ownerName?: string;
+  ownerId?: number;
   sourceInquiryId?: number;
   lockedPurchaseOwner?: boolean;
   needsPurchaseAssignment?: boolean;
@@ -67,6 +70,7 @@ type PurchaseOrderDetail = {
   }>;
   currentBatchCount: number;
   cancelReason?: string;
+  rejectionReason?: string;
   versionHistory?: Array<{
     versionNo: number;
     status: string;
@@ -233,9 +237,10 @@ async function loadSourceInquiryForApproval(
   }
 }
 
-async function loadPurchaseOrderAuditLogs(session: { role: string; user: string }) {
+async function loadPurchaseOrderAuditLogs(id: string, session: DemoSession) {
+  if (!canViewFormalAuditCenter(session)) return null;
   try {
-    const response = await fetch(`${getPurchaseOrderApiBaseUrl()}/purchase-orders/audit-logs`, {
+    const response = await fetch(`${getPurchaseOrderApiBaseUrl()}/audit-logs?bizType=purchase_order&bizId=${encodeURIComponent(id)}`, {
       cache: 'no-store',
       headers: {
         ...buildFormalRequestHeaders(session),
@@ -248,7 +253,9 @@ async function loadPurchaseOrderAuditLogs(session: { role: string; user: string 
     }
 
     const result = (await response.json().catch(() => null)) as unknown;
-    return hasValidAuditLogResponse(result) ? result : null;
+    return hasValidUnifiedAuditLogResponse(result) && !result.modules.some((module) => module.failed)
+      ? { items: result.items.filter((item) => item.bizType === 'purchase_order' && item.bizId === Number(id)) }
+      : null;
   } catch {
     return null;
   }
@@ -292,7 +299,7 @@ async function loadLinkedShipmentBatches(
 function buildFallbackPurchaseOwnerOptions(session: { role: string; user: string }) {
   return [
     {
-      id: resolveFormalUserId(session.user),
+      id: resolveFormalUserId(session),
       username: session.user.toLowerCase(),
       realName: session.user,
       roleCode: session.role,
@@ -713,7 +720,7 @@ export default async function AppPurchaseOrderDetailPage({
   if (!canViewFormalModule(session, 'purchase')) {
     return (
       <AppShell
-        title="正式采购单详情"
+        title="采购单详情"
         subtitle="正式采购详情页承接采购审批、改单重提与来源追溯。"
         session={session}
       >
@@ -727,11 +734,11 @@ export default async function AppPurchaseOrderDetailPage({
     );
   }
 
-  const createdBy = resolveFormalUserId(session.user);
+  const createdBy = resolveFormalUserId(session);
   const { id } = await params;
   const [purchaseOrder, auditLogs, purchaseOwnerOptions, supplierOptions] = await Promise.all([
     loadPurchaseOrderDetail(id, session),
-    loadPurchaseOrderAuditLogs(session),
+    loadPurchaseOrderAuditLogs(id, session),
     loadPurchaseOwnerOptions(session),
     loadActiveCounterpartyOptions('supplier', session),
   ]);
@@ -739,14 +746,14 @@ export default async function AppPurchaseOrderDetailPage({
   if (!purchaseOrder) {
     return (
       <AppShell
-        title="正式采购单详情"
+        title="采购单详情"
         subtitle="正式采购详情页承接采购审批、改单重提与来源追溯。"
         session={session}
       >
         <section style={detailLayoutStyle}>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>采购单详情加载失败</h3>
-            <p style={heroSubStyle}>请返回正式采购单列表后重试。</p>
+            <p style={heroSubStyle}>请返回采购单列表后重试。</p>
           </div>
         </section>
       </AppShell>
@@ -756,7 +763,7 @@ export default async function AppPurchaseOrderDetailPage({
   if (!canViewFormalPurchaseOrderDetail(session, purchaseOrder)) {
     return (
       <AppShell
-        title="正式采购单详情"
+        title="采购单详情"
         subtitle="正式采购详情页承接采购审批、改单重提与来源追溯。"
         session={session}
       >
@@ -819,12 +826,12 @@ export default async function AppPurchaseOrderDetailPage({
   const canShowPurchaseSubmitAction =
     canSubmitPurchaseOrder &&
     !purchaseOrder.needsPurchaseAssignment &&
-    purchaseOrder.ownerName === session.user &&
+    (session.userId !== undefined ? [session.userId, ...(session.legacyUserIds ?? [])].includes(purchaseOrder.ownerId ?? 0) : purchaseOrder.ownerName === session.user) &&
     (purchaseOrder.status === 'draft' ||
       purchaseOrder.status === 'pending_purchase_claim');
   const canSavePurchaseDraft = canShowPurchaseSubmitAction;
   const canAdjustFactoryEta = canSubmitPurchaseOrder &&
-    purchaseOrder.ownerName === session.user &&
+    (session.userId !== undefined ? [session.userId, ...(session.legacyUserIds ?? [])].includes(purchaseOrder.ownerId ?? 0) : purchaseOrder.ownerName === session.user) &&
     purchaseOrder.status === 'purchasing' && effectiveCurrentBatchCount === 0;
   const submitPurchaseOrderLabel =
     purchaseOrder.status === 'pending_purchase_claim'
@@ -847,20 +854,65 @@ export default async function AppPurchaseOrderDetailPage({
         ]
       : supplierOptions;
 
+  const orderItems = purchaseOrder.items ?? [];
+  const orderAmount = orderItems.every((item) => Number.isFinite(item.amount))
+    ? Number(orderItems.reduce((sum, item) => sum + item.amount, 0).toFixed(2)) : null;
+  const factoryEtas = [...new Set(orderItems.map((item) => item.factoryEstimatedDeliveryDate ?? purchaseOrder.factoryEstimatedDeliveryDate))];
+  const shipToAddresses = [...new Set(orderItems.map((item) => item.shipTo ?? purchaseOrder.shipTo))];
+  const hasInvalidFactoryEta = factoryEtas.some((value) => {
+    const date = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? new Date(`${value}T00:00:00.000Z`) : null;
+    return !date || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value;
+  });
+  const hasInvalidShipTo = shipToAddresses.some((value) => typeof value !== 'string' || !value.trim());
+  const commonFactoryEta = factoryEtas.length === 1 && !hasInvalidFactoryEta ? factoryEtas[0] : purchaseOrder.factoryEstimatedDeliveryDate;
+  const commonShipTo = shipToAddresses.length === 1 && !hasInvalidShipTo ? shipToAddresses[0] : purchaseOrder.shipTo;
+  const hasLineEtaDifference = factoryEtas.length > 1 || hasInvalidFactoryEta;
+  const hasLineAddressDifference = shipToAddresses.length > 1 || hasInvalidShipTo;
+  const hasLineSupplierDifference = !purchaseOrder.supplierId || orderItems.some((item) => item.supplierId !== purchaseOrder.supplierId);
+
   return (
     <AppShell
-      title="正式采购单详情"
+      title="采购单详情"
+      tabLabel={purchaseOrder.purchaseNo}
       subtitle="展示采购审批、版本、来源与履约信息的正式承接页。"
       session={session}
     >
       <section style={detailLayoutStyle}>
 
-        <article style={heroCardStyle}>
+        <article aria-label="采购单摘要" style={heroCardStyle}>
           <p style={heroEyebrowStyle}>Purchase Order Detail / 采购单详情</p>
           <h3 style={heroTitleStyle}>{`采购单 ${purchaseOrder.purchaseNo}`}</h3>
-          <p style={heroSubStyle}>
-            采购详情聚焦审批状态、来源销售单、供应商、采购负责人和版本历史。
-          </p>
+          {purchaseOrder.title && !purchaseOrder.title.includes(purchaseOrder.purchaseNo) ? <p style={valueStyle}>{purchaseOrder.title}</p> : null}
+          <div style={{ ...gridStyle, marginTop: '16px' }}>
+            <div><p style={labelStyle}>供应商 Supplier</p><p style={valueStyle}>{formatCounterpartyChineseDisplay(purchaseOrder.supplierName, { fallback: '未提供' })}</p></div>
+            <div><p style={labelStyle}>采购负责人 Purchase Owner</p><p style={valueStyle}>{purchaseOrder.ownerName ?? '未提供'}</p></div>
+            <div><p style={labelStyle}>状态 Status</p><p style={valueStyle}>{formatPurchaseOrderStatus(purchaseOrder.status)}</p></div>
+            <p style={valueStyle}>{`采购金额：${formatPurchaseValue(orderAmount)}`}</p>
+          </div>
+          <p style={{ ...heroSubStyle, marginTop: '12px' }}>{`当前版本：V${purchaseOrder.currentVersionNo}`}</p>
+        </article>
+
+        {purchaseOrder.rejectionReason ? (
+          <article role="alert" aria-label="最近驳回修改要求" style={infoCardStyle}>
+            <p style={labelStyle}>最近驳回修改要求</p>
+            <p style={valueStyle}>{purchaseOrder.rejectionReason}</p>
+          </article>
+        ) : null}
+        {purchaseOrder.cancelReason ? (
+          <article role="alert" aria-label="作废原因" style={infoCardStyle}>
+            <p style={labelStyle}>作废原因 Cancel Reason</p>
+            <p style={valueStyle}>{purchaseOrder.cancelReason}</p>
+          </article>
+        ) : null}
+
+        <article aria-label="当前操作" style={actionPanelStyle}>
+          <h3 style={{ marginTop: 0 }}>当前操作</h3>
+          <ActionPermissionNote>
+            {purchaseOrder.needsPurchaseAssignment
+              ? '当前节点需采购主管、老板或管理员先分配采购负责人。'
+              : '当前角色动作权限：可提交采购审批；通过/驳回需采购主管、老板或管理员。'}
+          </ActionPermissionNote>
           {canExecutePurchaseFulfillment ? (
             <div style={heroActionStyle}>
               <Link
@@ -871,261 +923,6 @@ export default async function AppPurchaseOrderDetailPage({
               </Link>
             </div>
           ) : null}
-        </article>
-
-        <h3 style={{ marginBottom: 0 }}>采购单信息</h3>
-        <div style={gridStyle}>
-          {purchaseOrder.title ? (
-            <article style={infoCardStyle}>
-              <p style={labelStyle}>采购单标题 Title</p>
-              <p style={valueStyle}>{purchaseOrder.title}</p>
-            </article>
-          ) : null}
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>供应商 Supplier</p>
-            <p style={valueStyle}>
-              {formatCounterpartyChineseDisplay(purchaseOrder.supplierName, {
-                fallback: '未提供',
-              })}
-            </p>
-          </article>
-          {freightStations ? (
-            <article style={infoCardStyle}>
-              <p style={labelStyle}>货代 Forwarder</p>
-              <p style={valueStyle}>{freightStations}</p>
-            </article>
-          ) : null}
-          {warehouseEntryNos ? (
-            <article style={infoCardStyle}>
-              <p style={labelStyle}>入仓号 Warehouse Entry No</p>
-              <p style={valueStyle}>{warehouseEntryNos}</p>
-            </article>
-          ) : null}
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>采购负责人 Purchase Owner</p>
-            <p style={valueStyle}>{`采购负责人：${purchaseOrder.ownerName ?? '未提供'}`}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>状态 Status</p>
-            <p style={valueStyle}>{formatPurchaseOrderStatus(purchaseOrder.status)}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>版本 Version</p>
-            <p style={valueStyle}>V{purchaseOrder.currentVersionNo}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>单据编号 Purchase No</p>
-            <p style={valueStyle}>{purchaseOrder.purchaseNo}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>订单编码 Sales Order No</p>
-            <p style={valueStyle}>{formatPurchaseValue(purchaseOrder.salesOrderNo)}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>订货日期 Order Date</p>
-            <p style={valueStyle}>{formatPurchaseValue(purchaseOrder.orderDate)}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>工厂预计交货时间 Factory ETA</p>
-            <p style={valueStyle}>
-              {formatPurchaseValue(purchaseOrder.factoryEstimatedDeliveryDate)}
-            </p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>发货至 Ship To</p>
-            <p style={valueStyle}>{formatPurchaseValue(purchaseOrder.shipTo)}</p>
-          </article>
-          <article style={infoCardStyle}>
-            <p style={labelStyle}>采购单附件 Attachments</p>
-            <div style={{ marginTop: '10px' }}>
-              {renderPurchaseAttachments(purchaseOrder.purchaseOrderAttachments)}
-            </div>
-          </article>
-          {purchaseOrder.cancelReason ? (
-            <article style={infoCardStyle}>
-              <p style={labelStyle}>作废原因 Cancel Reason</p>
-              <p style={valueStyle}>{purchaseOrder.cancelReason}</p>
-            </article>
-          ) : null}
-        </div>
-
-        {sourceInquiry ? (
-          <article style={infoCardStyle}>
-            <h3 style={{ marginTop: 0 }}>来源询价</h3>
-            <p style={heroSubStyle}>
-              {sourceInquiry.inquiryNo} · 客户 {sourceInquiry.customerName} · 来源报价 {sourceInquiry.quoteOrderNo} · 比价提交人 {sourceInquiry.comparisonSubmittedBy ?? '未记录'}
-            </p>
-            <div style={tableWrapStyle}>
-              <table style={tableStyle}>
-                <thead><tr><th style={headCellStyle}>行号</th><th style={headCellStyle}>SKU / 产品</th><th style={headCellStyle}>供应商报价</th><th style={headCellStyle}>确认采购价</th></tr></thead>
-                <tbody>{sourceInquiry.items.map((item) => (
-                  <tr key={item.lineNo}>
-                    <td style={cellStyle}>{item.lineNo}</td>
-                    <td style={cellStyle}>{item.sku ? `${item.sku} / ` : ''}{item.productName}</td>
-                    <td style={cellStyle}>{item.supplierQuotes.map((quote) => `${quote.supplierName}：${quote.purchasePrice}${quote.remark ? `（${quote.remark}）` : ''}`).join('；')}</td>
-                    <td style={cellStyle}>{item.confirmedSupplierName ?? '-'} / {item.confirmedPurchasePrice ?? '-'}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          </article>
-        ) : null}
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>来源追溯</h3>
-          <p style={valueStyle}>
-            {purchaseOrder.sourceSalesOrderId > 0
-              ? `来源销售单：${purchaseOrder.salesOrderNo} / #${purchaseOrder.sourceSalesOrderId}`
-              : `来源销售单：${formatPurchaseValue(purchaseOrder.salesOrderNo)}`}
-          </p>
-          <p style={heroSubStyle}>
-            来源销售单信息会保留在系统追溯字段中，采购明细仅展示采购执行需要识别的字段。
-          </p>
-          {canOpenSourceSalesOrder ? (
-            <Link
-              href={`/app/sales/orders/${purchaseOrder.sourceSalesOrderId}`}
-              style={subtleLinkStyle}
-            >
-              查看来源销售单
-            </Link>
-          ) : null}
-        </article>
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>关联发货单</h3>
-          {linkedShipmentBatches.length ? (
-            <div style={{ display: 'grid', gap: '10px' }}>
-              {linkedShipmentBatches.map((shipmentBatch) => (
-                <div
-                  key={shipmentBatch.detailHref}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '12px',
-                    flexWrap: 'wrap',
-                    border: '1px solid #d8e1ea',
-                    borderRadius: '12px',
-                    padding: '12px 14px',
-                    background: '#f8fafc',
-                  }}
-                >
-                  <div>
-                    <p style={{ ...labelStyle, letterSpacing: 0, textTransform: 'none' }}>
-                      发货单号 Shipment No
-                    </p>
-                    <p style={{ ...valueStyle, marginTop: '6px', fontSize: '16px' }}>
-                      {shipmentBatch.docNo}
-                    </p>
-                    <p style={{ ...heroSubStyle, marginTop: '4px' }}>
-                      {`状态：${formatShipmentBatchStatus(shipmentBatch.status)}`}
-                    </p>
-                  </div>
-                  <Link
-                    href={toFormalShipmentBatchDetailHref(shipmentBatch.detailHref)}
-                    style={heroActionLinkStyle}
-                  >
-                    查看发货单 {shipmentBatch.docNo}
-                  </Link>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p style={heroSubStyle}>暂无关联发货单</p>
-          )}
-        </article>
-
-        {purchaseOrder.versionHistory?.length ? (
-          <article style={infoCardStyle}>
-            <h3 style={{ marginTop: 0 }}>版本时间线</h3>
-            <div style={tableWrapStyle}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={headCellStyle}>版本 Version</th>
-                    <th style={headCellStyle}>状态 Status</th>
-                    <th style={headCellStyle}>创建时间 Created At</th>
-                    <th style={headCellStyle}>变更原因 Change Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {purchaseOrder.versionHistory.map((entry) => (
-                    <tr key={`${entry.versionNo}-${entry.createdAt}`}>
-                      <td style={cellStyle}>{`V${entry.versionNo}`}</td>
-                    <td style={cellStyle}>{formatPurchaseOrderStatus(entry.status)}</td>
-                      <td style={cellStyle}>{entry.createdAt}</td>
-                      <td style={cellStyle}>{entry.changeReason ?? '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </article>
-        ) : null}
-
-        <article style={infoCardStyle}>
-          <h3 style={{ marginTop: 0 }}>采购明细</h3>
-          <div style={tableWrapStyle}>
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={headCellStyle}>行号 Line</th>
-                  <th style={headCellStyle}>供应商 Supplier</th>
-                  <th style={headCellStyle}>货品编码 Product No</th>
-                  <th style={headCellStyle}>内部编码 Internal Code</th>
-                  <th style={headCellStyle}>货品名称 Product Name</th>
-                  <th style={headCellStyle}>图片 Image</th>
-                  <th style={headCellStyle}>数量/件 Quantity</th>
-                  <th style={headCellStyle}>每件数量 Quan</th>
-                  <th style={headCellStyle}>总数量 Total Q</th>
-                  <th style={headCellStyle}>单位 Unit</th>
-                  <th style={headCellStyle}>单价(元) Unit Price</th>
-                  <th style={headCellStyle}>国内运费 Freight</th>
-                  <th style={headCellStyle}>合计 Total</th>
-                  <th style={headCellStyle}>工厂预计交货时间 Factory ETA</th>
-                  <th style={headCellStyle}>发货至 Ship To</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(purchaseOrder.items ?? []).map((item) => (
-                  <tr key={`${item.lineNo}-${item.sku}`}>
-                    <td style={cellStyle}>{item.lineNo}</td>
-                    <td style={cellStyle}>
-                      {formatPurchaseSupplierLineValue(purchaseOrder, item.supplierId)}
-                    </td>
-                    <td style={cellStyle}>{item.sku}</td>
-                    <td style={cellStyle}>{formatPurchaseValue(item.internalCode)}</td>
-                    <td style={cellStyle}>{item.productName}</td>
-                    <td style={cellStyle}>{renderPurchaseImages(item)}</td>
-                    <td style={cellStyle}>{formatPurchaseValue(item.packageQuantity)}</td>
-                    <td style={cellStyle}>{formatPurchaseValue(item.unitsPerPackage)}</td>
-                    <td style={cellStyle}>{item.quantity}</td>
-                    <td style={cellStyle}>{item.unit}</td>
-                    <td style={cellStyle}>{formatPurchaseUnitPrice(item.unitPrice)}</td>
-                    <td style={cellStyle}>{formatPurchaseValue(item.domesticFreight)}</td>
-                    <td style={cellStyle}>{item.amount}</td>
-                    <td style={cellStyle}>
-                      {formatPurchaseValue(
-                        item.factoryEstimatedDeliveryDate ??
-                          purchaseOrder.factoryEstimatedDeliveryDate,
-                      )}
-                    </td>
-                    <td style={cellStyle}>
-                      {formatPurchaseValue(item.shipTo ?? purchaseOrder.shipTo)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </article>
-
-        <article style={actionPanelStyle}>
-          <ActionPermissionNote>
-            {purchaseOrder.needsPurchaseAssignment
-              ? '当前节点需采购主管、老板或管理员先分配采购负责人。'
-              : '当前角色动作权限：可提交采购审批；通过/驳回需采购主管、老板或管理员。'}
-          </ActionPermissionNote>
           <div style={actionGridStyle}>
             {purchaseOrder.needsPurchaseAssignment && canAssignPurchaseOwner ? (
               <MutationActionForm
@@ -1138,15 +935,16 @@ export default async function AppPurchaseOrderDetailPage({
                 fields={[
                   { name: 'currentStatus', value: purchaseOrder.status },
                   {
-                    name: 'ownerName',
-                    value: purchaseOrder.ownerName ?? '',
+                    name: 'ownerId',
+                    dataType: 'number',
+                    value: purchaseOrder.ownerId ?? '',
                     display: 'select',
                     label: '采购负责人',
                     required: true,
                     options: [
                       { value: '', label: '请选择采购负责人' },
                       ...purchaseOwnerOptions.filter((owner) => owner.status === 'active' && owner.id > 0).map((owner) => ({
-                        value: owner.realName,
+                        value: String(owner.id),
                         label: owner.realName,
                       })),
                     ],
@@ -1241,6 +1039,14 @@ export default async function AppPurchaseOrderDetailPage({
                     name: 'currentStatus',
                     value: purchaseOrder.status,
                   },
+                  {
+                    name: 'rejectionReason',
+                    value: '',
+                    display: 'input',
+                    label: '驳回修改要求',
+                    required: true,
+                    helpText: '请填写实际驳回原因和需要修改的内容，提交后采购负责人可在详情查看。',
+                  },
                 ]}
               />
             ) : null}
@@ -1290,7 +1096,200 @@ export default async function AppPurchaseOrderDetailPage({
           </div>
         </article>
 
-        <AuditLogTable session={session} items={auditLogs?.items ?? []} />
+        <article style={infoCardStyle}>
+          <h3 style={{ marginTop: 0 }}>采购明细</h3>
+          <div style={tableWrapStyle}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={headCellStyle}>行号 Line</th>
+                  {hasLineSupplierDifference ? <th style={headCellStyle}>供应商 Supplier</th> : null}
+                  <th style={headCellStyle}>货品编码 Product No</th>
+                  <th style={headCellStyle}>内部编码 Internal Code</th>
+                  <th style={headCellStyle}>货品名称 Product Name</th>
+                  <th style={headCellStyle}>图片 Image</th>
+                  <th style={headCellStyle}>数量/件 Quantity</th>
+                  <th style={headCellStyle}>每件数量 Quan</th>
+                  <th style={headCellStyle}>总数量 Total Q</th>
+                  <th style={headCellStyle}>单位 Unit</th>
+                  <th style={headCellStyle}>单价(元) Unit Price</th>
+                  <th style={headCellStyle}>国内运费 Freight</th>
+                  <th style={headCellStyle}>合计 Total</th>
+                  {hasLineEtaDifference ? <th style={headCellStyle}>工厂预计交货时间 Factory ETA</th> : null}
+                  {hasLineAddressDifference ? <th style={headCellStyle}>发货至 Ship To</th> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {(purchaseOrder.items ?? []).map((item) => (
+                  <tr key={`${item.lineNo}-${item.sku}`}>
+                    <td style={cellStyle}>{item.lineNo}</td>
+                    {hasLineSupplierDifference ? <td style={cellStyle}>
+                      {formatPurchaseSupplierLineValue(purchaseOrder, item.supplierId)}
+                    </td> : null}
+                    <td style={cellStyle}>{item.sku}</td>
+                    <td style={cellStyle}>{formatPurchaseValue(item.internalCode)}</td>
+                    <td style={cellStyle}>{item.productName}</td>
+                    <td style={cellStyle}>{renderPurchaseImages(item)}</td>
+                    <td style={cellStyle}>{formatPurchaseValue(item.packageQuantity)}</td>
+                    <td style={cellStyle}>{formatPurchaseValue(item.unitsPerPackage)}</td>
+                    <td style={cellStyle}>{item.quantity}</td>
+                    <td style={cellStyle}>{item.unit}</td>
+                    <td style={cellStyle}>{formatPurchaseUnitPrice(item.unitPrice)}</td>
+                    <td style={cellStyle}>{formatPurchaseValue(item.domesticFreight)}</td>
+                    <td style={cellStyle}>{item.amount}</td>
+                    {hasLineEtaDifference ? <td style={cellStyle}>
+                      {formatPurchaseValue(item.factoryEstimatedDeliveryDate ?? purchaseOrder.factoryEstimatedDeliveryDate)}
+                    </td> : null}
+                    {hasLineAddressDifference ? <td style={cellStyle}>
+                      {formatPurchaseValue(item.shipTo ?? purchaseOrder.shipTo)}
+                    </td> : null}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article style={infoCardStyle}>
+          <h3 style={{ marginTop: 0 }}>交付信息</h3>
+          <div style={gridStyle}>
+            <div><p style={labelStyle}>订货日期 Order Date</p><p style={valueStyle}>{formatPurchaseValue(purchaseOrder.orderDate)}</p></div>
+            <div><p style={labelStyle}>工厂预计交货时间 Factory ETA</p><p style={valueStyle}>{hasLineEtaDifference && !hasInvalidFactoryEta ? '按采购明细分别交付' : formatPurchaseValue(commonFactoryEta)}</p></div>
+            <div><p style={labelStyle}>发货至 Ship To</p><p style={valueStyle}>{hasLineAddressDifference && !hasInvalidShipTo ? '按采购明细分别发货' : formatPurchaseValue(commonShipTo)}</p></div>
+            {freightStations ? <div><p style={labelStyle}>货代 Forwarder</p><p style={valueStyle}>{freightStations}</p></div> : null}
+            {warehouseEntryNos ? <div><p style={labelStyle}>入仓号 Warehouse Entry No</p><p style={valueStyle}>{warehouseEntryNos}</p></div> : null}
+            <div><p style={labelStyle}>采购单附件 Attachments</p><div style={{ marginTop: '10px' }}>{renderPurchaseAttachments(purchaseOrder.purchaseOrderAttachments)}</div></div>
+          </div>
+        </article>
+
+        {sourceInquiry ? (
+          <article style={infoCardStyle}>
+            <h3 style={{ marginTop: 0 }}>来源询价</h3>
+            <p style={heroSubStyle}>
+              {sourceInquiry.inquiryNo} · 客户 {sourceInquiry.customerName} · 来源报价 {sourceInquiry.quoteOrderNo} · 比价提交人 {sourceInquiry.comparisonSubmittedBy ?? '未记录'}
+            </p>
+            <div style={tableWrapStyle}>
+              <table style={tableStyle}>
+                <thead><tr><th style={headCellStyle}>行号</th><th style={headCellStyle}>SKU / 产品</th><th style={headCellStyle}>供应商报价</th><th style={headCellStyle}>确认采购价</th></tr></thead>
+                <tbody>{sourceInquiry.items.map((item) => (
+                  <tr key={item.lineNo}>
+                    <td style={cellStyle}>{item.lineNo}</td>
+                    <td style={cellStyle}>{item.sku ? `${item.sku} / ` : ''}{item.productName}</td>
+                    <td style={cellStyle}>{item.supplierQuotes.map((quote) => `${quote.supplierName}：${quote.purchasePrice}${quote.remark ? `（${quote.remark}）` : ''}`).join('；')}</td>
+                    <td style={cellStyle}>{item.confirmedSupplierName ?? '-'} / {item.confirmedPurchasePrice ?? '-'}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </article>
+        ) : null}
+
+        <article style={infoCardStyle}>
+          <h3 style={{ marginTop: 0 }}>关联发货单</h3>
+          {linkedShipmentBatches.length ? (
+            <div style={{ display: 'grid', gap: '10px' }}>
+              {linkedShipmentBatches.map((shipmentBatch) => (
+                <div
+                  key={shipmentBatch.detailHref}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '12px',
+                    flexWrap: 'wrap',
+                    border: '1px solid #d8e1ea',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    background: '#f8fafc',
+                  }}
+                >
+                  <div>
+                    <p style={{ ...labelStyle, letterSpacing: 0, textTransform: 'none' }}>
+                      发货单号 Shipment No
+                    </p>
+                    <p style={{ ...valueStyle, marginTop: '6px', fontSize: '16px' }}>
+                      {shipmentBatch.docNo}
+                    </p>
+                    <p style={{ ...heroSubStyle, marginTop: '4px' }}>
+                      {`状态：${formatShipmentBatchStatus(shipmentBatch.status)}`}
+                    </p>
+                  </div>
+                  <Link
+                    href={toFormalShipmentBatchDetailHref(shipmentBatch.detailHref)}
+                    style={heroActionLinkStyle}
+                  >
+                    查看发货单 {shipmentBatch.docNo}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={heroSubStyle}>暂无关联发货单</p>
+          )}
+        </article>
+
+        <article style={infoCardStyle}>
+          <h3 style={{ marginTop: 0 }}>来源追溯</h3>
+          <p style={valueStyle}>
+            {purchaseOrder.sourceSalesOrderId > 0
+              ? `来源销售单：${purchaseOrder.salesOrderNo} / #${purchaseOrder.sourceSalesOrderId}`
+              : `来源销售单：${formatPurchaseValue(purchaseOrder.salesOrderNo)}`}
+          </p>
+          <p style={heroSubStyle}>
+            来源销售单信息会保留在系统追溯字段中，采购明细仅展示采购执行需要识别的字段。
+          </p>
+          {canOpenSourceSalesOrder ? (
+            <Link
+              href={`/app/sales/orders/${purchaseOrder.sourceSalesOrderId}`}
+              style={subtleLinkStyle}
+            >
+              查看来源销售单
+            </Link>
+          ) : null}
+        </article>
+
+        {purchaseOrder.versionHistory?.length ? (
+          <details style={infoCardStyle}>
+            <summary style={{ cursor: 'pointer' }}><h3 style={{ display: 'inline', margin: 0 }}>版本时间线</h3></summary>
+            <div style={tableWrapStyle}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={headCellStyle}>版本 Version</th>
+                    <th style={headCellStyle}>状态 Status</th>
+                    <th style={headCellStyle}>创建时间 Created At</th>
+                    <th style={headCellStyle}>变更原因 Change Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchaseOrder.versionHistory.map((entry) => (
+                    <tr key={`${entry.versionNo}-${entry.createdAt}`}>
+                      <td style={cellStyle}>{`V${entry.versionNo}`}</td>
+                    <td style={cellStyle}>{formatPurchaseOrderStatus(entry.status)}</td>
+                      <td style={cellStyle}>{entry.createdAt}</td>
+                      <td style={cellStyle}>{entry.changeReason ?? '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        ) : null}
+
+        {purchaseOrder.title?.includes(purchaseOrder.purchaseNo) ? (
+          <details style={infoCardStyle}>
+            <summary style={{ cursor: 'pointer' }}>原始采购标题</summary>
+            <p style={valueStyle}>{purchaseOrder.title}</p>
+          </details>
+        ) : null}
+        {canViewFormalAuditCenter(session) && !auditLogs ? (
+          <p role="alert">审计日志暂不可用，请刷新重试。</p>
+        ) : canViewFormalAuditCenter(session) ? (
+          <details style={infoCardStyle}>
+            <summary style={{ cursor: 'pointer' }}>审计日志</summary>
+            <AuditLogTable session={session} items={auditLogs?.items ?? []} collapseChanges />
+          </details>
+        ) : null}
       </section>
     </AppShell>
   );

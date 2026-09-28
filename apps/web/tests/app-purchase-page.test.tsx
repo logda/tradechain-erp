@@ -1,11 +1,20 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AppPurchasePage from '../app/app/purchase/page';
 
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...await importOriginal<typeof import('next/navigation')>(),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 describe('AppPurchasePage', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [], total: 0, count: 0, closedTotal: 0 }) })));
+  afterEach(() => vi.unstubAllGlobals());
+
   it('renders purchase workbench cards and quick actions', async () => {
     render(<>{await AppPurchasePage({})}</>);
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(
       screen.getByRole('heading', { name: '采购工作台' }),
     ).toBeInTheDocument();
@@ -62,6 +71,7 @@ describe('AppPurchasePage', () => {
       </>,
     );
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(
       screen.getByRole('heading', { name: '采购工作台' }),
     ).toBeInTheDocument();
@@ -89,6 +99,7 @@ describe('AppPurchasePage', () => {
       </>,
     );
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(
       screen.getByRole('heading', { name: '采购工作台' }),
     ).toBeInTheDocument();
@@ -98,7 +109,7 @@ describe('AppPurchasePage', () => {
     expect(
       screen.queryByRole('link', { name: '创建发货批次' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看仓库主数据' })).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: '仓库中心' }).find(link => !link.closest('aside'))!).toHaveAttribute(
       'href',
       '/app/warehouses',
     );

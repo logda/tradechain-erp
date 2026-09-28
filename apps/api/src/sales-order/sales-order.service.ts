@@ -1,5 +1,8 @@
+import { isDeepStrictEqual } from 'node:util';
+import { resolveFormalUserName, resolveRuntimeFormalUserName } from '../auth/formal-user-name';
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -21,10 +24,12 @@ import {
 } from '../auth/formal-session';
 import { CreateDirectSalesOrderDto } from './dto/create-direct-sales-order.dto';
 import { UpdateSalesOrderDraftDto } from './dto/update-sales-order-draft.dto';
-import { salesOrderListData } from './sales-order-list.data';
 import { resolveSalesOrderStore } from './sales-order.store';
 import { PrismaService } from '../storage/prisma.service';
 import { resolveStorageMode } from '../storage/storage-mode';
+import { resolvePurchaseOrderStore } from '../purchase-order/purchase-order.store';
+import { resolveShipmentBatchStore } from '../shipment-batch/shipment-batch.store';
+import type { PurchaseOrderRecord } from '../purchase-order/purchase-order.service';
 import { resolveQuoteStore } from '../quote/quote.store';
 import {
   CounterpartyService,
@@ -79,6 +84,7 @@ export type ConvertConfirmedQuotePayload = {
 };
 
 export type SalesOrderTransitionPayload = {
+  operatorId?: number;
   salesOrderId: number;
   currentStatus: string;
 };
@@ -178,15 +184,18 @@ export type BaseSalesOrderRecord = {
   salesOrderRemark?: string;
   salesOrderAttachments?: SalesOrderAttachmentInfo[];
   cancelReason?: string;
+  rejectionReason?: string;
   autoVoidedPurchaseOrderIds?: number[];
   versionHistory: SalesOrderVersionHistoryEntry[];
   items?: SalesOrderLineItem[];
   purchaseOwnerName?: string;
+  purchaseOwnerId?: number;
   sourceInquiryId?: number;
 };
 
 export type CreatedSalesOrderRecord = BaseSalesOrderRecord & {
   sourceMode: 'direct';
+  salesUserName?: string;
   customerId?: number;
   customerName: string;
   customerFullName?: string;
@@ -198,6 +207,7 @@ export type CreatedSalesOrderRecord = BaseSalesOrderRecord & {
 
 export type ConvertedSalesOrderRecord = BaseSalesOrderRecord & {
   sourceMode: 'from_quote';
+  salesUserName?: string;
   customerId: number;
   customerName: string;
   customerFullName?: string;
@@ -243,6 +253,7 @@ type PrismaSalesDb = PrismaService & {
     findUnique: (...args: any[]) => Promise<unknown>;
     create: (...args: any[]) => Promise<unknown>;
     update: (...args: any[]) => Promise<unknown>;
+    updateMany: (...args: any[]) => Promise<{ count: number }>;
   };
   operationLog: {
     create: (...args: any[]) => Promise<unknown>;
@@ -286,9 +297,10 @@ type ResubmitPayload = SalesOrderTransitionPayload & {
 };
 
 type CancelPayload = SalesOrderTransitionPayload & {
-  hasShipmentBatches: boolean;
-  unshippedPurchaseOrderIds: number[];
+  hasShipmentBatches?: boolean;
+  unshippedPurchaseOrderIds?: number[];
   cancelReason: string;
+  session?: FormalSession;
 };
 
 type SyncOperationalAggregatesPayload = {
@@ -304,19 +316,7 @@ type SyncOperationalAggregatesPayload = {
 };
 
 function resolveSalesUserName(userId: number) {
-  if (userId === 3 || userId === 2001) {
-    return 'Zoe';
-  }
-
-  if (userId === 4 || userId === 2002) {
-    return 'Leo';
-  }
-
-  if (userId === 1) {
-    return 'Admin';
-  }
-
-  return 'Mia';
+  return resolveRuntimeFormalUserName(userId);
 }
 
 function resolveSalesOrderSourceSummary(
@@ -336,10 +336,27 @@ function resolveSalesOrderSourceSummary(
 function toSalesOrderListItem(
   item: CreatedSalesOrderRecord | ConvertedSalesOrderRecord,
 ): SalesOrderListItem {
+  const lines = item.items ?? [];
+  const productNames = [...new Set(lines.map((line) => line.productName?.trim()).filter((name): name is string => Boolean(name)))];
+  let amount: number | undefined = lines.length ? 0 : undefined;
+  for (const line of lines) {
+    if (typeof line.amount === 'number' && Number.isFinite(line.amount) && line.amount !== 0) {
+      amount! += line.amount;
+    } else if (typeof line.quantity === 'number' && Number.isFinite(line.quantity) &&
+      typeof line.salePrice === 'number' && Number.isFinite(line.salePrice)) {
+      amount! += Number((line.quantity * line.salePrice).toFixed(2));
+    } else if (line.amount !== 0) {
+      amount = undefined;
+      break;
+    }
+  }
+  amount = amount !== undefined && Number.isFinite(amount) ? Number(amount.toFixed(2)) : undefined;
   return {
     moduleLabel: '销售订单',
     docNo: item.salesNo,
     title: item.title,
+    productNames,
+    amount,
     status: item.status,
     secondaryStatus: item.status,
     counterpartyName: item.customerName,
@@ -348,7 +365,9 @@ function toSalesOrderListItem(
     storeName: item.storeName,
     orderDate: item.orderDate,
     estimatedDeliveryDate: item.estimatedDeliveryDate,
-    ownerName: resolveSalesUserName(item.salesUserId),
+    ownerName: item.salesUserName ?? resolveSalesUserName(item.salesUserId),
+    ownerId: item.salesUserId,
+    createdById: item.createdBy,
     createdAt: item.createdAt,
     detailHref: `/sales-orders/${item.id}`,
     createdBy: resolveSalesUserName(item.createdBy),
@@ -827,6 +846,7 @@ export class SalesOrderService {
         items,
         title: dto.title,
         salesUserId: dto.salesUserId,
+        salesUserName: await resolveFormalUserName(dto.salesUserId, this.prisma),
         createdBy: dto.createdBy,
         createdAt,
       };
@@ -928,6 +948,7 @@ export class SalesOrderService {
       items,
       title: dto.title?.trim() || buildDefaultSalesOrderTitle(salesNo, items, customerName),
       salesUserId: dto.salesUserId,
+        salesUserName: await resolveFormalUserName(dto.salesUserId, this.prisma),
       createdBy: dto.createdBy,
       createdAt,
     };
@@ -961,6 +982,7 @@ export class SalesOrderService {
   async updateDraft(
     salesOrderId: number,
     dto: UpdateSalesOrderDraftDto,
+    actorId?: number,
   ): Promise<SalesOrderRecord> {
     const prismaRecord = this.shouldUsePrisma()
       ? ((await this.prismaDb!.businessDocument.findUnique({
@@ -994,7 +1016,7 @@ export class SalesOrderService {
       orderingUnit: dto.orderingUnit ?? existing.orderingUnit,
       title: dto.title ?? existing.title,
       salesUserId: dto.salesUserId ?? existing.salesUserId,
-      createdBy: dto.createdBy ?? existing.createdBy,
+      createdBy: existing.createdBy,
     } as UpdateSalesOrderDraftDto;
     const counterpartyService = new CounterpartyService(this.prisma);
     const salesOrderCustomer = await resolveDirectSalesOrderCustomer(
@@ -1004,7 +1026,7 @@ export class SalesOrderService {
     let customerId = salesOrderCustomer.customerId;
     let customerName = salesOrderCustomer.customerName;
     let customerCode = salesOrderCustomer.customerCode;
-    const operatorId = effectiveDto.createdBy;
+    const operatorId = actorId ?? dto.createdBy ?? existing.createdBy;
 
     if (
       salesOrderCustomer.customerEntryMode === 'manual' &&
@@ -1076,6 +1098,7 @@ export class SalesOrderService {
         items,
         title,
         salesUserId: effectiveDto.salesUserId,
+        salesUserName: await resolveFormalUserName(effectiveDto.salesUserId, this.prisma),
       } as SalesOrderRecord;
       const updated = (await this.prismaDb!.businessDocument.update({
         where: { id: prismaRecord!.id },
@@ -1151,6 +1174,7 @@ export class SalesOrderService {
       items,
       title,
       salesUserId: effectiveDto.salesUserId,
+        salesUserName: await resolveFormalUserName(effectiveDto.salesUserId, this.prisma),
     } as SalesOrderRecord;
 
     this.store.upsertSalesOrder(nextPayload);
@@ -1237,7 +1261,6 @@ export class SalesOrderService {
                 };
               }),
           )),
-          ...salesOrderListData,
         ];
 
     const filtered = filterVisibleFormalItems(
@@ -1463,6 +1486,7 @@ export class SalesOrderService {
         ),
         title: '',
         salesUserId: payload.createdBy,
+        salesUserName: await resolveFormalUserName(payload.createdBy, this.prisma),
         items: normalizeSalesOrderItems(conversionItems),
       };
         const created = (await db.businessDocument.create({
@@ -1565,6 +1589,7 @@ export class SalesOrderService {
         payload.customerName?.trim() || `客户 ${payload.customerId}`,
       ),
       salesUserId: payload.createdBy,
+        salesUserName: await resolveFormalUserName(payload.createdBy, this.prisma),
       items: normalizeSalesOrderItems(conversionItems),
     };
 
@@ -1838,10 +1863,10 @@ export class SalesOrderService {
     }
   }
 
-  async listAuditLogs() {
+  async listAuditLogs(bizId?: number) {
     if (this.shouldUsePrisma()) {
       const logs = (await this.prismaDb!.operationLog.findMany({
-        where: { bizType: 'sales_order' },
+        where: { bizType: 'sales_order', ...(bizId === undefined ? {} : { bizId: BigInt(bizId) }) },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       })) as PrismaOperationLogRecord[];
 
@@ -1851,7 +1876,9 @@ export class SalesOrderService {
     }
 
     return {
-      items: this.store.listAuditLogs(),
+      items: this.store.listAuditLogs().filter((item) =>
+        item.bizType === 'sales_order' && (bizId === undefined || item.bizId === bizId),
+      ),
     };
   }
 
@@ -1869,10 +1896,7 @@ export class SalesOrderService {
         );
         const listItem = toSalesOrderListItem(detail as CreatedSalesOrderRecord | ConvertedSalesOrderRecord);
         if (
-          session?.role &&
-          !isFormalAdminOrBoss(session?.role) &&
-          session?.role !== 'sales_manager' &&
-          !matchesFormalUser(session ?? {}, listItem)
+          !filterVisibleFormalItems([listItem], session ?? {}, ['admin', 'boss', 'sales_manager']).length
         ) {
           throw new NotFoundException('销售单不存在');
         }
@@ -1897,10 +1921,7 @@ export class SalesOrderService {
       const detail = withSalesOrderEffectiveStatus(created);
       const listItem = toSalesOrderListItem(detail);
       if (
-        session?.role &&
-        !isFormalAdminOrBoss(session?.role) &&
-        session?.role !== 'sales_manager' &&
-        !matchesFormalUser(session ?? {}, listItem)
+        !filterVisibleFormalItems([listItem], session ?? {}, ['admin', 'boss', 'sales_manager']).length
       ) {
         throw new NotFoundException('销售单不存在');
       }
@@ -1972,10 +1993,7 @@ export class SalesOrderService {
     const fallbackListItem = toSalesOrderListItem(fallback);
 
     if (
-      session?.role &&
-      !isFormalAdminOrBoss(session?.role) &&
-      session?.role !== 'sales_manager' &&
-      !matchesFormalUser(session ?? {}, fallbackListItem)
+      !filterVisibleFormalItems([fallbackListItem], session ?? {}, ['admin', 'boss', 'sales_manager']).length
     ) {
       throw new NotFoundException('销售单不存在');
     }
@@ -2030,7 +2048,7 @@ export class SalesOrderService {
           bizType: 'sales_order',
           bizId: updated.id,
           operationType: 'submit_sales_order',
-          operatorId: BigInt(beforeData.createdBy),
+          operatorId: BigInt(payload.operatorId ?? beforeData.createdBy),
           beforeData,
           afterData: nextPayload,
         },
@@ -2062,7 +2080,7 @@ export class SalesOrderService {
         bizType: 'sales_order',
         bizId: existing.id,
         operationType: 'submit_sales_order',
-        operatorId: existing.createdBy,
+        operatorId: payload.operatorId ?? existing.createdBy,
         beforeData,
         afterData: existing,
       });
@@ -2076,6 +2094,7 @@ export class SalesOrderService {
 
   async approve(payload: SalesOrderTransitionPayload & {
     purchaseOwnerName?: string;
+  purchaseOwnerId?: number;
     sourceInquiryId?: number;
     deferPurchaseTransfer?: boolean;
   }) {
@@ -2105,6 +2124,7 @@ export class SalesOrderService {
         purchaseAggregateStatus: nextStatus,
         shipmentAggregateStatus: 'purchasing',
         purchaseOwnerName: payload.purchaseOwnerName,
+        purchaseOwnerId: payload.purchaseOwnerId,
         sourceInquiryId: payload.sourceInquiryId,
       };
       const updated = (await this.prismaDb!.businessDocument.update({
@@ -2120,7 +2140,7 @@ export class SalesOrderService {
           bizType: 'sales_order',
           bizId: updated.id,
           operationType: 'approve_sales_order',
-          operatorId: BigInt(beforeData.createdBy),
+          operatorId: BigInt(payload.operatorId ?? beforeData.createdBy),
           beforeData,
           afterData: nextPayload,
         },
@@ -2142,13 +2162,14 @@ export class SalesOrderService {
       existing.purchaseAggregateStatus = existing.status;
       existing.shipmentAggregateStatus = 'purchasing';
       existing.purchaseOwnerName = payload.purchaseOwnerName;
+      existing.purchaseOwnerId = payload.purchaseOwnerId;
       existing.sourceInquiryId = payload.sourceInquiryId;
       this.store.upsertSalesOrder(existing);
       this.store.recordAuditLog({
         bizType: 'sales_order',
         bizId: existing.id,
         operationType: 'approve_sales_order',
-        operatorId: existing.createdBy,
+        operatorId: payload.operatorId ?? existing.createdBy,
         beforeData,
         afterData: existing,
       });
@@ -2173,10 +2194,11 @@ export class SalesOrderService {
       customerName: item.customerName,
       status: item.status,
       purchaseOwnerName: item.purchaseOwnerName,
+      purchaseOwnerId: item.purchaseOwnerId,
     }));
   }
 
-  async completePurchaseAssignment(id: number, purchaseOwnerName: string) {
+  async completePurchaseAssignment(id: number, purchaseOwnerName: string, actorId?: number, purchaseOwnerId?: number) {
     const ownerName = purchaseOwnerName.trim();
     if (!ownerName) {
       throw new BadRequestException('请选择采购负责人');
@@ -2192,12 +2214,13 @@ export class SalesOrderService {
       if (beforeData.status !== 'pending_purchase_assignment') {
         throw new BadRequestException('采购负责人已分配，请刷新页面');
       }
-      if (beforeData.purchaseOwnerName && beforeData.purchaseOwnerName !== ownerName) {
+      if (beforeData.purchaseOwnerId !== undefined ? beforeData.purchaseOwnerId !== purchaseOwnerId : beforeData.purchaseOwnerName && beforeData.purchaseOwnerName !== ownerName) {
         throw new BadRequestException('采购负责人必须与来源销售单一致');
       }
       const nextPayload = {
         ...beforeData,
         purchaseOwnerName: ownerName,
+        purchaseOwnerId,
         status: 'purchasing',
         purchaseAggregateStatus: 'purchasing',
       };
@@ -2210,7 +2233,7 @@ export class SalesOrderService {
           bizType: 'sales_order',
           bizId: existing.id,
           operationType: 'assign_purchase_owner',
-          operatorId: BigInt(beforeData.createdBy),
+          operatorId: BigInt(actorId ?? beforeData.createdBy),
           beforeData,
           afterData: nextPayload,
         },
@@ -2224,11 +2247,12 @@ export class SalesOrderService {
     if (existing.status !== 'pending_purchase_assignment') {
       throw new BadRequestException('采购负责人已分配，请刷新页面');
     }
-    if (existing.purchaseOwnerName && existing.purchaseOwnerName !== ownerName) {
+    if (existing.purchaseOwnerId !== undefined ? existing.purchaseOwnerId !== purchaseOwnerId : existing.purchaseOwnerName && existing.purchaseOwnerName !== ownerName) {
       throw new BadRequestException('采购负责人必须与来源销售单一致');
     }
     const beforeData = snapshotAuditData(existing);
     existing.purchaseOwnerName = ownerName;
+    existing.purchaseOwnerId = purchaseOwnerId;
     existing.status = 'purchasing';
     existing.purchaseAggregateStatus = 'purchasing';
     this.store.upsertSalesOrder(existing);
@@ -2236,78 +2260,98 @@ export class SalesOrderService {
       bizType: 'sales_order',
       bizId: existing.id,
       operationType: 'assign_purchase_owner',
-      operatorId: existing.createdBy,
+      operatorId: actorId ?? existing.createdBy,
       beforeData,
       afterData: existing,
     });
     return { id, status: existing.status, purchaseOwnerName: ownerName };
   }
 
-  async reject(payload: SalesOrderTransitionPayload) {
-    if (payload.currentStatus !== 'pending_sales_manager_approval') {
-      throw new BadRequestException(
-        'Only pending sales manager approval orders can be rejected',
-      );
+  private async requireSavedSalesOrder(id: number, session?: FormalSession, db = this.prismaDb) {
+    const document = this.shouldUsePrisma()
+      ? (await db!.businessDocument.findUnique({ where: { id: BigInt(id) } })) as PrismaBusinessDocumentRecord | null
+      : null;
+    const existing = this.shouldUsePrisma()
+      ? document?.bizType === 'sales_order' ? toSalesOrderDocumentPayload(document) : undefined
+      : this.store.getSalesOrder(id);
+    if (!existing || !filterVisibleFormalItems([existing], session ?? {}, ['admin', 'boss', 'sales_manager']).length) {
+      throw new NotFoundException('销售单不存在');
     }
+    return existing;
+  }
 
-    if (this.shouldUsePrisma()) {
-      const existing = (await this.prismaDb!.businessDocument.findUnique({
-        where: { id: BigInt(payload.salesOrderId) },
-      })) as PrismaBusinessDocumentRecord | null;
+  private assertRuntimeSalesOrderSnapshot(beforeData: SalesOrderRecord) {
+    if (!isDeepStrictEqual(this.store.getSalesOrder(beforeData.id), beforeData)) {
+      throw new ConflictException('单据已被其他操作更新，请刷新后重试');
+    }
+  }
 
-      if (!existing || existing.bizType !== 'sales_order') {
-        throw new NotFoundException('销售单不存在');
+  private async compareAndSwapDocument(db: PrismaSalesDb, bizType: 'sales_order' | 'purchase_order',
+    beforeData: SalesOrderRecord | PurchaseOrderRecord, next: SalesOrderRecord | PurchaseOrderRecord) {
+    const raw = (await db.businessDocument.findUnique({ where: { id: BigInt(next.id) } })) as PrismaBusinessDocumentRecord | null;
+    const saved = raw?.bizType === bizType
+      ? bizType === 'sales_order' ? toSalesOrderDocumentPayload(raw)
+        : { ...raw.payload, id: Number(raw.id), purchaseNo: raw.docNo, status: raw.status }
+      : undefined;
+    if (!isDeepStrictEqual(saved, beforeData)) {
+      throw new ConflictException('单据已被其他操作更新，请刷新后重试');
+    }
+    const result = await db.businessDocument.updateMany({
+      where: { id: raw!.id, bizType, status: raw!.status, payload: { equals: raw!.payload } },
+      data: { status: next.status, payload: next },
+    });
+    if (result.count !== 1) throw new ConflictException('单据已被其他操作更新，请刷新后重试');
+  }
+
+  private async runSalesTransaction<T>(operation: (db: PrismaSalesDb) => Promise<T>) {
+    try {
+      return await this.prisma!.$transaction(tx => operation(tx as unknown as PrismaSalesDb));
+    } catch (error) {
+      const databaseError = error as { name?: string; cause?: { originalCode?: string | number } } | null;
+      if (databaseError?.name === 'DriverAdapterError' && String(databaseError.cause?.originalCode) === '1020') {
+        throw new ConflictException('单据已被其他操作更新，请刷新后重试');
       }
-
-      const beforeData = toSalesOrderDocumentPayload(existing);
-      const nextPayload: SalesOrderRecord = {
-        ...beforeData,
-        status: 'rejected',
-      };
-      const updated = (await this.prismaDb!.businessDocument.update({
-        where: { id: existing.id },
-        data: {
-          status: nextPayload.status,
-          payload: nextPayload,
-        },
-      })) as PrismaBusinessDocumentRecord;
-
-      await this.prismaDb!.operationLog.create({
-        data: {
-          bizType: 'sales_order',
-          bizId: updated.id,
-          operationType: 'reject_sales_order',
-          operatorId: BigInt(beforeData.createdBy),
-          beforeData,
-          afterData: nextPayload,
-        },
-      });
-
-      return {
-        id: payload.salesOrderId,
-        status: 'rejected',
-      };
+      throw error;
     }
+  }
 
-    const existing = this.store.getSalesOrder(payload.salesOrderId);
-    if (existing) {
-      const beforeData = snapshotAuditData(existing);
-      existing.status = 'rejected';
-      this.store.upsertSalesOrder(existing);
-      this.store.recordAuditLog({
-        bizType: 'sales_order',
-        bizId: existing.id,
-        operationType: 'reject_sales_order',
-        operatorId: existing.createdBy,
-        beforeData,
-        afterData: existing,
-      });
+  private async saveSalesOrderMutation(beforeData: SalesOrderRecord, next: SalesOrderRecord,
+    operationType: string, operatorId?: number, db = this.prismaDb) {
+    if (this.shouldUsePrisma()) {
+      const save = async (tx: PrismaSalesDb) => {
+        await this.compareAndSwapDocument(tx, 'sales_order', beforeData, next);
+        await tx.operationLog.create({ data: {
+          bizType: 'sales_order', bizId: BigInt(next.id), operationType,
+          operatorId: BigInt(operatorId ?? beforeData.createdBy), beforeData, afterData: next,
+        } });
+      };
+      // Cancellation already owns a transaction covering sales, purchases and all their logs.
+      if (db === this.prismaDb) await this.runSalesTransaction(save);
+      else await save(db!);
+    } else {
+      // Keep the comparison and write synchronous so another runtime request cannot interleave.
+      this.assertRuntimeSalesOrderSnapshot(beforeData);
+      this.store.upsertSalesOrder(next);
+      this.store.recordAuditLog({ bizType: 'sales_order', bizId: next.id, operationType,
+        operatorId: operatorId ?? beforeData.createdBy, beforeData, afterData: next });
     }
+  }
 
-    return {
-      id: payload.salesOrderId,
-      status: 'rejected',
+  async reject(payload: SalesOrderTransitionPayload & { rejectionReason?: string; session?: FormalSession }) {
+    const existing = await this.requireSavedSalesOrder(payload.salesOrderId, payload.session);
+    if (existing.status !== 'pending_sales_manager_approval') {
+      throw new BadRequestException('Only pending sales manager approval orders can be rejected');
+    }
+    const rejectionReason = typeof payload.rejectionReason === 'string' ? payload.rejectionReason.trim() : '';
+    if (!rejectionReason) throw new BadRequestException('请填写驳回修改原因');
+    const next: SalesOrderRecord = {
+      ...existing, status: 'rejected', rejectionReason,
+      versionHistory: [...existing.versionHistory, createSalesOrderVersionHistoryEntry({
+        versionNo: existing.currentVersionNo, status: 'rejected', createdAt: new Date().toISOString(), changeReason: rejectionReason,
+      })],
     };
+    await this.saveSalesOrderMutation(existing, next, 'reject_sales_order', payload.operatorId);
+    return { id: next.id, status: next.status, rejectionReason };
   }
 
   async resubmit(payload: ResubmitPayload) {
@@ -2347,87 +2391,124 @@ export class SalesOrderService {
     };
   }
 
-  async cancel(payload: CancelPayload) {
-    if (payload.currentStatus !== 'purchasing') {
-      throw new BadRequestException(
-        'Only purchasing sales orders can be cancelled',
-      );
-    }
+  private async loadCancellationImpact(existing: SalesOrderRecord, db = this.prismaDb) {
+    const documents = this.shouldUsePrisma()
+      ? (await db!.businessDocument.findMany({ where: { bizType: { in: ['purchase_order', 'shipment_batch'] } } })) as Array<{
+          id: bigint; bizType: string; docNo: string; status: string; payload: any;
+        }>
+      : [];
+    const purchases: PurchaseOrderRecord[] = this.shouldUsePrisma()
+      ? documents.filter(doc => doc.bizType === 'purchase_order').map(doc => ({
+          ...doc.payload, id: Number(doc.id), purchaseNo: doc.docNo, status: doc.status,
+        }))
+      : resolvePurchaseOrderStore().listPurchaseOrders();
+    const shipments: Array<{ salesOrderId: number; purchaseOrderId: number }> = this.shouldUsePrisma()
+      ? documents.filter(doc => doc.bizType === 'shipment_batch').map(doc => doc.payload)
+      : resolveShipmentBatchStore().listShipmentBatches();
+    return this.resolveCancellationImpact(existing, purchases, shipments);
+  }
 
-    if (payload.hasShipmentBatches) {
-      throw new BadRequestException('Cannot cancel after shipment has started');
-    }
+  private resolveCancellationImpact(existing: SalesOrderRecord, purchases: PurchaseOrderRecord[],
+    shipments: Array<{ salesOrderId: number; purchaseOrderId: number }>) {
+    const linked = purchases.filter(purchase =>
+      purchase.sourceSalesOrderId === existing.id ||
+      (!purchase.sourceSalesOrderId && purchase.salesOrderNo === existing.salesNo));
+    const shippedStatus = /(^|_)(shipped|to_forwarder|forwarder_shipped|arrived|exception|closed)($|_)/;
+    const hasShipmentBatches = shipments.some(shipment =>
+      shipment.salesOrderId === existing.id || linked.some(purchase => purchase.id === shipment.purchaseOrderId)) ||
+      shippedStatus.test(existing.shipmentAggregateStatus) || linked.some(purchase =>
+        purchase.currentBatchCount > 0 || shippedStatus.test(purchase.status));
+    return { hasShipmentBatches, purchases: linked.filter(purchase => purchase.status !== 'void') };
+  }
 
-    if (!Array.isArray(payload.unshippedPurchaseOrderIds)) {
-      throw new BadRequestException('Unshipped purchase order ids are required');
-    }
-
-    const existing = this.store.getSalesOrder(payload.salesOrderId);
-    if (existing) {
-      existing.status = 'void';
-      existing.cancelReason = payload.cancelReason;
-      existing.autoVoidedPurchaseOrderIds = payload.unshippedPurchaseOrderIds;
-      existing.versionHistory = [
-        ...existing.versionHistory,
-        createSalesOrderVersionHistoryEntry({
-          versionNo: existing.currentVersionNo,
-          status: 'void',
-          createdAt: '2026-07-11T10:30:00.000Z',
-          changeReason: payload.cancelReason,
-        }),
-      ];
-      this.store.upsertSalesOrder(existing);
-    }
-
+  async getCancellationImpact(id: number, session?: FormalSession) {
+    const existing = await this.requireSavedSalesOrder(id, session);
+    const impact = await this.loadCancellationImpact(existing);
     return {
-      id: payload.salesOrderId,
-      status: 'void',
-      autoVoidedPurchaseOrderIds: payload.unshippedPurchaseOrderIds,
-      cancelReason: payload.cancelReason,
+      canCancel: existing.status === 'purchasing' && !impact.hasShipmentBatches,
+      hasShipmentBatches: impact.hasShipmentBatches,
+      purchaseOrders: impact.purchases.map(purchase => ({ id: purchase.id, purchaseNo: purchase.purchaseNo, status: purchase.status })),
     };
+  }
+
+  async cancel(payload: CancelPayload) {
+    const cancelSavedOrder = async (db = this.prismaDb) => {
+      if (this.shouldUsePrisma()) {
+        await db!.$queryRaw`SELECT id FROM BusinessDocument WHERE id=${BigInt(payload.salesOrderId)} AND bizType='sales_order' FOR UPDATE`;
+      }
+      const existing = await this.requireSavedSalesOrder(payload.salesOrderId, payload.session, db);
+      if (existing.status !== 'purchasing') {
+        throw new BadRequestException('Only purchasing sales orders can be cancelled');
+      }
+      const cancelReason = typeof payload.cancelReason === 'string' ? payload.cancelReason.trim() : '';
+      if (!cancelReason) throw new BadRequestException('请填写作废原因');
+      const impact = await this.loadCancellationImpact(existing, db);
+      if (impact.hasShipmentBatches) throw new BadRequestException('Cannot cancel after shipment has started');
+      if (!this.shouldUsePrisma()) {
+        this.assertRuntimeSalesOrderSnapshot(existing);
+        const freshImpact = this.resolveCancellationImpact(existing,
+          resolvePurchaseOrderStore().listPurchaseOrders(), resolveShipmentBatchStore().listShipmentBatches());
+        if (freshImpact.hasShipmentBatches) throw new BadRequestException('Cannot cancel after shipment has started');
+        if (!isDeepStrictEqual(freshImpact.purchases, impact.purchases)) {
+          throw new ConflictException('关联采购单已被其他操作更新，请刷新后重试');
+        }
+      }
+      const createdAt = new Date().toISOString();
+      for (const purchase of impact.purchases) {
+        const nextPurchase = { ...purchase, status: 'void', cancelReason,
+          versionHistory: [...(purchase.versionHistory ?? []), {
+            versionNo: purchase.currentVersionNo, status: 'void', createdAt, changeReason: cancelReason,
+          }],
+        };
+        if (this.shouldUsePrisma()) {
+          await this.compareAndSwapDocument(db!, 'purchase_order', purchase, nextPurchase);
+          await db!.operationLog.create({ data: { bizType: 'purchase_order', bizId: BigInt(purchase.id),
+            operationType: 'cancel_purchase_order', operatorId: BigInt(payload.operatorId ?? existing.createdBy),
+            beforeData: purchase, afterData: nextPurchase } });
+        } else {
+          const purchaseStore = resolvePurchaseOrderStore();
+          purchaseStore.upsertPurchaseOrder(nextPurchase);
+          purchaseStore.recordAuditLog({ bizType: 'purchase_order', bizId: purchase.id, operationType: 'cancel_purchase_order',
+            operatorId: payload.operatorId ?? existing.createdBy, beforeData: purchase, afterData: nextPurchase });
+        }
+      }
+      const next: SalesOrderRecord = { ...existing, status: 'void', cancelReason,
+        purchaseAggregateStatus: impact.purchases.length ? 'void' : existing.purchaseAggregateStatus,
+        autoVoidedPurchaseOrderIds: impact.purchases.map(purchase => purchase.id),
+        versionHistory: [...existing.versionHistory, createSalesOrderVersionHistoryEntry({
+          versionNo: existing.currentVersionNo, status: 'void', createdAt, changeReason: cancelReason,
+        })],
+      };
+      await this.saveSalesOrderMutation(existing, next, 'cancel_sales_order', payload.operatorId, db);
+      return { id: next.id, status: next.status, autoVoidedPurchaseOrderIds: impact.purchases.map(purchase => purchase.id), cancelReason };
+    };
+    return this.shouldUsePrisma()
+      ? this.runSalesTransaction(cancelSavedOrder)
+      : cancelSavedOrder();
   }
 
   async updateReceiptStatus(payload: {
-    salesOrderId: number;
-    receiptStatus: string;
+    salesOrderId: number; receiptStatus: string; operatorId?: number; session?: FormalSession;
   }) {
-    const existing = this.store.getSalesOrder(payload.salesOrderId);
-    if (existing) {
-      existing.receiptStatus = payload.receiptStatus;
-      this.store.upsertSalesOrder(existing);
+    const existing = await this.requireSavedSalesOrder(payload.salesOrderId, payload.session);
+    if (!['unpaid', 'deposit_received', 'fully_paid', 'prepaid_deducted'].includes(payload.receiptStatus)) {
+      throw new BadRequestException('请选择有效的收款状态');
     }
-
-    return {
-      id: payload.salesOrderId,
-      receiptStatus: payload.receiptStatus,
-    };
+    const next = { ...existing, receiptStatus: payload.receiptStatus };
+    await this.saveSalesOrderMutation(existing, next, 'update_receipt_status', payload.operatorId);
+    return { id: next.id, receiptStatus: next.receiptStatus };
   }
 
   async confirmFinance(payload: {
-    salesOrderId: number;
-    receiptStatus: string;
-    financeStatus: string;
+    salesOrderId: number; receiptStatus?: string; financeStatus?: string; operatorId?: number; session?: FormalSession;
   }) {
-    if (
-      payload.receiptStatus !== 'deposit_received' &&
-      payload.receiptStatus !== 'fully_paid' &&
-      payload.receiptStatus !== 'prepaid_deducted'
-    ) {
-      throw new BadRequestException(
-        'Cannot confirm finance before receipt status reaches a paid state',
-      );
+    const existing = await this.requireSavedSalesOrder(payload.salesOrderId, payload.session);
+    if (!['deposit_received', 'fully_paid', 'prepaid_deducted'].includes(existing.receiptStatus)) {
+      throw new BadRequestException('Cannot confirm finance before receipt status reaches a paid state');
     }
-
-    const existing = this.store.getSalesOrder(payload.salesOrderId);
-    if (existing) {
-      existing.financeStatus = 'confirmed';
-      this.store.upsertSalesOrder(existing);
-    }
-
-    return {
-      id: payload.salesOrderId,
-      financeStatus: 'confirmed',
-    };
+    const next = { ...existing, financeStatus: 'confirmed' };
+    await this.saveSalesOrderMutation(existing, next, 'confirm_finance', payload.operatorId);
+    return { id: next.id, financeStatus: next.financeStatus };
   }
 
   async syncOperationalAggregates(payload: SyncOperationalAggregatesPayload) {
@@ -2454,46 +2535,51 @@ export class SalesOrderService {
     };
 
     if (this.shouldUsePrisma()) {
-      const existing = (await this.prismaDb!.businessDocument.findUnique({
-        where: { id: BigInt(payload.salesOrderId) },
-      })) as PrismaBusinessDocumentRecord | null;
+      const result = await this.runSalesTransaction(async db => {
+        await db.$queryRaw`SELECT id FROM BusinessDocument WHERE id=${BigInt(payload.salesOrderId)} AND bizType='sales_order' FOR UPDATE`;
+        const existing = (await db.businessDocument.findUnique({
+          where: { id: BigInt(payload.salesOrderId) },
+        })) as PrismaBusinessDocumentRecord | null;
 
-      if (existing && existing.bizType === 'sales_order') {
-        const beforeData = toSalesOrderDocumentPayload(existing);
-        const nextPayload = applyNext(beforeData);
-        const updated = (await this.prismaDb!.businessDocument.update({
-          where: { id: existing.id },
-          data: {
-            status: nextPayload.status,
-            payload: nextPayload,
-          },
-        })) as PrismaBusinessDocumentRecord;
-
-        await this.prismaDb!.operationLog.create({
-          data: {
-            bizType: 'sales_order',
-            bizId: updated.id,
-            operationType: 'sync_sales_order_operational_aggregates',
-            operatorId: BigInt(payload.operatorId ?? beforeData.createdBy),
-            beforeData,
-            afterData: {
-              ...nextPayload,
-              syncSource: payload.source,
+        if (existing && existing.bizType === 'sales_order') {
+          const beforeData = toSalesOrderDocumentPayload(existing);
+          const nextPayload = applyNext(beforeData);
+          const updated = (await db.businessDocument.update({
+            where: { id: existing.id },
+            data: {
+              status: nextPayload.status,
+              payload: nextPayload,
             },
-          },
-        });
+          })) as PrismaBusinessDocumentRecord;
 
-        return {
-          id: payload.salesOrderId,
-          status: nextPayload.status,
-          purchaseAggregateStatus: nextPayload.purchaseAggregateStatus,
-          shipmentAggregateStatus: nextPayload.shipmentAggregateStatus,
-          receiptSendStatus: nextPayload.receiptSendStatus,
-          afterSalesEndStatus: nextPayload.afterSalesEndStatus,
-          receiptStatus: nextPayload.receiptStatus,
-          financeStatus: nextPayload.financeStatus,
-        };
-      }
+          await db.operationLog.create({
+            data: {
+              bizType: 'sales_order',
+              bizId: updated.id,
+              operationType: 'sync_sales_order_operational_aggregates',
+              operatorId: BigInt(payload.operatorId ?? beforeData.createdBy),
+              beforeData,
+              afterData: {
+                ...nextPayload,
+                syncSource: payload.source,
+              },
+            },
+          });
+
+          return {
+            id: payload.salesOrderId,
+            status: nextPayload.status,
+            purchaseAggregateStatus: nextPayload.purchaseAggregateStatus,
+            shipmentAggregateStatus: nextPayload.shipmentAggregateStatus,
+            receiptSendStatus: nextPayload.receiptSendStatus,
+            afterSalesEndStatus: nextPayload.afterSalesEndStatus,
+            receiptStatus: nextPayload.receiptStatus,
+            financeStatus: nextPayload.financeStatus,
+          };
+        }
+      });
+      if (result) return result;
+      throw new NotFoundException('销售单不存在');
     }
 
     const existing = this.store.getSalesOrder(payload.salesOrderId);

@@ -25,6 +25,9 @@ export type ShipmentBatchListQuery = Omit<CommonListQuery, 'sortBy'> & {
 };
 
 export type ShipmentBatchListItem = {
+  ownerId?: number;
+  ownerName?: string;
+  createdById?: number;
   moduleLabel: string;
   docNo: string;
   title: string;

@@ -62,7 +62,7 @@ it('shows an assigned purchase owner as read-only beside the claim action', asyn
   })}</>);
   expect(screen.getByRole('button', { name: '认领并提交采购审批' })).toBeInTheDocument();
   expect(screen.queryByRole('combobox', { name: /采购负责人 Purchase Owner/ })).not.toBeInTheDocument();
-  expect(screen.getByText('Leo')).toBeInTheDocument();
+  expect(screen.getByRole('article', { name: '采购单摘要' })).toHaveTextContent('Leo');
   expect(screen.getByRole('textbox', { name: /采购单标题/ })).toHaveValue('S901-风扇-星河供应');
   const saveButton = screen.getByRole('button', { name: '保存草稿' });
   const submitButton = screen.getByRole('button', { name: '认领并提交采购审批' });

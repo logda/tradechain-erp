@@ -16,6 +16,8 @@ function createSignedSession(
     role: string;
     user: string;
     username?: string;
+    userId?: number;
+    dataScope?: string;
     modules?: string[];
     actions?: string[];
     exp?: number;
@@ -297,6 +299,8 @@ describe('FormalRoleGuard', () => {
       role: 'sales',
       user: 'Zoe',
       username: 'zoe',
+      userId: 3,
+      dataScope: 'own_sales',
       modules: ['sales'],
       exp: Math.floor(Date.now() / 1000) + 300,
     });
@@ -330,6 +334,8 @@ describe('FormalRoleGuard', () => {
       role: 'sales',
       user: 'Zoe',
       username: 'zoe',
+      userId: 3,
+      dataScope: 'own_sales',
       modules: ['sales'],
       exp: Math.floor(Date.now() / 1000) + 300,
     });

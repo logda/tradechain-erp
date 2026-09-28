@@ -1,3 +1,4 @@
+import { resolveFormalUserName, resolveRuntimeFormalUserName } from '../auth/formal-user-name';
 import {
   BadRequestException,
   Inject,
@@ -8,7 +9,6 @@ import {
 import { buildSequentialDocumentCode, type QuoteListItem, type QuoteListQuery, type QuoteListResponse } from '@erp/shared';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { UpdateQuoteDraftDto } from './dto/update-quote-draft.dto';
-import { quoteListData } from './quote-list.data';
 import { resolveQuoteStore } from './quote.store';
 import { PrismaService } from '../storage/prisma.service';
 import { resolveStorageMode } from '../storage/storage-mode';
@@ -176,19 +176,7 @@ function normalizeTriStateFilter(value: 'all' | 'yes' | 'no' | undefined) {
 }
 
 function resolveSalesUserName(userId: number) {
-  if (userId === 3 || userId === 2001) {
-    return 'Zoe';
-  }
-
-  if (userId === 4 || userId === 2002) {
-    return 'Leo';
-  }
-
-  if (userId === 1) {
-    return 'Admin';
-  }
-
-  return 'Mia';
+  return resolveRuntimeFormalUserName(userId);
 }
 
 function resolveCurrentProgress(detail: {
@@ -464,6 +452,7 @@ function buildInquiryFromQuote(
     customerFullName: quote.customerFullName,
     customerCode: quote.customerCode,
     customerId: quote.customerId,
+    createdById: quote.salesUserId,
     createdBy: quote.salesUserName ?? resolveSalesUserName(quote.salesUserId),
     supplierCount: 0,
     comparisonSummary: '已由报价单生成，等待采购询价。',
@@ -626,6 +615,8 @@ function toQuoteListItem(item: QuoteDetailRecord): QuoteListItem {
     customerCode: item.customerCode,
     customerId: item.customerId,
     salesUserId: item.salesUserId,
+    ownerId: item.salesUserId,
+    createdById: item.salesUserId,
     createdBy: item.salesUserName ?? resolveSalesUserName(item.salesUserId),
     sourceType,
     inquiryDate: item.inquiryDate,
@@ -879,7 +870,7 @@ export class QuoteService {
             orderBy: { createdAt: 'desc' },
           })) as PrismaBusinessDocumentRecord[]
         ).map(toQuoteDocumentPayload).map(toQuoteListItem)
-      : [...quoteListData, ...this.store.listQuotes().map(toQuoteListItem)];
+      : this.store.listQuotes().map(toQuoteListItem);
     const counterpartyService = new CounterpartyService(this.prisma);
     const enrichedSourceItems = await enrichQuoteListItems(
       sourceItems,
@@ -994,7 +985,7 @@ export class QuoteService {
     };
   }
 
-  async create(dto: CreateQuoteDto) {
+  async create(dto: CreateQuoteDto, actorId?: number) {
     const counterpartyService = new CounterpartyService(this.prisma);
     const submitMode = resolveQuoteSubmitMode(dto.submitMode);
     const documentType = normalizeQuoteDocumentType(dto.documentType);
@@ -1013,7 +1004,7 @@ export class QuoteService {
       productSource,
       productService,
     );
-    const salesUserName = resolveSalesUserName(dto.salesUserId);
+    const salesUserName = await resolveFormalUserName(dto.salesUserId, this.prisma);
     const quoteCustomer = await resolveQuoteCustomer(dto, counterpartyService);
     const quoteNo =
       documentType === 'demand'
@@ -1104,14 +1095,14 @@ export class QuoteService {
           bizType: 'quote',
           bizId: updated.id,
           operationType: 'create_quote',
-          operatorId: BigInt(dto.salesUserId),
+          operatorId: BigInt(actorId ?? dto.salesUserId),
           beforeData: undefined,
           afterData: finalPayload,
         },
       });
 
       if (submitMode === 'submit') {
-        return this.submitDraftQuote(finalPayload.id);
+        return this.submitDraftQuote(finalPayload.id, actorId);
       }
 
       return {
@@ -1153,13 +1144,13 @@ export class QuoteService {
       bizType: 'quote',
       bizId: created.id,
       operationType: 'create_quote',
-      operatorId: dto.salesUserId,
+      operatorId: actorId ?? dto.salesUserId,
       beforeData: null,
       afterData: created,
     });
 
     if (submitMode === 'submit') {
-      return this.submitDraftQuote(created.id);
+      return this.submitDraftQuote(created.id, actorId);
     }
 
     return created;
@@ -1235,7 +1226,7 @@ export class QuoteService {
     };
   }
 
-  async submitDraftQuote(id: number) {
+  async submitDraftQuote(id: number, actorId?: number) {
     if (this.shouldUsePrisma()) {
       const created = (await this.prismaDb!.businessDocument.findUnique({
         where: { id: BigInt(id) },
@@ -1281,7 +1272,7 @@ export class QuoteService {
           bizType: 'quote',
           bizId: created.id,
           operationType,
-          operatorId: BigInt(detail.salesUserId),
+          operatorId: BigInt(actorId ?? detail.salesUserId),
           beforeData: detail,
           afterData: submitted,
         },
@@ -1324,7 +1315,7 @@ export class QuoteService {
       bizType: 'quote',
       bizId: submitted.id,
       operationType,
-      operatorId: submitted.salesUserId,
+      operatorId: actorId ?? submitted.salesUserId,
       beforeData: created,
       afterData: submitted,
     });
@@ -1354,7 +1345,7 @@ export class QuoteService {
       before: existing,
       after: approved,
       operationType: 'approve_demand',
-      operatorId: existing.salesUserId,
+      operatorId: session?.userId ?? existing.salesUserId,
       operatorName: session?.user,
     });
     return approved;
@@ -1423,7 +1414,7 @@ export class QuoteService {
       before: existing,
       after: confirmed,
       operationType: 'boss_confirm_quote_price',
-      operatorId: existing.salesUserId,
+      operatorId: session?.userId ?? existing.salesUserId,
       operatorName: session?.user,
     });
     return confirmed;
@@ -1516,7 +1507,7 @@ export class QuoteService {
           before: existing,
           after: updated,
           operationType: 'record_customer_feedback',
-          operatorId: existing.salesUserId,
+          operatorId: session?.userId ?? existing.salesUserId,
           operatorName: operatedBy,
         },
         prismaDb,
@@ -1923,7 +1914,7 @@ export class QuoteService {
     });
   }
 
-  async updateDraft(id: number, dto: UpdateQuoteDraftDto) {
+  async updateDraft(id: number, dto: UpdateQuoteDraftDto, actorId?: number) {
     const counterpartyService = new CounterpartyService(this.prisma);
     const submitMode = resolveQuoteSubmitMode(dto.submitMode);
     const requestedProductSource = normalizeQuoteProductSource(dto);
@@ -1933,7 +1924,7 @@ export class QuoteService {
         productSource: requestedProductSource,
       });
     }
-    const salesUserName = resolveSalesUserName(dto.salesUserId);
+    const salesUserName = await resolveFormalUserName(dto.salesUserId, this.prisma);
     const quoteCustomer = await resolveQuoteCustomer(dto, counterpartyService);
     let customerId = quoteCustomer.customerId;
     let customerName = quoteCustomer.customerName;
@@ -2037,14 +2028,14 @@ export class QuoteService {
           bizType: 'quote',
           bizId: existing.id,
           operationType: 'update_quote_draft',
-          operatorId: BigInt(dto.salesUserId),
+          operatorId: BigInt(actorId ?? dto.salesUserId),
           beforeData: before,
           afterData: saved,
         },
       });
 
       if (submitMode === 'submit') {
-        return this.submitDraftQuote(id);
+        return this.submitDraftQuote(id, actorId);
       }
 
       return saved;
@@ -2109,7 +2100,7 @@ export class QuoteService {
       bizType: 'quote',
       bizId: saved.id,
       operationType: 'update_quote_draft',
-      operatorId: dto.salesUserId,
+      operatorId: actorId ?? dto.salesUserId,
       beforeData: existing,
       afterData: saved,
     });
@@ -2158,10 +2149,7 @@ export class QuoteService {
         const detail = toQuoteDocumentPayload(created);
         const listItem = toQuoteListItem(detail);
         if (
-          session?.role &&
-          !isFormalAdminOrBoss(session?.role) &&
-          session?.role !== 'sales_manager' &&
-          !matchesFormalUser(session ?? {}, listItem)
+          !filterVisibleFormalItems([listItem], session ?? {}, ['admin', 'boss', 'sales_manager']).length
         ) {
           throw new NotFoundException('报价单不存在');
         }
@@ -2192,10 +2180,7 @@ export class QuoteService {
       };
       const listItem = toQuoteListItem(normalizedCreated);
       if (
-        session?.role &&
-        !isFormalAdminOrBoss(session?.role) &&
-        session?.role !== 'sales_manager' &&
-        !matchesFormalUser(session ?? {}, listItem)
+        !filterVisibleFormalItems([listItem], session ?? {}, ['admin', 'boss', 'sales_manager']).length
       ) {
         throw new NotFoundException('报价单不存在');
       }
@@ -2260,10 +2245,7 @@ export class QuoteService {
     });
 
     if (
-      session?.role &&
-      !isFormalAdminOrBoss(session?.role) &&
-      session?.role !== 'sales_manager' &&
-      !matchesFormalUser(session ?? {}, fallbackListItem)
+      !filterVisibleFormalItems([fallbackListItem], session ?? {}, ['admin', 'boss', 'sales_manager']).length
     ) {
       throw new NotFoundException('报价单不存在');
     }

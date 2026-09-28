@@ -1,7 +1,9 @@
 'use client';
 
 import { FilterPanel } from '../../_components/filter-panel';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { workspaceContentReadyEvent } from '../../_lib/workspace-navigation';
 import {
   CreateProductForm,
   type PricingMode,
@@ -69,6 +71,7 @@ type ProductMasterDataClientProps = {
   initialItems: ProductItem[];
   initialTotal: number;
   initialQuery: ProductQuery;
+  hasExplicitQuery?: boolean;
   canManageMasterData: boolean;
   canConfigureFields?: boolean;
   salesView?: boolean;
@@ -89,66 +92,31 @@ type ProductMasterDataClientProps = {
 
 const sectionStyle = {
   border: '1px solid #d8e1ea',
-  borderRadius: '24px',
-  padding: '22px',
-  background:
-    'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)',
-  boxShadow: '0 18px 40px rgba(15, 23, 42, 0.05)',
+  borderRadius: '12px',
+  padding: '14px',
+  background: '#ffffff',
 } satisfies React.CSSProperties;
 
-const sectionHeadingStyle = {
-  marginTop: 0,
-} satisfies React.CSSProperties;
-
-const metricsGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-  gap: '14px',
-  marginTop: '18px',
-} satisfies React.CSSProperties;
-
-const metricCardStyle = {
-  border: '1px solid #dbe4ee',
-  borderRadius: '20px',
-  padding: '18px 18px 16px',
-  background:
-    'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,245,249,0.94) 100%)',
-  display: 'grid',
-  gap: '8px',
-  minHeight: '112px',
-  alignContent: 'start',
-} satisfies React.CSSProperties;
-
-const metricLabelStyle = {
-  fontSize: '12px',
-  color: '#64748b',
-  letterSpacing: '0.04em',
-} satisfies React.CSSProperties;
-
-const metricValueStyle = {
-  fontSize: '28px',
-  lineHeight: 1,
-  color: '#0f172a',
-  fontWeight: 800,
-} satisfies React.CSSProperties;
-
-const metricHintStyle = {
+const summaryStyle = {
+  display: 'flex',
+  gap: '16px',
+  flexWrap: 'wrap' as const,
+  marginTop: '10px',
   fontSize: '12px',
   color: '#475569',
-  lineHeight: 1.6,
 } satisfies React.CSSProperties;
 
 const tableWrapStyle = {
   overflowX: 'auto' as const,
   border: '1px solid #d8e1ea',
-  borderRadius: '18px',
+  borderRadius: '8px',
   background: '#ffffff',
 } satisfies React.CSSProperties;
 
 const tableStyle = {
   width: '100%',
   borderCollapse: 'collapse' as const,
-  minWidth: '1240px',
+  minWidth: '860px',
 } satisfies React.CSSProperties;
 
 const headCellStyle = {
@@ -215,6 +183,13 @@ function buildProductQueryParams(query: ProductQuery) {
   params.set('pageSize', String(query.pageSize));
 
   return params;
+}
+
+function isProductQuery(value: unknown): value is ProductQuery {
+  const query = value as ProductQuery | null;
+  return !!query && Number.isInteger(query.page) && query.page > 0 && Number.isInteger(query.pageSize) && query.pageSize > 0 &&
+    ['keyword', 'status', 'category', 'ownerName', 'productStage', 'pricingMode'].every((name) =>
+      query[name as keyof ProductQuery] == null || typeof query[name as keyof ProductQuery] === 'string');
 }
 
 function hasValidProductListResponse(value: unknown): value is {
@@ -336,6 +311,7 @@ export function ProductMasterDataClient({
   initialItems,
   initialTotal,
   initialQuery,
+  hasExplicitQuery = false,
   canManageMasterData,
   canConfigureFields = false,
   salesView = false,
@@ -362,6 +338,41 @@ export function ProductMasterDataClient({
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const requestSeqRef = useRef(0);
+  const userId = Number(requestHeaders['x-erp-user-id']);
+  const cacheKey = Number.isSafeInteger(userId) && userId > 0 && requestHeaders['x-erp-role']
+    ? `erp-product-query:${userId}:${requestHeaders['x-erp-role']}:${requestHeaders['x-erp-data-scope'] ?? 'default'}` : null;
+  const [cacheReady, setCacheReady] = useState(false);
+  const successfulQueryRef = useRef(initialQuery);
+  const restoringQueryRef = useRef(false);
+
+  useEffect(() => {
+    if (!cacheKey) return;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(cacheKey) ?? 'null');
+      if (saved && isProductQuery(saved.applied) && isProductQuery(saved.draft)) {
+        const sameQuery = buildProductQueryParams(saved.applied).toString() === buildProductQueryParams(initialQuery).toString();
+        if (!hasExplicitQuery || sameQuery) {
+          successfulQueryRef.current = saved.applied;
+          setDraftQuery(saved.draft);
+          if (!sameQuery) {
+            restoringQueryRef.current = true;
+            void fetchProducts(saved.applied);
+          }
+        }
+      }
+    } catch { /* No usable query context is available. */ }
+    setCacheReady(true);
+  }, [cacheKey]);
+  useEffect(() => {
+    if (!cacheKey || !cacheReady) return;
+    try { sessionStorage.setItem(cacheKey, JSON.stringify({ applied: successfulQueryRef.current, draft: draftQuery })); }
+    catch { /* Query controls remain usable without storage. */ }
+  }, [cacheKey, cacheReady, appliedQuery, draftQuery]);
+  useEffect(() => {
+    if (!cacheReady || isLoading || !restoringQueryRef.current) return;
+    restoringQueryRef.current = false;
+    if (!loadError) window.dispatchEvent(new Event(workspaceContentReadyEvent));
+  }, [cacheReady, isLoading, loadError, appliedQuery]);
 
   const formalCount = countProductsByStage(items, 'formal');
   const tieredCount = countProductsByPricingMode(items, 'tiered');
@@ -399,8 +410,11 @@ export function ProductMasterDataClient({
         page: result.page,
         pageSize: result.pageSize,
       };
+      successfulQueryRef.current = resolvedQuery;
       setAppliedQuery(resolvedQuery);
-      setDraftQuery(resolvedQuery);
+      setDraftQuery((current) =>
+        buildProductQueryParams({ ...current, page: nextQuery.page, pageSize: nextQuery.pageSize }).toString() === buildProductQueryParams(nextQuery).toString()
+          ? resolvedQuery : current);
     } catch (error) {
       if (requestSeqRef.current !== nextRequestSeq) {
         return;
@@ -473,45 +487,28 @@ export function ProductMasterDataClient({
     });
   }
 
+  const totalPages = Math.max(1, Math.ceil(total / Math.max(appliedQuery.pageSize, 1)));
+  const appliedSummary = [
+    appliedQuery.keyword ? `关键词：${appliedQuery.keyword}` : '',
+    appliedQuery.category ? `分类：${({ electronics: '电子类', consumables: '耗材类', service: '服务类' } as Record<string, string>)[appliedQuery.category] ?? appliedQuery.category}` : '',
+    appliedQuery.status ? `状态：${appliedQuery.status === 'active' ? '启用' : appliedQuery.status === 'inactive' ? '停用' : appliedQuery.status}` : '',
+    appliedQuery.ownerName ? `负责人：${appliedQuery.ownerName}` : '',
+    appliedQuery.productStage ? `阶段：${({ formal: '正式产品', quote_candidate: '报价候选产品' } as Record<string, string>)[appliedQuery.productStage] ?? appliedQuery.productStage}` : '',
+    appliedQuery.pricingMode ? `定价：${({ tiered: '阶梯报价', fixed: '固定报价' } as Record<string, string>)[appliedQuery.pricingMode] ?? appliedQuery.pricingMode}` : '',
+  ].filter(Boolean).join('，');
+
+  function clearFilters() {
+    const nextQuery = { page: 1, pageSize: appliedQuery.pageSize };
+    setDraftQuery(nextQuery);
+    void fetchProducts(nextQuery);
+  }
+
   return (
     <>
       <section style={sectionStyle}>
-        <h3 style={sectionHeadingStyle}>当前页统计</h3>
-        <div style={metricsGridStyle}>
-          <article style={metricCardStyle}>
-            <span style={metricLabelStyle}>当前页商品</span>
-            <strong style={metricValueStyle}>{items.length}</strong>
-            <span style={metricHintStyle}>按当前筛选条件和分页视图加载的产品数量。</span>
-          </article>
-          <article style={metricCardStyle}>
-            <span style={metricLabelStyle}>正式产品</span>
-            <strong style={metricValueStyle}>{formalCount}</strong>
-            <span style={metricHintStyle}>已可进入标准下游流程的正式产品记录。</span>
-          </article>
-          <article style={metricCardStyle}>
-            <span style={metricLabelStyle}>阶梯报价</span>
-            <strong style={metricValueStyle}>{tieredCount}</strong>
-            <span style={metricHintStyle}>当前页中启用数量阶梯报价模式的产品数量。</span>
-          </article>
-          {!salesView ? <article style={metricCardStyle}>
-            <span style={metricLabelStyle}>已关联供应商</span>
-            <strong style={metricValueStyle}>{linkedSupplierCount}</strong>
-            <span style={metricHintStyle}>已带出工厂或供应商编码的产品资料数。</span>
-          </article> : null}
-        </div>
-      </section>
-
-      {canConfigureFields ? <CounterpartyCustomFieldManager fields={customFields} onChange={setCustomFields} endpoint={`${mutationApiBaseUrl}/products/custom-fields`} requestHeaders={requestHeaders} /> : null}
-
-      {canManageMasterData ? <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        {createNotice ? <p role="status" style={{ margin: 0, padding: '10px 14px', border: '1px solid #bbf7d0', borderRadius: '12px', color: '#166534', background: '#f0fdf4' }}>{createNotice}</p> : null}
-        <button ref={openCreateRef} type="button" className="erp-button erp-button--primary" onClick={() => { setCreateNotice(null); setHasOpenedCreate(true); setIsCreateOpen(true); }}>新增</button>
-      </div> : null}
-
-      <FilterPanel title="筛选商品">
-        <form onSubmit={handleFilterSubmit} className="erp-filter-form">
-          <div className="erp-form-grid">
-            <label className="erp-form-field">
+        <form onSubmit={handleFilterSubmit} className="erp-filter-form" style={{ display: 'grid', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'end', gap: '10px', flexWrap: 'wrap' }}>
+            <label className="erp-form-field" style={{ flex: '1 1 280px' }}>
               关键词 Keyword
               <input
                 name="keyword"
@@ -522,6 +519,14 @@ export function ProductMasterDataClient({
                 className="erp-control"
               />
             </label>
+            <button className="erp-button erp-button--primary" type="submit" disabled={isLoading}>
+              {isLoading ? '查询中...' : '查询'}
+            </button>
+            <span style={{ alignSelf: 'center', color: '#64748b', fontSize: '12px' }}>{canManageMasterData ? '可维护产品' : '产品只读'}</span>
+            {canManageMasterData ? <button ref={openCreateRef} type="button" className="erp-button erp-button--primary" onClick={() => { setCreateNotice(null); setHasOpenedCreate(true); setIsCreateOpen(true); }}>新增</button> : null}
+          </div>
+          <FilterPanel title="筛选商品" appliedSummary={appliedSummary} onClear={clearFilters}>
+          <div className="erp-form-grid">
             <label className="erp-form-field">
               分类 Category
               <select
@@ -590,38 +595,31 @@ export function ProductMasterDataClient({
               </select>
             </label>
           </div>
-          <div className="erp-filter-actions" style={{ justifyContent: 'flex-end', marginTop: '16px' }}>
-            <button
-              className="erp-button erp-button--primary"
-              type="button"
-              disabled={isLoading}
-              onClick={(event) => applyFilters(event.currentTarget.form)}
-            >
-              {isLoading ? '查询中...' : '查询'}
-            </button>
-          </div>
+          </FilterPanel>
           {loadError ? <p style={{ margin: 0, color: '#b91c1c' }}>{loadError}</p> : null}
         </form>
-      </FilterPanel>
+        <div style={summaryStyle}>
+          <span><span>当前页商品</span> <strong>{items.length}</strong></span>
+          <span><span>正式产品</span> <strong>{formalCount}</strong></span>
+          <span><span>阶梯报价</span> <strong>{tieredCount}</strong></span>
+          {!salesView ? <span><span>已关联供应商</span> <strong>{linkedSupplierCount}</strong></span> : null}
+        </div>
+        {createNotice ? <p role="status" style={{ margin: '10px 0 0', color: '#166534', fontSize: '13px' }}>{createNotice}</p> : null}
+      </section>
 
       <section style={sectionStyle}>
-        <h3 style={{ marginTop: 0 }}>商品列表</h3>
+        <h3 style={{ margin: '0 0 10px', fontSize: '16px' }}>商品列表</h3>
         <div style={tableWrapStyle}>
           <table style={tableStyle}>
             <thead>
               <tr>
                 <th style={headCellStyle}>{salesView ? '产品编码' : '产品编码 / 采购编码'}</th>
                 <th style={headCellStyle}>产品名称 Product Name</th>
-                <th style={headCellStyle}>英文名称 Name EN</th>
                 <th style={headCellStyle}>品牌 / 分类</th>
-                {!salesView ? <th style={headCellStyle}>工厂 / 供应商</th> : null}
-                <th style={headCellStyle}>型号 / 规格 / 重量</th>
-                <th style={headCellStyle}>包装信息</th>
-                <th style={headCellStyle}>单位 Unit</th>
+                <th style={headCellStyle}>型号 / 规格</th>
                 <th style={headCellStyle}>阶段 / 价格</th>
                 <th style={headCellStyle}>状态</th>
-                {!salesView ? <th style={headCellStyle}>编辑 Edit</th> : null}
-                {!salesView ? <th style={headCellStyle}>操作 Action</th> : null}
+                <th style={headCellStyle}>操作 Action</th>
               </tr>
             </thead>
             <tbody>
@@ -644,8 +642,8 @@ export function ProductMasterDataClient({
           </table>
         </div>
         <nav style={paginationWrapStyle} aria-label="商品分页">
-          <span>{`第 ${appliedQuery.page} / ${Math.max(1, Math.ceil(total / Math.max(appliedQuery.pageSize, 1)))} 页，共 ${total} 条`}</span>
-          <div style={paginationActionWrapStyle}>
+          <span>{`第 ${appliedQuery.page} / ${totalPages} 页，共 ${total} 条`}</span>
+          {totalPages > 1 ? <div style={paginationActionWrapStyle}>
             {appliedQuery.page > 1 ? (
               <button
                 type="button"
@@ -670,9 +668,16 @@ export function ProductMasterDataClient({
             ) : (
               <span style={paginationDisabledActionStyle}>下一页</span>
             )}
-          </div>
+          </div> : null}
         </nav>
       </section>
+      {canManageMasterData ? <details style={sectionStyle}>
+        <summary style={{ cursor: 'pointer', color: '#334155', fontWeight: 700 }}>产品设置</summary>
+        <div style={{ display: 'grid', gap: '12px', paddingTop: '12px' }}>
+          <Link href="/app/master-data/product-code-rule" style={{ color: '#334155', fontWeight: 700 }}>产品编码规则设置</Link>
+          {canConfigureFields ? <CounterpartyCustomFieldManager fields={customFields} onChange={setCustomFields} endpoint={`${mutationApiBaseUrl}/products/custom-fields`} requestHeaders={requestHeaders} /> : null}
+        </div>
+      </details> : null}
       {hasOpenedCreate ? <div aria-hidden={!isCreateOpen} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.58)', display: isCreateOpen ? 'grid' : 'none', placeItems: 'center', padding: '20px' }}>
         <section role="dialog" aria-modal="true" aria-label="新增产品" style={{ width: 'min(1100px, 100%)', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff', color: '#0f172a', borderRadius: '20px', boxShadow: '0 24px 80px rgba(15, 23, 42, 0.28)' }}>
           <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', padding: '10px 16px', borderBottom: '1px solid #e2e8f0', background: '#fff' }}>

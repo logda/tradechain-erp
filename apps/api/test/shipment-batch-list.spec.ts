@@ -1,6 +1,17 @@
+import { useListFixtures } from './helpers/list-fixtures';
 import { ShipmentBatchService } from '../src/shipment-batch/shipment-batch.service';
 
 describe('ShipmentBatchService list', () => {
+  useListFixtures('shipment');
+  it('honors signed own scopes even for bosses and administrators', async () => {
+    const service = new ShipmentBatchService();
+    for (const role of ['boss', 'admin'] as const) {
+      expect((await service.list({}, { role, userId: 57, dataScope: 'own_purchase' })).items).toEqual([]);
+      await expect(service.getDetail(1, { role, userId: 57, dataScope: 'own_purchase' })).rejects.toThrow();
+    }
+    expect((await service.list({}, { role: 'sales', userId: 57, dataScope: 'sales_team' })).items).toHaveLength(3);
+  });
+
   it('filters shipment batches by advanced fields and returns applied filters', async () => {
     const service = new ShipmentBatchService();
 

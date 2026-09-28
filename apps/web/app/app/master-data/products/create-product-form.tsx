@@ -129,23 +129,17 @@ const factorySourceModeLabels: Record<FactorySourceMode, string> = {
 
 const formStyle = {
   display: 'grid',
-  gap: '22px',
+  gap: '14px',
 } satisfies React.CSSProperties;
 
 const heroCardStyle = {
   display: 'grid',
-  gap: '16px',
-  padding: '22px 24px',
-  border: '1px solid #dbe4ee',
-  borderRadius: '22px',
-  background:
-    'radial-gradient(circle at top left, rgba(15,118,110,0.12) 0%, rgba(255,255,255,0.98) 34%, rgba(248,250,252,0.96) 100%)',
-  boxShadow: '0 16px 42px rgba(15, 23, 42, 0.05)',
+  gap: '6px',
 } satisfies React.CSSProperties;
 
 const heroTitleStyle = {
   margin: 0,
-  fontSize: '24px',
+  fontSize: '20px',
   lineHeight: 1.2,
   color: '#0f172a',
 } satisfies React.CSSProperties;
@@ -158,44 +152,13 @@ const heroCopyStyle = {
   maxWidth: '920px',
 } satisfies React.CSSProperties;
 
-const heroMetaGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-  gap: '12px',
-} satisfies React.CSSProperties;
-
-const heroMetaCardStyle = {
-  display: 'grid',
-  gap: '8px',
-  padding: '14px 16px',
-  border: '1px solid #d7e3ec',
-  borderRadius: '18px',
-  background: 'rgba(255,255,255,0.9)',
-} satisfies React.CSSProperties;
-
-const heroMetaLabelStyle = {
-  fontSize: '11px',
-  fontWeight: 700,
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase' as const,
-  color: '#64748b',
-} satisfies React.CSSProperties;
-
-const heroMetaValueStyle = {
-  fontSize: '14px',
-  lineHeight: 1.7,
-  color: '#0f172a',
-  fontWeight: 600,
-} satisfies React.CSSProperties;
-
 const sectionStyle = {
   display: 'grid',
-  gap: '16px',
-  padding: '20px 22px 22px',
+  gap: '12px',
+  padding: '14px',
   border: '1px solid #dbe4ee',
-  borderRadius: '22px',
+  borderRadius: '12px',
   background: '#ffffff',
-  boxShadow: '0 14px 32px rgba(15, 23, 42, 0.04)',
 } satisfies React.CSSProperties;
 
 const sectionHeaderStyle = {
@@ -296,10 +259,6 @@ const requiredMarkStyle = {
   color: '#dc2626',
   fontWeight: 700,
   marginLeft: '4px',
-} satisfies React.CSSProperties;
-
-const fullWidthFieldStyle = {
-  gridColumn: '1 / -1',
 } satisfies React.CSSProperties;
 
 const buttonStyle = {
@@ -650,29 +609,81 @@ export function CreateProductForm({
       <input type="hidden" name="currency" value="USD" />
       <input type="hidden" name="ownerName" value={createdBy} />
       <section style={heroCardStyle}>
-        <div style={{ display: 'grid', gap: '8px' }}>
+        <div style={{ display: 'grid', gap: '6px' }}>
           <h3 style={heroTitleStyle}>新增商品</h3>
           <p style={heroCopyStyle}>
-            这是正式商品主数据的建档入口。产品编码和采购编码均可手填或按各自规则自动生成。
+            填写产品资料与价格，编码可手填或自动生成。
           </p>
         </div>
-        <div style={heroMetaGridStyle}>
-          <article style={heroMetaCardStyle}>
-            <span style={heroMetaLabelStyle}>销售 / 采购编码模式</span>
-            <span style={heroMetaValueStyle}>
-              两类编码均可分别选择手工填写或自动生成。
-            </span>
-          </article>
-          <article style={heroMetaCardStyle}>
-            <span style={heroMetaLabelStyle}>当前编码规则</span>
-            <span style={heroMetaValueStyle}>
-              销售：{describeProductCodeRule(salesCodeRule)}；采购：{describeProductCodeRule(codeRule)}。
-            </span>
-          </article>
-          <article style={heroMetaCardStyle}>
-            <span style={heroMetaLabelStyle}>当前示例</span>
-            <span style={heroMetaValueStyle}>{generationPreview}</span>
-          </article>
+      </section>
+
+      <section style={sectionStyle}>
+        <div style={sectionHeaderStyle}>
+          <h4 style={sectionTitleStyle}>产品资料</h4>
+          <p style={sectionCopyStyle}>这一组维护产品主属性、分类和报价阶段，方便后续报价、采购、库存共用。</p>
+        </div>
+        <div style={gridStyle}>
+          <label style={labelStyle}>
+            品牌 Brand
+            <input aria-label="品牌 Brand" name="brand" style={inputStyle} />
+          </label>
+          <label style={labelStyle}>
+            型号 Model
+            <input aria-label="型号 Model" name="model" style={inputStyle} />
+          </label>
+          <label style={labelStyle}>
+            单个规格 Spec
+            <input aria-label="单个规格 Spec" name="spec" style={inputStyle} />
+          </label>
+          <label style={labelStyle}>
+            {renderRequiredLabel('产品名称 Product Name')}
+            <input aria-label="产品名称 Product Name" name="nameCn" style={inputStyle} />
+          </label>
+          <label style={labelStyle}>
+            英文名称 Name EN
+            <input aria-label="英文名称 Name EN" name="nameEn" style={inputStyle} />
+          </label>
+          <label style={labelStyle}>
+            {renderRequiredLabel('分类 Category')}
+            <select
+              aria-label="分类 Category"
+              name="category"
+              value={selectedCategory}
+              onChange={(event) => setSelectedCategory(event.target.value as ProductCategory)}
+              style={inputStyle}
+            >
+              {Object.entries(categoryLabels).map(([key, value]) => (
+                <option key={key} value={key}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={labelStyle}>
+            单位 Unit
+            <input aria-label="单位 Unit" name="unit" style={inputStyle} />
+          </label>
+          <label style={labelStyle}>
+            {renderRequiredLabel('产品阶段 Product Stage')}
+            <select
+              ref={productStageRef}
+              aria-label="产品阶段 Product Stage"
+              aria-invalid={state.error === '请选择产品阶段'}
+              name="productStage"
+              defaultValue=""
+              required
+              onChange={() => { if (state.error === '请选择产品阶段') setState(initialState); }}
+              style={inputStyle}
+            >
+              <option value="">请选择阶段 Select stage</option>
+              {Object.entries(productStageLabels).map(([key, value]) => (
+                <option key={key} value={key}>
+                  {value}
+                </option>
+              ))}
+            </select>
+            {state.error === '请选择产品阶段' ? <span role="alert" style={{ color: '#b91c1c', fontSize: '13px' }}>{state.error}</span> : null}
+          </label>
         </div>
       </section>
 
@@ -828,114 +839,9 @@ export function CreateProductForm({
 
       <section style={sectionStyle}>
         <div style={sectionHeaderStyle}>
-          <h4 style={sectionTitleStyle}>产品资料</h4>
-          <p style={sectionCopyStyle}>这一组维护产品主属性、分类和报价阶段，方便后续报价、采购、库存共用。</p>
+          <h4 style={sectionTitleStyle}>价格</h4>
         </div>
         <div style={gridStyle}>
-          <label style={labelStyle}>
-            品牌 Brand
-            <input aria-label="品牌 Brand" name="brand" style={inputStyle} />
-          </label>
-          <label style={labelStyle}>
-            型号 Model
-            <input aria-label="型号 Model" name="model" style={inputStyle} />
-          </label>
-          <label style={labelStyle}>
-            单个规格 Spec
-            <input aria-label="单个规格 Spec" name="spec" style={inputStyle} />
-          </label>
-          <label style={labelStyle}>
-            {renderRequiredLabel('产品名称 Product Name')}
-            <input aria-label="产品名称 Product Name" name="nameCn" style={inputStyle} />
-          </label>
-          <label style={labelStyle}>
-            英文名称 Name EN
-            <input aria-label="英文名称 Name EN" name="nameEn" style={inputStyle} />
-          </label>
-          <label style={labelStyle}>
-            {renderRequiredLabel('分类 Category')}
-            <select
-              aria-label="分类 Category"
-              name="category"
-              value={selectedCategory}
-              onChange={(event) => setSelectedCategory(event.target.value as ProductCategory)}
-              style={inputStyle}
-            >
-              {Object.entries(categoryLabels).map(([key, value]) => (
-                <option key={key} value={key}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label style={labelStyle}>
-            单位 Unit
-            <input aria-label="单位 Unit" name="unit" style={inputStyle} />
-          </label>
-          <label style={labelStyle}>
-            {renderRequiredLabel('产品阶段 Product Stage')}
-            <select
-              ref={productStageRef}
-              aria-label="产品阶段 Product Stage"
-              aria-invalid={state.error === '请选择产品阶段'}
-              name="productStage"
-              defaultValue=""
-              required
-              onChange={() => { if (state.error === '请选择产品阶段') setState(initialState); }}
-              style={inputStyle}
-            >
-              <option value="">请选择阶段 Select stage</option>
-              {Object.entries(productStageLabels).map(([key, value]) => (
-                <option key={key} value={key}>
-                  {value}
-                </option>
-              ))}
-            </select>
-            {state.error === '请选择产品阶段' ? <span role="alert" style={{ color: '#b91c1c', fontSize: '13px' }}>{state.error}</span> : null}
-          </label>
-        </div>
-      </section>
-
-      <section style={sectionStyle}>
-        <div style={sectionHeaderStyle}>
-          <h4 style={sectionTitleStyle}>包装与价格</h4>
-          <p style={sectionCopyStyle}>补齐重量、装箱、定价方式和默认价格。需要按数量报价时，直接在下方阶梯售价里维护。</p>
-        </div>
-        <div style={gridStyle}>
-          <label style={labelStyle}>
-            单个重量 Weight
-            <input
-              aria-label="单个重量 Weight"
-              name="singleWeight"
-              type="number"
-              step="0.001"
-              style={inputStyle}
-            />
-          </label>
-          <label style={labelStyle}>
-            装箱规格 Carton Spec
-            <input aria-label="装箱规格 Carton Spec" name="cartonSpec" style={inputStyle} />
-          </label>
-          <label style={labelStyle}>
-            装箱数量 Carton Qty
-            <input
-              aria-label="装箱数量 Carton Qty"
-              name="cartonQuantity"
-              type="number"
-              step="1"
-              style={inputStyle}
-            />
-          </label>
-          <label style={labelStyle}>
-            装箱重量 Carton Weight
-            <input
-              aria-label="装箱重量 Carton Weight"
-              name="cartonWeight"
-              type="number"
-              step="0.001"
-              style={inputStyle}
-            />
-          </label>
           <div style={labelStyle}>
             <input type="hidden" name="pricingMode" value={pricingMode} />
             <span>定价方式 Pricing Mode</span>
@@ -973,14 +879,35 @@ export function CreateProductForm({
               style={inputStyle}
             />
           </label>
-          <div style={fullWidthFieldStyle} />
         </div>
       </section>
-      <SalePriceTierEditor
-        pricingMode={pricingMode}
-        tiers={salePriceTiers}
-        onChange={setSalePriceTiers}
-      />
+      <details style={{ ...sectionStyle, display: 'block' }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#334155' }}>包装与重量</summary>
+        <div style={{ ...gridStyle, marginTop: '12px' }}>
+          <label style={labelStyle}>
+            单个重量 Weight
+            <input aria-label="单个重量 Weight" name="singleWeight" type="number" step="0.001" style={inputStyle} />
+          </label>
+          <label style={labelStyle}>
+            装箱规格 Carton Spec
+            <input aria-label="装箱规格 Carton Spec" name="cartonSpec" style={inputStyle} />
+          </label>
+          <label style={labelStyle}>
+            装箱数量 Carton Qty
+            <input aria-label="装箱数量 Carton Qty" name="cartonQuantity" type="number" step="1" style={inputStyle} />
+          </label>
+          <label style={labelStyle}>
+            装箱重量 Carton Weight
+            <input aria-label="装箱重量 Carton Weight" name="cartonWeight" type="number" step="0.001" style={inputStyle} />
+          </label>
+        </div>
+      </details>
+      {pricingMode === 'tiered' ? <details style={{ ...sectionStyle, display: 'block' }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#334155' }}>阶梯售价</summary>
+        <div style={{ marginTop: '12px' }}>
+          <SalePriceTierEditor pricingMode={pricingMode} tiers={salePriceTiers} onChange={setSalePriceTiers} compact />
+        </div>
+      </details> : null}
       <ProductCustomValueFields fields={customFields} />
       {state.error && state.error !== '请选择产品阶段' ? (
         <p role="alert" style={{ margin: 0, color: '#b91c1c', fontSize: '13px' }}>

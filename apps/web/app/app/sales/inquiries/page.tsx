@@ -1,3 +1,5 @@
+import { DataLoadError } from '../../_components/data-load-error';
+import { DataScopeNote } from '../../_components/data-scope-note';
 import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import { AuditLogTable } from '../../_components/audit-log-table';
@@ -12,7 +14,6 @@ import {
 } from '../../_lib/demo-session';
 import { formatCounterpartyBilingualDisplay } from '../../_lib/counterparty-display';
 import { hasValidAuditLogResponse, type AuditLogResponse } from '../../_lib/audit-log';
-import { getInquiryPreviewResponse } from './inquiry-preview';
 import { buildFormalApiRequestHeaders } from '../../_lib/formal-api-request-headers';
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -226,21 +227,25 @@ export default async function AppFormalInquiryPage({
   if (!canViewFormalInquiryModule(session)) {
     return (
       <AppShell
-        title="正式询价单"
+        title="询价单"
         subtitle="当前角色不在采购域内，不能查看询价单。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限访问正式询价单</h2>
+          <h2>无权限访问询价单</h2>
           <p>请切换到采购、采购主管、老板或管理员视角后再查看。</p>
         </section>
       </AppShell>
     );
   }
 
-  const result =
-    (await loadInquiryList(inquirySearchParams, session)) ??
-    getInquiryPreviewResponse(query);
+  const result = await loadInquiryList(inquirySearchParams, session);
+  if (!result) {
+    return <AppShell title="询价单" session={session}>
+      <DataScopeNote session={session} />
+      <DataLoadError label="询价单列表" />
+    </AppShell>;
+  }
   const auditLogs = await loadInquiryAuditLogs(session);
   const pendingInquiryCount = result.items.filter(
     (item) => item.status === 'pending_inquiry',
@@ -271,11 +276,12 @@ export default async function AppFormalInquiryPage({
 
   return (
     <AppShell
-      title="正式询价单"
+      title="询价单"
       subtitle="询价单承接供应商比价和老板确认，是报价和销售转单的中间环节。"
       session={session}
     >
 
+      <DataScopeNote session={session} />
       <StatStrip
         items={[
           { label: '全部', value: result.total },

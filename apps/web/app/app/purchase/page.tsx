@@ -11,6 +11,10 @@ import {
   canUseFormalShipmentUpdateActions,
 } from '../_lib/formal-access';
 import { getFormalTodos } from '../_lib/formal-todos';
+import { loadFormalTodos } from '../_lib/load-formal-todos';
+import { TodoGroup } from '../_components/todo-group';
+import { DataLoadError } from '../_components/data-load-error';
+import { DataScopeNote } from '../_components/data-scope-note';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -85,13 +89,15 @@ export default async function AppPurchasePage({
     );
   }
 
-  const purchaseTodos = getFormalTodos(session).filter(
+  const liveTodos = await loadFormalTodos(session);
+  const todos = getFormalTodos(session, liveTodos?.items ?? []);
+  const purchaseTodos = todos.filter(
     (todo) => todo.domain === 'purchase',
   );
-  const operationsTodos = getFormalTodos(session).filter(
+  const operationsTodos = todos.filter(
     (todo) => todo.domain === 'operations',
   );
-  const afterSalesTodos = getFormalTodos(session).filter(
+  const afterSalesTodos = todos.filter(
     (todo) => todo.domain === 'after_sales',
   );
 
@@ -100,8 +106,10 @@ export default async function AppPurchasePage({
       title="采购工作台"
       subtitle="采购入口先聚合采购单、发货协同、售后协同与待办，再进入具体列表。"
       session={session}
+      todoCountOverride={liveTodos?.total ?? null}
     >
-      <StatStrip
+      <DataScopeNote session={session} generatedAt={liveTodos?.generatedAt} />
+      {liveTodos ? <StatStrip
         items={[
           { label: '采购待办', value: purchaseTodos.length },
           { label: '发货待办', value: operationsTodos.length },
@@ -114,7 +122,12 @@ export default async function AppPurchasePage({
               afterSalesTodos.length,
           },
         ]}
-      />
+      /> : <DataLoadError label="待办" />}
+      {liveTodos ? <div data-todo-block className="erp-home-todo-groups">
+        <TodoGroup title="采购待办" todos={purchaseTodos} />
+        <TodoGroup title="发货待办" todos={operationsTodos} />
+        <TodoGroup title="售后待办" todos={afterSalesTodos} />
+      </div> : null}
 
       <section style={sectionStyle}>
         <div>
@@ -184,17 +197,11 @@ export default async function AppPurchasePage({
           >
             待询价单
           </Link>
-          <Link href="/app/warehouses" style={quickActionLinkStyle}>
-            查看仓库主数据
-          </Link>
           {canUseFormalShipmentUpdateActions(session) ? (
             <Link href="/app/shipment-batches/new" style={quickActionLinkStyle}>
               创建发货批次
             </Link>
           ) : null}
-          <Link href="/app/todos#purchase" style={quickActionLinkStyle}>
-            查看采购待办
-          </Link>
         </div>
       </section>
     </AppShell>

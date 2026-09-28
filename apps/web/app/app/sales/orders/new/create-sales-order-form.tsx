@@ -3,6 +3,7 @@
 import React from 'react';
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { SavedDraftResume, forgetSavedDraft } from '../../../_components/saved-draft-resume';
 import { useMutationAttempt } from '../../../_lib/use-mutation-attempt';
 import { createMutationRequestKey } from '../../../_lib/mutation-request-key';
 import {
@@ -857,6 +858,7 @@ export function CreateSalesOrderForm({
   const autosaveRequestKeyRef = useRef<string | null>(null);
   const isSubmittingRef = useRef(false);
   const draftSalesOrderIdRef = useRef<number | null>(initialSalesOrder?.id ?? null);
+  const hasPendingFiles = selectedAttachmentCount > 0 || Object.values(selectedFactoryPicPreviewsByLineId).some(files => files.length > 0);
   const selectedFactoryPicPreviewUrlsRef = useRef<Record<number, string[]>>({});
   const [customerEntryMode, setCustomerEntryMode] = useState<'existing' | 'manual'>(
     initialSalesOrder?.customerEntryMode === 'manual' ? 'manual' : 'existing',
@@ -921,6 +923,11 @@ export function CreateSalesOrderForm({
       return;
     }
 
+    const seq = ++autosaveSeqRef.current;
+    if (formRef.current) formRef.current.dataset.saveState = 'waiting';
+    setAutosaveStatus('waiting');
+    setAutosaveMessage('尚未保存，稍后自动保存草稿');
+
     if (autosaveRunningRef.current) {
       autosaveQueuedRef.current = true;
       return;
@@ -930,10 +937,7 @@ export function CreateSalesOrderForm({
       clearTimeout(autosaveTimerRef.current);
     }
 
-    setAutosaveStatus('waiting');
-    setAutosaveMessage('正在等待字段稳定后自动保存草稿');
-    const seq = autosaveSeqRef.current + 1;
-    autosaveSeqRef.current = seq;
+
     autosaveTimerRef.current = setTimeout(async () => {
       const form = formRef.current;
       if (!form || isSubmittingRef.current) {
@@ -967,7 +971,7 @@ export function CreateSalesOrderForm({
 
           if (result.error) {
             setAutosaveStatus('error');
-            setAutosaveMessage(result.error);
+            setAutosaveMessage(`保存失败：${result.error}`);
             return;
           }
 
@@ -981,6 +985,8 @@ export function CreateSalesOrderForm({
             titleInputRef.current.value = result.title;
           }
 
+          form.dataset.saveState = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="file"]')).some(input => (input.files?.length ?? 0) > 0) ? 'waiting' : 'saved';
+          setState(initialState);
           setAutosaveStatus('saved');
           setAutosaveMessage(
             result.savedAt
@@ -990,6 +996,11 @@ export function CreateSalesOrderForm({
                 })}`
               : '已自动保存',
           );
+        } catch {
+          if (autosaveSeqRef.current === seq) {
+            setAutosaveStatus('error');
+            setAutosaveMessage('保存失败：请检查网络后重试');
+          }
         } finally {
           autosaveRunningRef.current = false;
           if (autosaveQueuedRef.current && !isSubmittingRef.current) {
@@ -1009,7 +1020,7 @@ export function CreateSalesOrderForm({
 
   function handleFormInput(event: FormEvent<HTMLFormElement>) {
     const target = event.target;
-    if (target instanceof HTMLInputElement && target.type === 'file') {
+    if (target instanceof HTMLInputElement && (target.type === 'file' || target.type === 'search')) {
       return;
     }
 
@@ -1018,7 +1029,7 @@ export function CreateSalesOrderForm({
 
   function handleFormChange(event: ChangeEvent<HTMLFormElement>) {
     const target = event.target;
-    if (target instanceof HTMLInputElement && target.type === 'file') {
+    if (target instanceof HTMLInputElement && (target.type === 'file' || target.type === 'search')) {
       return;
     }
 
@@ -1055,6 +1066,7 @@ export function CreateSalesOrderForm({
       createEmptySalesOrderItemDraft(nextLineId),
     ]);
     setNextLineId((value) => value + 1);
+    scheduleAutosave();
   }
 
   function removeSalesOrderItem(id: number) {
@@ -1068,6 +1080,7 @@ export function CreateSalesOrderForm({
     setSalesOrderItems((items) =>
       items.length > 1 ? items.filter((item) => item.id !== id) : items,
     );
+    scheduleAutosave();
   }
 
   function handleFactoryPicChange(
@@ -1126,11 +1139,13 @@ export function CreateSalesOrderForm({
           ? await updateSalesOrderDraftAction(initialState, formData)
           : await createSalesOrderAction(initialState, formData);
       if (nextState.error) attempt.fail();
-      else attempt.succeed();
+      else { attempt.succeed(); form.dataset.saveState = 'saved'; if (nextSubmitMode === 'submit') forgetSavedDraft('sales', createdBy, role, draftSalesOrderIdRef.current); }
       setState(nextState);
     } catch (error) {
       if (isRedirectError(error)) {
         attempt.succeed();
+        form.dataset.saveState = 'saved';
+        if (nextSubmitMode === 'submit') forgetSavedDraft('sales', createdBy, role, draftSalesOrderIdRef.current);
         throw error;
       }
 
@@ -1146,6 +1161,7 @@ export function CreateSalesOrderForm({
   return (
     <form
       ref={formRef}
+      data-save-state={isSubmitting ? 'saving' : state.error ? 'error' : hasPendingFiles ? 'waiting' : autosaveStatus}
       noValidate
       onSubmit={handleSubmit}
       onChangeCapture={attempt.resetFailedAfterEdit}
@@ -1154,6 +1170,8 @@ export function CreateSalesOrderForm({
       onChange={handleFormChange}
       style={formStyle}
     >
+      <fieldset disabled={isSubmitting} style={{ border: 0, padding: 0, margin: 0, display: 'contents' }}>
+      <SavedDraftResume kind="sales" actorId={createdBy} role={role} draftId={draftSalesOrderId} enabled={!initialSalesOrder} />
       {draftSalesOrderId ? (
         <input type="hidden" name="salesOrderId" value={String(draftSalesOrderId)} />
       ) : null}
@@ -1237,7 +1255,7 @@ export function CreateSalesOrderForm({
               <CounterpartyPicker
                 options={customerOptions}
                 selectedId={selectedCustomerId}
-                onSelect={(option) => setSelectedCustomerId(String(option.id))}
+                onSelect={(option) => { setSelectedCustomerId(String(option.id)); scheduleAutosave(); }}
               />
             </label>
             <label style={labelStyle}>
@@ -1788,12 +1806,13 @@ export function CreateSalesOrderForm({
       </p>
 
       {state.error ? <p role="alert">{state.error}</p> : null}
-      {autosaveStatus !== 'idle' ? (
+      {autosaveStatus !== 'idle' || hasPendingFiles ? (
         <p aria-live="polite" style={autosaveTextStyle}>
-          {autosaveMessage}
+          {hasPendingFiles ? '附件或图片尚未上传，请点击保存草稿。' : autosaveMessage}
         </p>
       ) : null}
 
+      {autosaveStatus === 'error' ? <button type="button" onClick={scheduleAutosave}>重试保存</button> : null}
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         <button
           type="submit"
@@ -1814,6 +1833,7 @@ export function CreateSalesOrderForm({
           {isSubmitting && submittingMode === 'submit' ? '提交中...' : '提交审批'}
         </button>
       </div>
+      </fieldset>
     </form>
   );
 }

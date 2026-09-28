@@ -1,6 +1,8 @@
+import { useListFixtures } from './helpers/list-fixtures';
 import { SalesOrderService } from '../src/sales-order/sales-order.service';
 
 describe('SalesOrderService list', () => {
+  useListFixtures('sales');
   it('filters sales orders by advanced fields and returns applied filters', async () => {
     const service = new SalesOrderService();
 
@@ -9,7 +11,7 @@ describe('SalesOrderService list', () => {
       customerName: 'Acme',
       approvalStatus: 'purchasing',
       hasAfterSales: 'yes',
-      sourceMode: 'from_quote_with_inquiry',
+      sourceMode: 'from_quote',
       page: 1,
       pageSize: 10,
       sortBy: 'createdAt',
@@ -18,7 +20,7 @@ describe('SalesOrderService list', () => {
 
     expect(result.items.map((item) => item.docNo)).toEqual(['S202607080001']);
     expect(result.appliedFilters.hasAfterSales).toBe('yes');
-    expect(result.appliedFilters.sourceMode).toBe('from_quote_with_inquiry');
+    expect(result.appliedFilters.sourceMode).toBe('from_quote');
     expect(result.total).toBe(1);
   });
 

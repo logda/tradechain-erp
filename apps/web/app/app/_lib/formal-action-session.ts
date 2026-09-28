@@ -67,7 +67,7 @@ export async function resolveFormalActionSessionFromHeaders(
   };
 }
 
-export async function resolveFormalActionSessionFromForm(formData: FormData) {
+export async function resolveFormalActionSessionFromForm(formData: FormData): Promise<DemoSession> {
   const session = await readLiveActionSession();
   if (session) return session;
   if (process.env.NODE_ENV !== 'test') throw new Error('请先登录');

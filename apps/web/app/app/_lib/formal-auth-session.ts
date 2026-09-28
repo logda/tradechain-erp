@@ -14,6 +14,7 @@ export async function loadAuthenticatedSession(token: string | undefined | null)
       !value ||
       !['admin', 'boss', 'sales_manager', 'sales', 'purchase_manager', 'purchase'].includes(value.role ?? '') ||
       typeof value.user !== 'string' || !value.user ||
+      !Number.isSafeInteger(value.userId) || Number(value.userId) <= 0 ||
       typeof value.username !== 'string' || !value.username ||
       !value.accessScopes || !Array.isArray(value.accessScopes.modules) ||
       !Array.isArray(value.accessScopes.actions) ||

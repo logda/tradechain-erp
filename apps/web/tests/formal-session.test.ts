@@ -319,7 +319,7 @@ describe('formal session helpers', () => {
 
   it('keeps verified formal app rewrites on the same public origin', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
-      role: 'admin', user: 'Admin', username: 'admin',
+      role: 'admin', user: 'Admin', userId: 1, username: 'admin',
       accessScopes: { modules: ['sales', 'admin'], dataScope: 'all', actions: ['audit.view'] },
     }) }));
     const request = new NextRequest('https://example.trycloudflare.com/app', {

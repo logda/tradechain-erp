@@ -2,6 +2,11 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AppSalesPage from '../app/app/sales/page';
 
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...await importOriginal<typeof import('next/navigation')>(),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 describe('AppSalesPage', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
@@ -17,10 +22,12 @@ describe('AppSalesPage', () => {
       json: async () => ({
         generatedAt: '2026-07-12T08:00:00.000Z',
         currency: 'CNY',
+        count: 0, items: [], total: 0, closedTotal: 0,
         totals: {
           salesOrderCount: 16,
           submittedAmount: 880000,
           shippedAmount: 532000,
+          voidedAmount: 17000,
         },
         afterSalesOverview: {
           openCases: 7,
@@ -65,7 +72,7 @@ describe('AppSalesPage', () => {
     expect(screen.getByText('16')).toBeInTheDocument();
     expect(screen.getByText('880,000')).toBeInTheDocument();
     expect(screen.getByText('532,000')).toBeInTheDocument();
-    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getByText('17,000')).toBeInTheDocument();
     expect(screen.queryByText('已收金额')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '需求/报价模块' })).toHaveAttribute(
       'href',
@@ -92,7 +99,8 @@ describe('AppSalesPage', () => {
       '/app/todos',
     );
     expect(screen.getByRole('heading', { name: '辅助模块' })).toBeInTheDocument();
-    expect(screen.getByText('售后待闭环')).toBeInTheDocument();
+    expect(screen.getByText('作废金额')).toBeInTheDocument();
+    expect(screen.queryByText('售后待闭环')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '查看有售后销售单' })).toHaveAttribute(
       'href',
       '/app/sales/orders?hasAfterSales=yes',
@@ -103,7 +111,14 @@ describe('AppSalesPage', () => {
     );
   });
 
-  it('falls back to zeros when the formal summary response is missing values', async () => {
+  it('shows unavailable when the void amount is missing rather than inventing zero', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ totals: { salesOrderCount: 0, submittedAmount: 0, shippedAmount: 0 }, afterSalesOverview: { openCases: 0 }, count: 0, total: 0, closedTotal: 0, items: [] }) }));
+    render(<>{await AppSalesPage({})}</>);
+    expect(screen.getByText(/销售统计暂不可用/)).toBeInTheDocument();
+    expect(screen.queryByText('作废金额')).not.toBeInTheDocument();
+  });
+
+  it('shows unavailable instead of zeros when the formal summary response is missing values', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -111,6 +126,7 @@ describe('AppSalesPage', () => {
         json: async () => ({
           generatedAt: '2026-07-12T08:00:00.000Z',
           currency: 'CNY',
+        count: 0, items: [], total: 0, closedTotal: 0,
           totals: {
             salesOrderCount: null,
             submittedAmount: null,
@@ -125,7 +141,8 @@ describe('AppSalesPage', () => {
 
     render(<>{await AppSalesPage({})}</>);
 
-    expect(screen.getAllByText('0')).toHaveLength(4);
+    expect(screen.getByText(/销售统计暂不可用/)).toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(screen.queryByText('已收金额')).not.toBeInTheDocument();
   });
 });

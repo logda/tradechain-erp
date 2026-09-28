@@ -466,7 +466,7 @@ export default async function AppQuoteDetailPage({
   if (!canViewFormalModule(session, 'sales')) {
     return (
       <AppShell
-        title="正式需求和报价详情"
+        title="需求和报价详情"
         subtitle="正式工作台下查看需求和报价详情。"
         session={session}
       >
@@ -521,14 +521,14 @@ export default async function AppQuoteDetailPage({
   if (!quote) {
     return (
       <AppShell
-        title="正式需求和报价详情"
+        title="需求和报价详情"
         subtitle="正式工作台下查看需求和报价详情。"
         session={session}
       >
         <section style={detailLayoutStyle}>
           <div style={heroCardStyle}>
             <h3 style={heroTitleStyle}>单据详情加载失败</h3>
-            <p style={heroSubStyle}>请返回正式需求和报价列表后重试。</p>
+            <p style={heroSubStyle}>请返回需求和报价列表后重试。</p>
           </div>
         </section>
       </AppShell>
@@ -538,7 +538,7 @@ export default async function AppQuoteDetailPage({
   if (!canViewFormalQuoteDetail(session, quote)) {
     return (
       <AppShell
-        title="正式需求和报价详情"
+        title="需求和报价详情"
         subtitle="正式工作台下查看需求和报价详情。"
         session={session}
       >
@@ -556,8 +556,9 @@ export default async function AppQuoteDetailPage({
 
   return (
     <AppShell
-      title="正式需求和报价详情"
+      title="需求和报价详情"
       subtitle="展示单据状态、来源与版本信息，并保留对应转单动作。"
+      tabLabel={quote.quoteNo}
       session={session}
     >
       <section style={detailLayoutStyle}>
@@ -566,7 +567,7 @@ export default async function AppQuoteDetailPage({
           <p style={heroEyebrowStyle}>Quote Detail / 单据详情</p>
           <h3 style={heroTitleStyle}>{`${resolveQuoteDocumentLabel(quote.documentType)} ${quote.quoteNo}`}</h3>
           <p style={heroSubStyle}>
-            正式页承接需求单与报价单的关键追踪信息，便于审批、转单与追溯。
+            查看审批进度，继续转单或追溯历史版本。
           </p>
         </article>
 

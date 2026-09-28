@@ -68,4 +68,14 @@ describe('ReportController', () => {
     expect((await controller.getGrossProfitSummary()).grossProfit).toBe(242000);
     expect((await controller.getPeriodSummary()).reopenedApprovals).toBe(2);
   });
+
+  it('forwards authenticated account and scope to the sales summary', async () => {
+    const service = { getSalesSummary: jest.fn().mockResolvedValue({}) };
+    const controller = new ReportController(service as unknown as ReportService);
+    await controller.getSalesSummary({ 'x-erp-role': 'sales', 'x-erp-user': '改名后的员工',
+      'x-erp-user-id': '3011', 'x-erp-data-scope': 'own_sales' });
+    expect(service.getSalesSummary).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'sales', user: '改名后的员工', userId: 3011, dataScope: 'own_sales',
+    }));
+  });
 });

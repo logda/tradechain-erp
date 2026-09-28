@@ -58,6 +58,14 @@ function describeSuccess(result: unknown, successLabel?: string) {
       return `操作成功，财务状态：${maybeFinanceStatus}`;
     }
 
+    const registeredReceiptStatus = (result as { receiptStatus?: unknown }).receiptStatus;
+    const receiptLabels: Record<string, string> = {
+      unpaid: '未收款', deposit_received: '已收定金', fully_paid: '已全款到账', prepaid_deducted: '预付款抵扣',
+    };
+    if (typeof registeredReceiptStatus === 'string' && receiptLabels[registeredReceiptStatus]) {
+      return `收款已登记：${receiptLabels[registeredReceiptStatus]}`;
+    }
+
     const maybeReceiptStatus = (result as { receiptSendStatus?: unknown }).receiptSendStatus;
     if (typeof maybeReceiptStatus === 'string') {
       return `操作成功，回单状态：${maybeReceiptStatus}`;
@@ -275,6 +283,7 @@ export function MutationActionForm({
     setState(initialState);
     submissionLocked.current = true;
     setIsSubmitting(true);
+    form.dataset.saveState = 'saving';
     requestKey.current ??= createMutationRequestKey();
 
     const formData = new FormData(form);
@@ -291,6 +300,7 @@ export function MutationActionForm({
 
       if (!result.ok) {
         submissionLocked.current = false;
+        form.dataset.saveState = 'error';
         setState({
           error: result.error,
           success: null,
@@ -298,11 +308,13 @@ export function MutationActionForm({
         return;
       }
 
+      form.dataset.saveState = 'saved';
       setState({
         error: null,
         success: describeSuccess(result.result, successLabel),
       });
       setIsComplete(true);
+      window.dispatchEvent(new Event('erp:formal-todos-changed'));
       const redirectId = successRedirectBasePath
         ? resolveSuccessRedirectId(result.result)
         : null;
@@ -325,6 +337,7 @@ export function MutationActionForm({
       }
     } catch (error) {
       submissionLocked.current = false;
+      form.dataset.saveState = 'error';
       setState({
         error: formatUnexpectedActionError(error),
         success: null,
@@ -369,12 +382,14 @@ export function MutationActionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} onChangeCapture={() => {
+    <form onSubmit={handleSubmit} onInputCapture={(event) => { event.currentTarget.dataset.saveState = 'waiting'; }} onChangeCapture={(event) => {
+      event.currentTarget.dataset.saveState = 'waiting';
       if (state.error && !submissionLocked.current) {
         requestKey.current = null;
         setState(initialState);
       }
     }} style={{ ...formalActionFormStyle, ...(fullWidth ? { width: '100%' } : {}) }}>
+      <fieldset disabled={isSubmitting} style={{ display: 'contents', border: 0, padding: 0, margin: 0 }}>
       {fields.filter((field) => field.display !== 'input' && field.display !== 'select').map((field) => (
         <input
           key={field.name}
@@ -454,6 +469,7 @@ export function MutationActionForm({
       >
         {isSubmitting ? '提交中...' : label}
       </button>
+      </fieldset>
       {confirmationOpen && confirmMessage ? (
         <ConfirmDialog message={confirmMessage} onConfirm={confirmSubmission} onCancel={cancelConfirmation} />
       ) : null}

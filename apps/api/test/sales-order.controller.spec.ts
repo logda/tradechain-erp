@@ -411,6 +411,7 @@ describe('SalesOrder controllers', () => {
       createdBy: 2001,
       initialStatus: 'pending_purchase_claim',
       ownerName: 'Leo',
+      ownerId: 2002,
       allowPendingAssignment: true,
       items: [
         {

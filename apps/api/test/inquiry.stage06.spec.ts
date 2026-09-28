@@ -1,3 +1,4 @@
+import { seedInquiryFixtures } from './helpers/list-fixtures';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +11,7 @@ describe('询价待老板确认阶段', () => {
     runtimeDir = mkdtempSync(join(tmpdir(), 'erp-stage06-inquiry-'));
     process.env.ERP_DATA_DIR = runtimeDir;
     delete process.env.ERP_STORAGE_MODE;
+    seedInquiryFixtures();
   });
 
   afterEach(() => {

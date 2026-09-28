@@ -17,6 +17,7 @@ import {
   FormalRoles,
 } from '../auth/formal-role.decorator';
 import { FormalRoleGuard } from '../auth/formal-role.guard';
+import { parseAuditBizId } from '../audit/audit-log-query';
 import { readOptionalFormalSession } from '../auth/formal-session';
 import { CreateShipmentBatchDto } from './dto/create-shipment-batch.dto';
 import { ListShipmentBatchesQueryDto } from './dto/list-shipment-batches-query.dto';
@@ -36,19 +37,8 @@ function normalizeTriStateFilter(value: 'all' | 'yes' | 'no' | undefined) {
 }
 
 function resolveFormalUserId(user: string | undefined) {
-  if (user === 'Admin') {
-    return 9000;
-  }
-
-  if (user === 'Zoe') {
-    return 2001;
-  }
-
-  if (user === 'Leo') {
-    return 2002;
-  }
-
-  return 2000;
+  if (process.env.NODE_ENV !== 'test') return undefined;
+  return user === 'Admin' ? 9000 : user === 'Zoe' ? 2001 : user === 'Leo' ? 2002 : user === 'Mia' ? 2000 : undefined;
 }
 
 @Controller('shipment-batches')
@@ -66,6 +56,10 @@ export class ShipmentBatchController {
     @Query() query: ListShipmentBatchesQueryDto,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     const sortBy: (typeof shipmentBatchListSortFields)[number] = shipmentBatchListSortFields.includes(
       query.sortBy as (typeof shipmentBatchListSortFields)[number],
@@ -85,6 +79,10 @@ export class ShipmentBatchController {
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -92,15 +90,15 @@ export class ShipmentBatchController {
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales', 'purchase_manager', 'purchase')
   @FormalActions('audit.view')
   @Get('audit-logs')
-  listAuditLogs() {
-    return this.shipmentBatchService.listAuditLogs();
+  listAuditLogs(@Query('bizId') bizId?: string) {
+    return this.shipmentBatchService.listAuditLogs(parseAuditBizId(bizId));
   }
 
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
   @FormalActions('shipment.update')
   @Post()
-  create(@Body() body: CreateShipmentBatchDto) {
-    return this.shipmentBatchService.create(body);
+  create(@Body() body: CreateShipmentBatchDto, @Headers('x-erp-user-id') userId?: string) {
+    return this.shipmentBatchService.create({ ...body, createdBy: userId ? Number(userId) : body.createdBy });
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales', 'purchase_manager', 'purchase')
@@ -109,12 +107,20 @@ export class ShipmentBatchController {
     @Param('id', ParseIntPipe) id: number,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.shipmentBatchService.getDetail(
       id,
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -126,11 +132,15 @@ export class ShipmentBatchController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string },
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.shipmentBatchService.markToForwarder({
       shipmentBatchId: id,
       currentStatus: body.currentStatus,
-      operatorId: resolveFormalUserId(user),
+      operatorId: userId ? Number(userId) : resolveFormalUserId(user),
     });
   }
 
@@ -141,11 +151,15 @@ export class ShipmentBatchController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string },
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.shipmentBatchService.markForwarderShipped({
       shipmentBatchId: id,
       currentStatus: body.currentStatus,
-      operatorId: resolveFormalUserId(user),
+      operatorId: userId ? Number(userId) : resolveFormalUserId(user),
     });
   }
 
@@ -156,11 +170,15 @@ export class ShipmentBatchController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string },
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.shipmentBatchService.markArrived({
       shipmentBatchId: id,
       currentStatus: body.currentStatus,
-      operatorId: resolveFormalUserId(user),
+      operatorId: userId ? Number(userId) : resolveFormalUserId(user),
     });
   }
 
@@ -171,12 +189,25 @@ export class ShipmentBatchController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string; reason: string },
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
+    @Headers('x-erp-role') role?: string,
   ) {
     return this.shipmentBatchService.markException({
       shipmentBatchId: id,
       currentStatus: body.currentStatus,
       reason: body.reason,
-      operatorId: resolveFormalUserId(user),
+      operatorId: userId ? Number(userId) : resolveFormalUserId(user),
+      session: readOptionalFormalSession({
+        'x-erp-role': role,
+        'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
+      }),
     });
   }
 
@@ -187,11 +218,15 @@ export class ShipmentBatchController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { receiptDocUrl: string },
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.shipmentBatchService.uploadReceipt({
       shipmentBatchId: id,
       receiptDocUrl: body.receiptDocUrl,
-      operatorId: resolveFormalUserId(user),
+      operatorId: userId ? Number(userId) : resolveFormalUserId(user),
     });
   }
 
@@ -202,12 +237,16 @@ export class ShipmentBatchController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { receiptDocUrl: string | null; sentBy: number },
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.shipmentBatchService.sendReceipt({
       shipmentBatchId: id,
       receiptDocUrl: body.receiptDocUrl,
-      sentBy: body.sentBy,
-      operatorId: resolveFormalUserId(user),
+      sentBy: userId ? Number(userId) : body.sentBy,
+      operatorId: userId ? Number(userId) : resolveFormalUserId(user),
     });
   }
 }

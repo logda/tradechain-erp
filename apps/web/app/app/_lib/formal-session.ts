@@ -4,6 +4,7 @@ export const FORMAL_SESSION_COOKIE = 'erp_formal_session';
 
 export type FormalSession = DemoSession & {
   username: string;
+  userId?: number;
   accessScopes?: {
     modules: string[];
     dataScope: string;
@@ -205,6 +206,7 @@ export function encodeFormalSessionCookie(session: {
   role: string;
   user: string;
   username: string;
+  userId?: number;
   accessScopes?: FormalSession['accessScopes'];
 }) {
   return encodeURIComponent(JSON.stringify(session));
@@ -273,6 +275,7 @@ export function decodeFormalSessionCookie(value: string | undefined | null) {
         role: parsed.role,
         user: parsed.user,
         username: parsed.username,
+        ...(Number.isSafeInteger(parsed.userId) && Number(parsed.userId) > 0 ? { userId: parsed.userId } : {}),
         accessScopes: parsed.accessScopes,
       } satisfies FormalSession;
     } catch {

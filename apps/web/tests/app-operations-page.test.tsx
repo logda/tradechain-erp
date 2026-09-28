@@ -1,16 +1,25 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AppOperationsPage from '../app/app/operations/page';
 
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...await importOriginal<typeof import('next/navigation')>(),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 describe('AppOperationsPage', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [], total: 0, count: 0, closedTotal: 0 }) })));
+  afterEach(() => vi.unstubAllGlobals());
+
   it('renders operations workbench cards and quick actions', async () => {
     render(<>{await AppOperationsPage({})}</>);
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(
       screen.getByRole('heading', { name: '运营工作台' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('发货待办')).toBeInTheDocument();
-    expect(screen.getByText('售后待办')).toBeInTheDocument();
+    expect(screen.getAllByText('发货待办').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('售后待办').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: '发货批次模块' })).toHaveAttribute(
       'href',
       '/app/shipment-batches',
@@ -47,6 +56,7 @@ describe('AppOperationsPage', () => {
       </>,
     );
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(
       screen.getByRole('heading', { name: '运营工作台' }),
     ).toBeInTheDocument();
@@ -74,6 +84,7 @@ describe('AppOperationsPage', () => {
       </>,
     );
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(
       screen.getByRole('heading', { name: '运营工作台' }),
     ).toBeInTheDocument();
@@ -83,7 +94,7 @@ describe('AppOperationsPage', () => {
     expect(
       screen.queryByRole('link', { name: '新建售后单' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看库存余额' })).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: '库存中心' }).find(link => !link.closest('aside'))!).toHaveAttribute(
       'href',
       '/app/inventory',
     );

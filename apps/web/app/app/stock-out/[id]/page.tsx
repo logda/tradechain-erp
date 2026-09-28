@@ -179,12 +179,12 @@ export default async function AppStockOutDetailPage({
   if (!allowed) {
     return (
       <AppShell
-        title="正式出库单详情"
+        title="出库单详情"
         subtitle="当前角色不在运营域内，不能查看出库单详情。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限访问正式出库单</h2>
+          <h2>无权限访问出库单</h2>
           <p>请切换到采购、采购主管、老板或管理员视角后再查看。</p>
         </section>
       </AppShell>
@@ -196,7 +196,7 @@ export default async function AppStockOutDetailPage({
   if (!detail) {
     return (
       <AppShell
-        title="正式出库单详情"
+        title="出库单详情"
         subtitle="未找到对应的出库单记录。"
         session={session}
       >
@@ -210,7 +210,7 @@ export default async function AppStockOutDetailPage({
 
   return (
     <AppShell
-      title="正式出库单详情"
+      title="出库单详情"
       subtitle="查看单据来源、仓库库位和出库商品明细。"
       session={session}
     >

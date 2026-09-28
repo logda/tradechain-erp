@@ -90,6 +90,7 @@ export async function createFormalAfterSalesAction(
   try {
     const payload = await buildCreateFormalAfterSalesPayload(formData);
     const actionSession = await resolveFormalActionSessionFromForm(formData);
+    if (actionSession.userId !== undefined) payload.createdBy = actionSession.userId;
     const response = await fetch(`${getAfterSalesApiBaseUrl()}/after-sales`, {
       method: 'POST',
       headers: {

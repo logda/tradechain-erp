@@ -71,18 +71,22 @@ export async function middleware(request: NextRequest) {
   }
   const url = new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, origin);
   if (url.searchParams.has('role') || url.searchParams.has('user') ||
-    url.searchParams.has('username') || url.searchParams.has('access')) {
+    url.searchParams.has('username') || url.searchParams.has('userId') || url.searchParams.has('legacyUserIds') || url.searchParams.has('access')) {
     const access = url.searchParams.get('access');
     const currentAccess = JSON.stringify(session.accessScopes);
     if (url.searchParams.get('role') === session.role &&
       url.searchParams.get('user') === session.user &&
       url.searchParams.get('username') === session.username &&
+      url.searchParams.get('userId') === String(session.userId) &&
+      (url.searchParams.get('legacyUserIds') ?? '') === (session.legacyUserIds ?? []).join(',') &&
       (access === currentAccess || access === encodeURIComponent(currentAccess))) {
       return NextResponse.next();
     }
     url.searchParams.delete('role');
     url.searchParams.delete('user');
     url.searchParams.delete('username');
+    url.searchParams.delete('userId');
+    url.searchParams.delete('legacyUserIds');
     url.searchParams.delete('access');
     return NextResponse.redirect(url);
   }
@@ -90,6 +94,8 @@ export async function middleware(request: NextRequest) {
   rewriteUrl.searchParams.set('role', session.role);
   rewriteUrl.searchParams.set('user', session.user);
   rewriteUrl.searchParams.set('username', session.username);
+  rewriteUrl.searchParams.set('userId', String(session.userId));
+  if (session.legacyUserIds?.length) rewriteUrl.searchParams.set('legacyUserIds', session.legacyUserIds.join(','));
   rewriteUrl.searchParams.set('access', encodeURIComponent(JSON.stringify(session.accessScopes)));
   return NextResponse.rewrite(rewriteUrl);
 }

@@ -15,7 +15,7 @@ describe('产品接口代理会话', () => {
   it('仅把当前后端会话签成管理员请求', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({
-        role: 'admin', user: 'Admin', username: 'admin',
+        role: 'admin', user: 'Admin', userId: 1, username: 'admin',
         accessScopes: { modules: ['admin'], dataScope: 'all', actions: ['audit.view'] },
       }) })
       .mockResolvedValueOnce({ status: 200, arrayBuffer: async () => new ArrayBuffer(0), headers: new Headers() });
@@ -32,7 +32,7 @@ describe('产品接口代理会话', () => {
   it('forwards the authenticated sales role for read-only product requests', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({
-        role: 'sales', user: 'Zoe', username: 'zoe',
+        role: 'sales', user: 'Zoe', userId: 3, username: 'zoe',
         accessScopes: { modules: ['sales'], dataScope: 'own_sales', actions: [] },
       }) })
       .mockResolvedValueOnce({ status: 200, arrayBuffer: async () => new ArrayBuffer(0), headers: new Headers() });

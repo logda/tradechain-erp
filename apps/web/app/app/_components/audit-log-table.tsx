@@ -110,8 +110,8 @@ const emptyStyle = {
   lineHeight: 1.7,
 } satisfies React.CSSProperties;
 
-function ChangeSummary({ item, compact }: { item: AuditLogItem; compact: boolean }) {
-  const summary = buildAuditChangeSummary(item, compact);
+function ChangeSummary({ item, compact, collapsed }: { item: AuditLogItem; compact: boolean; collapsed: boolean }) {
+  const summary = buildAuditChangeSummary(item, compact || collapsed);
 
   const renderRow = (row: typeof summary.rows[number], index: number) => (
     <div key={`${index}-${row.field}`} style={changeRowStyle}>
@@ -122,6 +122,16 @@ function ChangeSummary({ item, compact }: { item: AuditLogItem; compact: boolean
     </div>
   );
   const previewCount = compact ? 6 : summary.rows.length;
+  if (collapsed && summary.rows.length > 0) {
+    return (
+      <details>
+        <summary style={{ color: '#1d4ed8', cursor: 'pointer', fontSize: '13px' }}>展开字段变更</summary>
+        <div style={{ ...summaryWrapStyle, marginTop: '8px' }}>
+          {summary.rows.map(renderRow)}
+        </div>
+      </details>
+    );
+  }
   return (
     <div style={summaryWrapStyle}>
       {!compact || !summary.rows.length ? <p style={summaryTitleStyle}>{summary.title}</p> : null}
@@ -149,6 +159,7 @@ export function AuditLogTable({
   limit = 8,
   showModule = false,
   compact = false,
+  collapseChanges = false,
   total,
 }: {
   items: Array<AuditLogItem & { moduleLabel?: string }>;
@@ -157,6 +168,7 @@ export function AuditLogTable({
   limit?: number;
   showModule?: boolean;
   compact?: boolean;
+  collapseChanges?: boolean;
   total?: number;
 }) {
   if (!canViewFormalAuditCenter(session)) return null;
@@ -219,7 +231,7 @@ export function AuditLogTable({
                   <span style={operatorTextStyle}>{formatAuditOperator(item)}</span>
                 </td>
                 <td style={tableCellStyle}>
-                  <ChangeSummary item={item} compact={compact} />
+                  <ChangeSummary item={item} compact={compact} collapsed={collapseChanges} />
                 </td>
                 <td style={tableCellStyle}>
                   <span style={timeTextStyle}>{formatAuditCreatedAt(item.createdAt, compact)}</span>

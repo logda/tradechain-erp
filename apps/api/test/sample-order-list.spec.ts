@@ -1,6 +1,17 @@
+import { useListFixtures } from './helpers/list-fixtures';
 import { SampleOrderService } from '../src/sample-order/sample-order.service';
 
 describe('SampleOrderService list', () => {
+  useListFixtures('sample');
+  it('honors signed own scopes even for bosses and administrators', async () => {
+    const service = new SampleOrderService();
+    for (const role of ['boss', 'admin'] as const) {
+      expect((await service.list({}, { role, user: 'Other employee', userId: 57, dataScope: 'own_sales' })).items).toEqual([]);
+      await expect(service.getDetail(1, { role, user: 'Other employee', userId: 57, dataScope: 'own_sales' })).rejects.toThrow();
+    }
+    expect((await service.list({}, { role: 'purchase', userId: 57, dataScope: 'all' })).items).toHaveLength(3);
+  });
+
   it('lets purchase staff open sampling work even when the sales owner is different', async () => {
     const service = new SampleOrderService();
     const list = await service.list({ page: 1, pageSize: 20 }, { role: 'purchase', user: 'Leo' });

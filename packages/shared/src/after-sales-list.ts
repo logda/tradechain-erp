@@ -29,6 +29,8 @@ export type AfterSalesListQuery = Omit<CommonListQuery, 'sortBy'> & {
 };
 
 export type AfterSalesListItem = {
+  ownerId?: number;
+  createdById?: number;
   moduleLabel: string;
   docNo: string;
   title: string;

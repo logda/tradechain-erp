@@ -13,6 +13,7 @@ import {
 import { afterSalesListSortFields } from '@erp/shared';
 import { FormalActions, FormalModules, FormalRoles } from '../auth/formal-role.decorator';
 import { FormalRoleGuard } from '../auth/formal-role.guard';
+import { parseAuditBizId } from '../audit/audit-log-query';
 import { readOptionalFormalSession } from '../auth/formal-session';
 import { CreateAfterSalesOrderDto } from './dto/create-after-sales-order.dto';
 import { ListAfterSalesQueryDto } from './dto/list-after-sales-query.dto';
@@ -51,6 +52,10 @@ export class AfterSalesController {
     @Query() query: ListAfterSalesQueryDto,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     const sortBy: (typeof afterSalesListSortFields)[number] = afterSalesListSortFields.includes(
       query.sortBy as (typeof afterSalesListSortFields)[number],
@@ -70,6 +75,10 @@ export class AfterSalesController {
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -77,15 +86,15 @@ export class AfterSalesController {
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
   @FormalActions('audit.view')
   @Get('audit-logs')
-  listAuditLogs() {
-    return this.afterSalesService.listAuditLogs();
+  listAuditLogs(@Query('bizId') bizId?: string) {
+    return this.afterSalesService.listAuditLogs(parseAuditBizId(bizId));
   }
 
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
   @FormalActions('after_sales.process')
   @Post()
-  create(@Body() body: CreateAfterSalesOrderDto) {
-    return this.afterSalesService.create(body);
+  create(@Body() body: CreateAfterSalesOrderDto, @Headers('x-erp-user-id') userId?: string) {
+    return this.afterSalesService.create({ ...body, createdBy: userId ? Number(userId) : body.createdBy });
   }
 
   @FormalRoles('admin', 'boss', 'purchase_manager', 'purchase')
@@ -94,12 +103,20 @@ export class AfterSalesController {
     @Param('id', ParseIntPipe) id: number,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.afterSalesService.getDetail(
       id,
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -110,9 +127,11 @@ export class AfterSalesController {
   submit(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
     return this.afterSalesService.submit({
       afterSalesOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
     });
   }
@@ -123,9 +142,11 @@ export class AfterSalesController {
   approve(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
     return this.afterSalesService.approve({
       afterSalesOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
     });
   }
@@ -135,11 +156,27 @@ export class AfterSalesController {
   @Post(':id/reject')
   reject(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { currentStatus: string },
+    @Body() body: { currentStatus: string; rejectionReason: string },
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.afterSalesService.reject({
       afterSalesOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
+      rejectionReason: body.rejectionReason,
+      session: readOptionalFormalSession({
+        'x-erp-role': role,
+        'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
+      }),
     });
   }
 
@@ -149,9 +186,11 @@ export class AfterSalesController {
   startProcessing(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
     return this.afterSalesService.startProcessing({
       afterSalesOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
     });
   }
@@ -162,9 +201,11 @@ export class AfterSalesController {
   finish(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
     return this.afterSalesService.finish({
       afterSalesOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
     });
   }
@@ -175,9 +216,11 @@ export class AfterSalesController {
   confirmFinance(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string; financeReviewStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
     return this.afterSalesService.confirmFinance({
       afterSalesOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
       financeReviewStatus: body.financeReviewStatus,
     });
@@ -189,9 +232,11 @@ export class AfterSalesController {
   close(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { currentStatus: string; financeReviewStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
     return this.afterSalesService.close({
       afterSalesOrderId: id,
+      operatorId: userId ? Number(userId) : undefined,
       currentStatus: body.currentStatus,
       financeReviewStatus: body.financeReviewStatus,
     });

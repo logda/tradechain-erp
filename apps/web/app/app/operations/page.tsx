@@ -11,6 +11,10 @@ import {
   canUseFormalShipmentUpdateActions,
 } from '../_lib/formal-access';
 import { getFormalTodos } from '../_lib/formal-todos';
+import { loadFormalTodos } from '../_lib/load-formal-todos';
+import { TodoGroup } from '../_components/todo-group';
+import { DataLoadError } from '../_components/data-load-error';
+import { DataScopeNote } from '../_components/data-scope-note';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -85,10 +89,12 @@ export default async function AppOperationsPage({
     );
   }
 
-  const operationsTodos = getFormalTodos(session).filter(
+  const liveTodos = await loadFormalTodos(session);
+  const todos = getFormalTodos(session, liveTodos?.items ?? []);
+  const operationsTodos = todos.filter(
     (todo) => todo.domain === 'operations',
   );
-  const afterSalesTodos = getFormalTodos(session).filter(
+  const afterSalesTodos = todos.filter(
     (todo) => todo.domain === 'after_sales',
   );
 
@@ -97,14 +103,20 @@ export default async function AppOperationsPage({
       title="运营工作台"
       subtitle="运营入口聚合发货批次、回单状态、售后处理与财务闭环。"
       session={session}
+      todoCountOverride={liveTodos?.total ?? null}
     >
-      <StatStrip
+      <DataScopeNote session={session} generatedAt={liveTodos?.generatedAt} />
+      {liveTodos ? <StatStrip
         items={[
           { label: '发货待办', value: operationsTodos.length },
           { label: '售后待办', value: afterSalesTodos.length },
           { label: '运营合计', value: operationsTodos.length + afterSalesTodos.length },
         ]}
-      />
+      /> : <DataLoadError label="待办" />}
+      {liveTodos ? <div data-todo-block className="erp-home-todo-groups">
+        <TodoGroup title="发货待办" todos={operationsTodos} />
+        <TodoGroup title="售后待办" todos={afterSalesTodos} />
+      </div> : null}
 
       <section style={sectionStyle}>
         <div>
@@ -115,13 +127,13 @@ export default async function AppOperationsPage({
           <WorktileCard
             title="库存中心"
             href="/app/inventory"
-            description="查看库存余额、台账流水和仓储动作对老板汇报的统一口径。"
+            description="查看库存余额和出入库台账。"
             badge="Inventory"
           />
           <WorktileCard
             title="发货批次模块"
             href="/app/shipment-batches"
-            description="分批发货、货代发出、到港到仓、回单上传与发送。"
+            description="分批发货、货代发出、到港到仓、回单状态与发送。"
             badge="Shipment"
           />
           <WorktileCard
@@ -142,7 +154,7 @@ export default async function AppOperationsPage({
       <section style={sectionStyle}>
         <div>
           <h2 style={titleStyle}>快捷入口</h2>
-          <p style={metaStyle}>把高频运营动作前置，方便汇报时演示完整闭环。</p>
+          <p style={metaStyle}>快速创建单据或查找需要跟进的业务。</p>
         </div>
         <div style={quickActionStyle}>
           {canUseFormalShipmentUpdateActions(session) ? (
@@ -155,9 +167,6 @@ export default async function AppOperationsPage({
             style={quickActionLinkStyle}
           >
             待发送回单
-          </Link>
-          <Link href="/app/inventory" style={quickActionLinkStyle}>
-            查看库存余额
           </Link>
           {canUseFormalAfterSalesProcessActions(session) ? (
             <Link href="/app/after-sales/new" style={quickActionLinkStyle}>

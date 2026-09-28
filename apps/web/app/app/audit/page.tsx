@@ -262,13 +262,13 @@ export default async function AppAuditPage({ searchParams }: AppAuditPageProps) 
   if (!canViewFormalAuditCenter(session)) {
     return (
       <AppShell
-        title="正式日志中心"
+        title="日志中心"
         subtitle="集中查看正式业务操作日志。"
         session={session}
       >
         <section style={layoutStyle}>
           <article style={heroCardStyle}>
-            <h3 style={heroTitleStyle}>无权限访问正式日志中心</h3>
+            <h3 style={heroTitleStyle}>无权限访问日志中心</h3>
             <p style={heroSubStyle}>
               日志中心涉及业务操作日志，请联系管理员配置“审计查看”权限。
             </p>
@@ -320,7 +320,7 @@ export default async function AppAuditPage({ searchParams }: AppAuditPageProps) 
 
   return (
     <AppShell
-      title="正式日志中心"
+      title="日志中心"
       subtitle="集中查看报价、销售、采购、发货、售后、主数据等各板块操作日志。"
       session={session}
     >

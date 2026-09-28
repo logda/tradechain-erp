@@ -7,16 +7,22 @@ import {
   resolveDemoSession,
 } from '../_lib/demo-session';
 import { getFormalTodos } from '../_lib/formal-todos';
+import { loadFormalTodos } from '../_lib/load-formal-todos';
+import { DataScopeNote } from '../_components/data-scope-note';
+import { DataLoadError } from '../_components/data-load-error';
+import { TodoGroup } from '../_components/todo-group';
 import { canUseFormalSalesOrderActions } from '../_lib/formal-access';
 import { buildFormalApiRequestHeaders } from '../_lib/formal-api-request-headers';
 
 type SalesSummary = {
   generatedAt: string;
+  scope?: { dataScope: string; timeRange: string };
   currency: string;
   totals: {
     salesOrderCount: number;
     submittedAmount: number;
     shippedAmount: number;
+    voidedAmount: number;
   };
   afterSalesOverview: {
     openCases: number;
@@ -131,12 +137,14 @@ function normalizeSalesSummary(value: unknown): SalesSummary {
     typeof value === 'object' && value !== null ? (value as Partial<SalesSummary>) : {};
 
   return {
-    generatedAt: typeof summary.generatedAt === 'string' ? summary.generatedAt : '',
+    generatedAt: typeof summary.generatedAt === 'string' && !Number.isNaN(Date.parse(summary.generatedAt)) ? summary.generatedAt : new Date().toISOString(),
+    scope: summary.scope,
     currency: typeof summary.currency === 'string' ? summary.currency : 'CNY',
     totals: {
       salesOrderCount: normalizeNumber(summary.totals?.salesOrderCount),
       submittedAmount: normalizeNumber(summary.totals?.submittedAmount),
       shippedAmount: normalizeNumber(summary.totals?.shippedAmount),
+      voidedAmount: normalizeNumber(summary.totals?.voidedAmount),
     },
     afterSalesOverview: {
       openCases: normalizeNumber(summary.afterSalesOverview?.openCases),
@@ -150,7 +158,7 @@ function normalizeSalesSummary(value: unknown): SalesSummary {
   };
 }
 
-async function loadSalesSummary(session: { role: string; user: string }) {
+async function loadSalesSummary(session: Parameters<typeof buildFormalApiRequestHeaders>[0]) {
   try {
     const response = await fetch(`${getReportApiBaseUrl()}/reports/sales-summary`, {
       cache: 'no-store',
@@ -158,13 +166,15 @@ async function loadSalesSummary(session: { role: string; user: string }) {
     });
 
     if (!response.ok) {
-      return normalizeSalesSummary(null);
+      return null;
     }
 
     const value = (await response.json().catch(() => null)) as unknown;
-    return normalizeSalesSummary(value);
+    const data = value as Partial<SalesSummary> | null;
+    if (!data?.totals || ![data.totals.salesOrderCount, data.totals.submittedAmount, data.totals.shippedAmount, data.totals.voidedAmount].every((item) => typeof item === 'number' && Number.isFinite(item))) return null;
+    return normalizeSalesSummary(data);
   } catch {
-    return normalizeSalesSummary(null);
+    return null;
   }
 }
 
@@ -194,23 +204,26 @@ export default async function AppSalesPage({
     );
   }
 
-  const todoItems = getFormalTodos(session).filter((todo) => todo.domain === 'sales');
-  const salesSummary = await loadSalesSummary(session);
+  const [liveTodos, salesSummary] = await Promise.all([loadFormalTodos(session), loadSalesSummary(session)]);
+  const todoItems = getFormalTodos(session, liveTodos?.items ?? []).filter((todo) => todo.domain === 'sales');
 
   return (
     <AppShell
       title="销售工作台"
-      subtitle="正式销售入口不直接堆长表格，先进入报价、销售单与待办。"
+      subtitle="查看销售进度、常用业务和待办。"
       session={session}
+      todoCountOverride={liveTodos?.total ?? null}
     >
-      <StatStrip
+      <DataScopeNote session={session} dataScope={salesSummary?.scope?.dataScope} generatedAt={salesSummary?.generatedAt} timeRange={salesSummary?.scope?.timeRange} />
+      {salesSummary ? <StatStrip
         items={[
           { label: '销售单总数', value: salesSummary.totals.salesOrderCount },
           { label: '提交金额', value: salesSummary.totals.submittedAmount.toLocaleString('zh-CN') },
           { label: '已发货金额', value: salesSummary.totals.shippedAmount.toLocaleString('zh-CN') },
-          { label: '售后待闭环', value: salesSummary.afterSalesOverview.openCases },
+          { label: '作废金额', value: salesSummary.totals.voidedAmount.toLocaleString('zh-CN') },
         ]}
-      />
+      /> : <DataLoadError label="销售统计" />}
+      {salesSummary ? <p style={sectionMetaStyle}>金额单位：人民币元。提交金额不含草稿、驳回和作废；已发货金额按采购实际发货数量与销售价计算；作废金额按作废销售单整单计算。</p> : null}
 
       <section style={sectionStyle}>
         <div>
@@ -227,7 +240,7 @@ export default async function AppSalesPage({
           <WorktileCard
             title="销售单模块"
             href="/app/sales/orders"
-            description="正式销售单列表、来源追溯、履约与财务状态总览。"
+            description="查看销售单、来源和履约进度。"
             badge="Sales Order"
           />
           <WorktileCard
@@ -239,7 +252,7 @@ export default async function AppSalesPage({
           <WorktileCard
             title="销售待办"
             href="/app/todos"
-            description="跳转到正式待办中心，按当前账号聚合销售待办。"
+            description="查看需要处理和正在跟进的销售业务。"
             badge="Todo"
           />
         </div>
@@ -254,27 +267,15 @@ export default async function AppSalesPage({
           <WorktileCard
             title="样品模块"
             href="/app/sales/samples"
-            description="正式样品单列表、报价追溯、替代版本与取消留痕。"
+            description="查看样品单、来源报价和历史版本。"
             badge="Sample"
           />
         </div>
       </section>
 
-      <section id="todo" style={todoStyle}>
-        <h2>销售待办</h2>
-        <p style={{ marginTop: 0, color: '#64748b', fontSize: '13px' }}>
-          数据更新时间{' '}
-          {salesSummary.generatedAt
-            ? new Date(salesSummary.generatedAt).toLocaleString('zh-CN')
-            : '未同步'}
-        </p>
-        <ul>
-          {todoItems.map((item) => (
-            <li key={item.id}>
-              {item.docNo} {item.statusLabel}
-            </li>
-          ))}
-        </ul>
+      <section id="todo" style={todoStyle} data-todo-block>
+        <DataScopeNote session={session} generatedAt={liveTodos?.generatedAt} />
+        {liveTodos ? <TodoGroup title="销售待办" todos={todoItems} /> : <DataLoadError label="待办" />}
         <div style={quickActionStyle}>
           {canCreateSalesOrder ? (
             <Link
@@ -284,12 +285,6 @@ export default async function AppSalesPage({
               直接新建销售单
             </Link>
           ) : null}
-          <Link
-            href="/app/sales/quotes"
-            style={quickActionLinkStyle}
-          >
-            从报价池继续转单
-          </Link>
           <Link
             href="/app/sales/orders?hasAfterSales=yes"
             style={quickActionLinkStyle}

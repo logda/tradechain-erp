@@ -6,6 +6,8 @@ import {
   resolveDemoSession,
   type DemoSession,
 } from '../../_lib/demo-session';
+import { DataLoadError } from '../../_components/data-load-error';
+import { DataScopeNote } from '../../_components/data-scope-note';
 import { buildFormalApiRequestHeaders } from '../../_lib/formal-api-request-headers';
 
 type BossDashboardSummary = {
@@ -126,7 +128,7 @@ function normalizeBossDashboardSummary(value: unknown): BossDashboardSummary {
     typeof value === 'object' && value !== null ? (value as Partial<BossDashboardSummary>) : {};
 
   return {
-    generatedAt: typeof summary.generatedAt === 'string' ? summary.generatedAt : '',
+    generatedAt: typeof summary.generatedAt === 'string' && !Number.isNaN(Date.parse(summary.generatedAt)) ? summary.generatedAt : new Date().toISOString(),
     workflowAlerts: normalizeWorkflowAlerts(summary.workflowAlerts),
     salesOverview: {
       totalOrders: normalizeNumber(summary.salesOverview?.totalOrders),
@@ -165,13 +167,25 @@ async function loadBossDashboardSummary(session: DemoSession) {
     });
 
     if (!response.ok) {
-      return normalizeBossDashboardSummary(null);
+      return null;
     }
 
     const value = (await response.json().catch(() => null)) as unknown;
-    return normalizeBossDashboardSummary(value);
+    const data = value as Partial<BossDashboardSummary> | null;
+    const numberFields = {
+      salesOverview: ['totalOrders', 'pendingApproval', 'inProduction', 'partiallyShipped', 'fullyShipped'],
+      purchaseOverview: ['totalOrders', 'pendingApproval', 'purchasing', 'partiallyReceived', 'completed'],
+      afterSalesOverview: ['openCases', 'pendingApproval', 'processing', 'financeReviewing', 'closedThisMonth'],
+      financeOverview: ['pendingConfirmation', 'confirmedThisMonth', 'prepaidDeducted'],
+    };
+    if (!Array.isArray(data?.workflowAlerts) || !data.workflowAlerts.every((item) => typeof item?.count === 'number' && Number.isFinite(item.count)) ||
+      !Object.entries(numberFields).every(([key, fields]) => {
+        const block = data[key as keyof typeof numberFields] as Record<string, unknown> | undefined;
+        return block && fields.every((field) => typeof block[field] === 'number' && Number.isFinite(block[field]));
+      })) return null;
+    return normalizeBossDashboardSummary(data);
   } catch {
-    return normalizeBossDashboardSummary(null);
+    return null;
   }
 }
 
@@ -201,6 +215,12 @@ export default async function AppBossDashboardPage({
   }
 
   const summary = await loadBossDashboardSummary(session);
+  if (!summary) {
+    return <AppShell title="老板看板" session={session}>
+      <DataScopeNote session={session} dataScope="all" />
+      <DataLoadError label="经营看板" />
+    </AppShell>;
+  }
   const workflowAlertTotal = summary.workflowAlerts.reduce(
     (total, item) => total + item.count,
     0,
@@ -212,6 +232,7 @@ export default async function AppBossDashboardPage({
       subtitle="正式看板优先承载待办总览、销售采购汇总、财务回款和异常提醒。"
       session={session}
     >
+      <DataScopeNote session={session} dataScope="all" generatedAt={summary.generatedAt} />
       <StatStrip
         items={[
           { label: '待办总量', value: workflowAlertTotal },

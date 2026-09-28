@@ -1,5 +1,6 @@
-import { type DemoRole } from './demo-session';
 import { resolveFormalUserId } from './formal-access';
+import { type DemoRole } from './demo-session';
+
 import { buildFormalApiRequestHeaders } from './formal-api-request-headers';
 
 export type SalesUserOption = {
@@ -59,7 +60,9 @@ function normalizeRoleCode(roleCode: string): SalesUserOption['roleCode'] {
   return roleCode === 'sales_manager' ? 'sales_manager' : 'sales';
 }
 
-function matchesSessionUser(option: { username: string; label: string }, user: string) {
+function matchesSessionUser(option: { id: number; username: string; label: string }, session: { user: string; userId?: number }) {
+  if (session.userId !== undefined) return option.id === session.userId;
+  const user = session.user;
   const normalizedUser = user.trim().toLowerCase();
   return (
     option.username.trim().toLowerCase() === normalizedUser ||
@@ -68,20 +71,23 @@ function matchesSessionUser(option: { username: string; label: string }, user: s
 }
 
 function filterSalesUsersByRole(
-  session: { role: DemoRole; user: string },
+  session: { role: DemoRole; user: string; userId?: number },
   items: SalesUserOption[],
 ) {
-  const normalizedItems = ensureSessionUserOption(session, items);
+  const mayOwn = session.role === 'sales_manager' || session.role === 'boss';
+  const normalizedItems = mayOwn && !items.some(item => matchesSessionUser(item, session))
+    ? [...items, { id: resolveFormalUserId(session), username: session.user, roleCode: session.role as 'sales_manager' | 'boss', label: `${session.user} / ${roleLabel(session.role)} ${session.user}` }]
+    : items;
 
   if (session.role === 'sales') {
     return normalizedItems.filter(
-      (item) => item.roleCode === 'sales' && matchesSessionUser(item, session.user),
+      (item) => item.roleCode === 'sales' && matchesSessionUser(item, session),
     );
   }
 
   if (session.role === 'sales_manager') {
     return normalizedItems.filter(
-      (item) => item.roleCode === 'sales' || matchesSessionUser(item, session.user),
+      (item) => item.roleCode === 'sales' || matchesSessionUser(item, session),
     );
   }
 
@@ -90,7 +96,7 @@ function filterSalesUsersByRole(
       (item) =>
         item.roleCode === 'sales' ||
         item.roleCode === 'sales_manager' ||
-        matchesSessionUser(item, session.user),
+        matchesSessionUser(item, session),
     );
   }
 
@@ -101,46 +107,6 @@ function filterSalesUsersByRole(
   }
 
   return normalizedItems;
-}
-
-function resolveSessionOwnerRoleCode(role: DemoRole): SalesUserOption['roleCode'] | null {
-  if (role === 'sales') {
-    return 'sales';
-  }
-
-  if (role === 'sales_manager') {
-    return 'sales_manager';
-  }
-
-  if (role === 'boss') {
-    return 'boss';
-  }
-
-  return null;
-}
-
-function ensureSessionUserOption(
-  session: { role: DemoRole; user: string },
-  items: SalesUserOption[],
-) {
-  if (items.some((item) => matchesSessionUser(item, session.user))) {
-    return items;
-  }
-
-  const roleCode = resolveSessionOwnerRoleCode(session.role);
-  if (!roleCode) {
-    return items;
-  }
-
-  return [
-    ...items,
-    {
-      id: resolveFormalUserId(session.user),
-      label: `${session.user} / ${roleLabel(roleCode)} ${session.user}`,
-      username: session.user,
-      roleCode,
-    },
-  ];
 }
 
 function sortSalesUsers(items: SalesUserOption[]) {
@@ -156,14 +122,14 @@ function sortSalesUsers(items: SalesUserOption[]) {
 }
 
 export function resolveDefaultSalesUserId(
-  session: { role: DemoRole; user: string },
+  session: { role: DemoRole; user: string; userId?: number },
   items: SalesUserOption[],
 ) {
-  const matched = items.find((item) => matchesSessionUser(item, session.user));
+  const matched = items.find((item) => matchesSessionUser(item, session));
   return matched?.id ?? items[0]?.id ?? 0;
 }
 
-export async function loadSalesUserOptions(session: { role: string; user: string }) {
+export async function loadSalesUserOptions(session: { role: string; user: string; userId?: number }, retainedOwner?: { id: number; name?: string }) {
   try {
     const response = await fetch(`${getQuoteApiBaseUrl()}/quotes/create-metadata`, {
       cache: 'no-store',
@@ -183,17 +149,19 @@ export async function loadSalesUserOptions(session: { role: string; user: string
       .filter((item) => item.status === 'active')
       .map((item) => ({
         id: item.id,
-        username: item.realName,
+        username: item.username,
         roleCode: normalizeRoleCode(item.roleCode),
         label: `${item.realName} / ${roleLabel(item.roleCode)} ${item.realName}`,
       }));
 
-    return sortSalesUsers(
-      filterSalesUsersByRole(session as { role: DemoRole; user: string }, options),
-    );
+    const visible = filterSalesUsersByRole(session as { role: DemoRole; user: string; userId?: number }, options);
+    if (retainedOwner && !visible.some(item => item.id === retainedOwner.id)) {
+      const name = retainedOwner.name ?? `用户 #${retainedOwner.id}`;
+      visible.push({ id: retainedOwner.id, username: '', label: `${name} / 原销售负责人`, roleCode: 'sales' });
+    }
+    return sortSalesUsers(visible);
   } catch {
-    return sortSalesUsers(
-      filterSalesUsersByRole(session as { role: DemoRole; user: string }, fallbackSalesUsers),
-    );
+    if (session.userId !== undefined || process.env.NODE_ENV !== 'test') return [];
+    return sortSalesUsers(filterSalesUsersByRole(session as { role: DemoRole; user: string }, fallbackSalesUsers));
   }
 }

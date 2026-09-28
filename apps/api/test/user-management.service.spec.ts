@@ -173,6 +173,8 @@ describe('UserManagementService', () => {
 
     expect(result).toEqual({
       role: 'admin',
+      userId: 1,
+      legacyUserIds: [9000],
       user: 'Admin',
       username: 'admin',
       accessScopes: {

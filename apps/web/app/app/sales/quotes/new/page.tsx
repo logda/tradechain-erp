@@ -7,7 +7,7 @@ import {
   loadSalesUserOptions,
   resolveDefaultSalesUserId,
 } from '../../../_lib/sales-user-options';
-import { canUseFormalQuoteActions } from '../../../_lib/formal-access';
+import { canUseFormalQuoteActions, resolveFormalUserId } from '../../../_lib/formal-access';
 import { CreateFormalQuoteForm } from './create-formal-quote-form';
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -64,12 +64,12 @@ export default async function AppNewFormalQuotePage({
   if (!canUseFormalQuoteActions(session)) {
     return (
       <AppShell
-        title="正式新建需求和报价"
+        title="新建需求和报价"
         subtitle="当前角色不具备需求和报价创建权限，不能创建单据。"
         session={session}
       >
         <section style={formPanelStyle}>
-          <h2>无权限创建正式需求和报价</h2>
+          <h2>无权限创建需求和报价</h2>
           <p>请切换到销售、销售主管、老板或管理员账号后再创建单据。</p>
         </section>
       </AppShell>
@@ -84,14 +84,14 @@ export default async function AppNewFormalQuotePage({
 
   return (
     <AppShell
-      title="正式新建需求和报价"
+      title="新建需求和报价"
       subtitle="需求单可选择产品库产品或手填新产品；报价单只选择产品库产品。"
       session={session}
     >
       <section style={shellBodyStyle}>
 
         <article style={heroCardStyle}>
-          <h3 style={titleStyle}>正式需求和报价创建 / Formal Quote Create</h3>
+          <h3 style={titleStyle}>需求和报价创建 / Formal Quote Create</h3>
           <p style={subStyle}>
             承接客户编号、负责人、来源渠道与需求说明，创建成功后按单据类型跳转到对应详情页。
           </p>
@@ -104,6 +104,7 @@ export default async function AppNewFormalQuotePage({
             salesUsers={salesUsers}
             sourceOptions={sourceOptions}
             defaultSalesUserId={defaultSalesUserId}
+            actorUserId={resolveFormalUserId(session)}
             role={session.role}
             user={session.user}
             access={encodeAccessScopes(session.accessScopes)}

@@ -11,6 +11,21 @@ function createListResponse<T>(items: T[]) {
 }
 
 describe('FormalTodoService', () => {
+  it('keeps renamed employee tasks by ID and excludes same-name tasks owned by others', async () => {
+    const empty = { list: jest.fn().mockResolvedValue(createListResponse([])) };
+    const quote = { list: jest.fn().mockResolvedValue(createListResponse([
+      { docNo: 'Q-MINE', title: 'My order', status: 'pending_customer_feedback', bossConfirmed: true,
+        createdBy: 'Old name', ownerId: 57, detailHref: '/quotes/1' },
+      { docNo: 'Q-OTHER', title: 'Other order', status: 'pending_customer_feedback', bossConfirmed: true,
+        createdBy: 'Renamed employee', ownerId: 58, detailHref: '/quotes/2' },
+    ])) };
+    const service = new FormalTodoService(quote as never, empty as never, empty as never, empty as never, empty as never);
+    const result = await service.listFormalTodos({ role: 'sales', user: 'Renamed employee', userId: 57, modules: ['sales'], dataScope: 'own_sales' } as any);
+    expect(result.items.map(item => item.docNo)).toEqual(['Q-MINE']);
+    const hidden = await service.listFormalTodos({ role: 'sales', user: 'Renamed employee', userId: 57, modules: [], dataScope: 'own_sales' } as any);
+    expect(hidden.items).toEqual([]);
+  });
+
   it('creates a boss todo only for a quote at the boss approval node', async () => {
     const empty = { list: jest.fn().mockResolvedValue(createListResponse([])) };
     const quote = { list: jest.fn().mockResolvedValue(createListResponse([

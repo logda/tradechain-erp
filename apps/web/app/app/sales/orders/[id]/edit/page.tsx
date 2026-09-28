@@ -30,6 +30,7 @@ type AppSalesOrderEditPageProps = {
 };
 
 type SalesOrderEditDetail = InitialSalesOrderFormValue & {
+  salesUserName?: string;
   status: string;
   salesNo: string;
   currentVersionNo: number;
@@ -180,15 +181,16 @@ export default async function AppEditSalesOrderDraftPage({
   const [customerOptions, productOptions, salesUsers] = await Promise.all([
     loadActiveCounterpartyOptions('customer', session),
     loadActiveProductOptions(session),
-    loadSalesUserOptions(session),
+    loadSalesUserOptions(session, salesOrder.salesUserId ? { id: salesOrder.salesUserId, name: salesOrder.salesUserName } : undefined),
   ]);
   const defaultSalesUserId = resolveDefaultSalesUserId(session, salesUsers);
-  const currentUserId = resolveFormalUserId(session.user);
+  const currentUserId = resolveFormalUserId(session);
 
   return (
     <AppShell
       title="编辑销售单草稿"
       subtitle="继续补充草稿内容，保存后仍停留在草稿；也可以直接提交审批。"
+      tabLabel={salesOrder.salesNo}
       session={session}
     >
       <section style={shellBodyStyle}>

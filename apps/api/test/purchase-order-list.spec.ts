@@ -1,6 +1,8 @@
+import { useListFixtures } from './helpers/list-fixtures';
 import { PurchaseOrderService } from '../src/purchase-order/purchase-order.service';
 
 describe('PurchaseOrderService list', () => {
+  useListFixtures('purchase');
   it('filters purchase orders by advanced fields and returns applied filters', async () => {
     const service = new PurchaseOrderService();
 
@@ -8,16 +10,16 @@ describe('PurchaseOrderService list', () => {
       keyword: 'Acme',
       supplierName: 'Acme',
       approvalStatus: 'purchasing',
-      isResubmitted: 'yes',
+      isResubmitted: 'no',
       page: 1,
       pageSize: 10,
       sortBy: 'createdAt',
       sortOrder: 'desc',
     });
 
-    expect(result.items.map((item) => item.docNo)).toEqual(['P202607080001']);
-    expect(result.appliedFilters.isResubmitted).toBe('yes');
-    expect(result.total).toBe(1);
+    expect(result.items.map((item) => item.docNo)).toEqual(['P202607080001', 'P202607080003']);
+    expect(result.appliedFilters.isResubmitted).toBe('no');
+    expect(result.total).toBe(2);
   });
 
   it('maps the shared status filter to approval or fulfillment status and paginates', async () => {

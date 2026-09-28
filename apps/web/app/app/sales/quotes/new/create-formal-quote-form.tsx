@@ -8,6 +8,7 @@ import {
   type FormEvent,
 } from 'react';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { SavedDraftResume, forgetSavedDraft } from '../../../_components/saved-draft-resume';
 import { useMutationAttempt } from '../../../_lib/use-mutation-attempt';
 import { createMutationRequestKey } from '../../../_lib/mutation-request-key';
 import {
@@ -389,6 +390,7 @@ export function CreateFormalQuoteForm({
   user,
   access,
   initialQuote,
+  actorUserId,
 }: {
   customerOptions: CounterpartyOption[];
   productOptions: ProductOption[];
@@ -399,6 +401,7 @@ export function CreateFormalQuoteForm({
   user: string;
   access?: string;
   initialQuote?: InitialFormalQuoteFormValue;
+  actorUserId?: number;
 }) {
   const [state, setState] = useState(initialState);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -452,6 +455,7 @@ export function CreateFormalQuoteForm({
   >([]);
   const [savedQuoteImageUrls, setSavedQuoteImageUrls] = useState(initialQuoteImageUrls);
   const [savedQuoteAttachments, setSavedQuoteAttachments] = useState(initialQuoteAttachments);
+  const hasPendingFiles = selectedImagePreviews.length > 0 || selectedQuoteAttachmentCount > 0;
   const [imageViewerIndex, setImageViewerIndex] = useState<number | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<CounterpartyOption | null>(
     resolveInitialCustomer(initialQuote, customerOptions),
@@ -553,6 +557,10 @@ export function CreateFormalQuoteForm({
     setAutosaveStatus('saving');
     setAutosaveMessage('正在自动保存草稿');
     const formData = new FormData(form);
+    const previousImages = String(formData.get('existingQuoteImageUrls') ?? '[]');
+    const previousAttachments = String(formData.get('existingQuoteAttachments') ?? '[]');
+    const submittedImages = Array.from(imageFilesInputRef.current?.files ?? []);
+    const submittedAttachments = Array.from(quoteAttachmentFilesInputRef.current?.files ?? []);
     formData.set('submitMode', 'draft');
     autosaveRequestKeyRef.current ??= createMutationRequestKey();
     formData.set('idempotencyKey', autosaveRequestKeyRef.current);
@@ -568,12 +576,12 @@ export function CreateFormalQuoteForm({
       setDraftQuoteId(result.quoteId);
     }
 
-      if (result.imageUrls) {
+      if (!result.error && !result.skipped && result.imageUrls && String(new FormData(form).get('existingQuoteImageUrls') ?? '[]') === previousImages) {
         setSavedQuoteImageUrls(result.imageUrls);
         form.querySelectorAll<HTMLInputElement>('input[name="existingQuoteImageUrls"]').forEach((input) => {
           input.value = JSON.stringify(result.imageUrls ?? []);
         });
-        if (result.imageUrls.length > 0 && imageFilesInputRef.current) {
+        if (result.imageUrls.length > 0 && imageFilesInputRef.current && Array.from(imageFilesInputRef.current.files ?? []).length === submittedImages.length && Array.from(imageFilesInputRef.current.files ?? []).every((file, index) => file === submittedImages[index])) {
         imageFilesInputRef.current.value = '';
         imagePreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
         imagePreviewUrlsRef.current = [];
@@ -581,12 +589,12 @@ export function CreateFormalQuoteForm({
       }
     }
 
-      if (result.quoteAttachments) {
+      if (!result.error && !result.skipped && result.quoteAttachments && String(new FormData(form).get('existingQuoteAttachments') ?? '[]') === previousAttachments) {
         setSavedQuoteAttachments(result.quoteAttachments);
         form.querySelectorAll<HTMLInputElement>('input[name="existingQuoteAttachments"]').forEach((input) => {
           input.value = JSON.stringify(result.quoteAttachments ?? []);
         });
-        if (result.quoteAttachments.length > 0 && quoteAttachmentFilesInputRef.current) {
+        if (result.quoteAttachments.length > 0 && quoteAttachmentFilesInputRef.current && Array.from(quoteAttachmentFilesInputRef.current.files ?? []).length === submittedAttachments.length && Array.from(quoteAttachmentFilesInputRef.current.files ?? []).every((file, index) => file === submittedAttachments[index])) {
         quoteAttachmentFilesInputRef.current.value = '';
         quoteAttachmentPreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
         quoteAttachmentPreviewUrlsRef.current = [];
@@ -601,7 +609,7 @@ export function CreateFormalQuoteForm({
 
     if (result.error) {
       setAutosaveStatus('error');
-      setAutosaveMessage(result.error);
+      setAutosaveMessage(`保存失败：${result.error}`);
       return;
     }
 
@@ -611,6 +619,8 @@ export function CreateFormalQuoteForm({
       return;
     }
 
+    form.dataset.saveState = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="file"]')).some(input => (input.files?.length ?? 0) > 0) ? 'waiting' : 'saved';
+    setState(initialState);
     setAutosaveStatus('saved');
     setAutosaveMessage(
       result.savedAt
@@ -622,10 +632,16 @@ export function CreateFormalQuoteForm({
     );
   }
 
-  function scheduleAutosave() {
+  function scheduleAutosave(event?: { target: EventTarget | null }) {
+    if (event?.target instanceof HTMLInputElement && event.target.type === 'search') return;
     if (isSubmittingRef.current) {
       return;
     }
+
+    const seq = ++autosaveSeqRef.current;
+    if (formRef.current) formRef.current.dataset.saveState = 'waiting';
+    setAutosaveStatus('waiting');
+    setAutosaveMessage('尚未保存，稍后自动保存草稿');
 
     if (autosaveRunningRef.current) {
       autosaveQueuedRef.current = true;
@@ -636,15 +652,17 @@ export function CreateFormalQuoteForm({
       clearTimeout(autosaveTimerRef.current);
     }
 
-    setAutosaveStatus('waiting');
-    setAutosaveMessage('正在等待字段稳定后自动保存草稿');
-    const seq = autosaveSeqRef.current + 1;
-    autosaveSeqRef.current = seq;
+
     autosaveTimerRef.current = setTimeout(async () => {
       const running = runAutosave(seq);
       autosavePromiseRef.current = running;
       try {
         await running;
+      } catch {
+        if (autosaveSeqRef.current === seq) {
+          setAutosaveStatus('error');
+          setAutosaveMessage('保存失败：请检查网络后重试');
+        }
       } finally {
         autosavePromiseRef.current = null;
         autosaveRunningRef.current = false;
@@ -817,11 +835,13 @@ export function CreateFormalQuoteForm({
           ? await updateFormalQuoteDraftAction(initialState, formData)
           : await createFormalQuoteAction(initialState, formData);
       if (nextState.error) attempt.fail();
-      else attempt.succeed();
+      else { attempt.succeed(); form.dataset.saveState = 'saved'; if (nextSubmitMode === 'submit') forgetSavedDraft('quote', actorUserId, role, draftQuoteIdRef.current); }
       setState(nextState);
     } catch (error) {
       if (isRedirectError(error)) {
         attempt.succeed();
+        form.dataset.saveState = 'saved';
+        if (nextSubmitMode === 'submit') forgetSavedDraft('quote', actorUserId, role, draftQuoteIdRef.current);
         throw error;
       }
 
@@ -851,6 +871,7 @@ export function CreateFormalQuoteForm({
   return (
     <form
       ref={formRef}
+      data-save-state={isSubmitting ? 'saving' : state.error ? 'error' : hasPendingFiles ? 'waiting' : autosaveStatus}
       onSubmit={handleSubmit}
       onChangeCapture={attempt.resetFailedAfterEdit}
       onKeyDownCapture={handleFormKeyDown}
@@ -858,6 +879,8 @@ export function CreateFormalQuoteForm({
       onChange={scheduleAutosave}
       style={formStyle}
     >
+      <fieldset disabled={isSubmitting} style={{ border: 0, padding: 0, margin: 0, display: 'contents' }}>
+      <SavedDraftResume kind="quote" actorId={actorUserId} role={role} draftId={draftQuoteId} enabled={!initialQuote} />
       {draftQuoteId ? (
         <input type="hidden" name="quoteId" value={String(draftQuoteId)} />
       ) : null}
@@ -915,7 +938,7 @@ export function CreateFormalQuoteForm({
               type="button"
               aria-pressed={customerEntryMode === 'existing'}
               style={buildModeButtonStyle(customerEntryMode === 'existing')}
-              onClick={() => setCustomerEntryMode('existing')}
+              onClick={() => { setCustomerEntryMode('existing'); scheduleAutosave(); }}
             >
               从往来单位选择
             </button>
@@ -923,7 +946,7 @@ export function CreateFormalQuoteForm({
               type="button"
               aria-pressed={customerEntryMode === 'manual'}
               style={buildModeButtonStyle(customerEntryMode === 'manual')}
-              onClick={() => setCustomerEntryMode('manual')}
+              onClick={() => { setCustomerEntryMode('manual'); scheduleAutosave(); }}
             >
               手动填写客户
             </button>
@@ -1080,7 +1103,7 @@ export function CreateFormalQuoteForm({
                 type="button"
                 aria-pressed={documentType === 'demand'}
                 style={buildModeButtonStyle(documentType === 'demand')}
-                onClick={() => setDocumentType('demand')}
+                onClick={() => { setDocumentType('demand'); scheduleAutosave(); }}
               >
                 需求单
               </button>
@@ -1088,7 +1111,7 @@ export function CreateFormalQuoteForm({
                 type="button"
                 aria-pressed={documentType === 'quote'}
                 style={buildModeButtonStyle(documentType === 'quote')}
-                onClick={() => setDocumentType('quote')}
+                onClick={() => { setDocumentType('quote'); scheduleAutosave(); }}
               >
                 报价单
               </button>
@@ -1102,7 +1125,7 @@ export function CreateFormalQuoteForm({
                   type="button"
                   aria-pressed={productEntryMode === 'existing'}
                   style={buildModeButtonStyle(productEntryMode === 'existing')}
-                  onClick={() => setProductEntryMode('existing')}
+                  onClick={() => { setProductEntryMode('existing'); scheduleAutosave(); }}
                 >
                   产品库产品
                 </button>
@@ -1110,7 +1133,7 @@ export function CreateFormalQuoteForm({
                   type="button"
                   aria-pressed={productEntryMode === 'candidate'}
                   style={buildModeButtonStyle(productEntryMode === 'candidate')}
-                  onClick={() => setProductEntryMode('candidate')}
+                  onClick={() => { setProductEntryMode('candidate'); scheduleAutosave(); }}
                 >
                   手填新产品
                 </button>
@@ -1495,9 +1518,10 @@ export function CreateFormalQuoteForm({
       </label>
 
       {state.error ? <p role="alert">{state.error}</p> : null}
-      {autosaveStatus !== 'idle' ? (
+      {autosaveStatus === 'error' ? <button type="button" onClick={scheduleAutosave}>重试保存</button> : null}
+      {autosaveStatus !== 'idle' || hasPendingFiles ? (
         <p aria-live="polite" style={autosaveTextStyle}>
-          {autosaveMessage}
+          {hasPendingFiles ? '附件或图片尚未上传，请点击保存草稿。' : autosaveMessage}
         </p>
       ) : null}
 
@@ -1698,6 +1722,7 @@ export function CreateFormalQuoteForm({
                               style={chipButtonStyle}
                               onClick={() => {
                                 setSelectedProductOption(optionValue);
+                                scheduleAutosave();
                                 applyExistingProductSalePrice(optionValue, quantityValue);
                                 setProductPickerOpen(false);
                               }}
@@ -1940,6 +1965,7 @@ export function CreateFormalQuoteForm({
                             style={chipButtonStyle}
                             onClick={() => {
                               setSelectedCustomer(option);
+                              scheduleAutosave();
                               setCustomerPickerOpen(false);
                             }}
                           >
@@ -2097,6 +2123,7 @@ export function CreateFormalQuoteForm({
           </div>
         </div>
       ) : null}
+      </fieldset>
     </form>
   );
 }

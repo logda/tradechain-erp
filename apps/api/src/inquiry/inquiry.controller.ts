@@ -53,6 +53,10 @@ export class InquiryController {
     @Query() query: ListInquiryQueriesDto,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.inquiryService.list(
       {
@@ -68,6 +72,10 @@ export class InquiryController {
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -79,11 +87,19 @@ export class InquiryController {
   listAuditLogs(
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.inquiryService.listAuditLogs(
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -95,12 +111,20 @@ export class InquiryController {
     @Param('id', ParseIntPipe) id: number,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.inquiryService.getById(
       id,
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -139,6 +163,10 @@ export class InquiryController {
     },
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.inquiryService.submitForComparison({
       inquiryId: id,
@@ -146,6 +174,10 @@ export class InquiryController {
     }, readOptionalFormalSession({
       'x-erp-role': role,
       'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
     }));
   }
 
@@ -157,10 +189,18 @@ export class InquiryController {
     @Param('id', ParseIntPipe) id: number,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.inquiryService.rejectByBoss(id, readOptionalFormalSession({
       'x-erp-role': role,
       'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
     }));
   }
 
@@ -181,6 +221,10 @@ export class InquiryController {
     },
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.inquiryService.confirmByBoss({
       inquiryId: id,
@@ -188,6 +232,10 @@ export class InquiryController {
     }, readOptionalFormalSession({
       'x-erp-role': role,
       'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
     }));
   }
 }

@@ -22,13 +22,13 @@ describe('ReportService prisma aggregation', () => {
               return Promise.resolve([
                 {
                   payload: {
-                    status: 'closed',
+                    id: 11, status: 'closed',
                     financeStatus: 'confirmed',
                     receiptStatus: 'prepaid_deducted',
                     shipmentAggregateStatus: 'arrived',
                     versionHistory: [{ versionNo: 1 }, { versionNo: 2 }],
                     items: [
-                      { amount: 200, quantity: 10, salePrice: 20 },
+                      { lineNo: 1, amount: 200, quantity: 10, salePrice: 20 },
                     ],
                   },
                 },
@@ -56,8 +56,8 @@ describe('ReportService prisma aggregation', () => {
               ]);
             case 'shipment_batch':
               return Promise.resolve([
-                { payload: { status: 'arrived' } },
-                { payload: { status: 'to_forwarder' } },
+                { payload: { status: 'arrived', salesOrderId: 11, items: [{ sourceSalesItemId: 1, shippedQty: 6 }] } },
+                { payload: { status: 'to_forwarder', salesOrderId: 11, items: [{ sourceSalesItemId: 1, shippedQty: 4 }] } },
               ]);
             case 'after_sales':
               return Promise.resolve([
@@ -69,6 +69,7 @@ describe('ReportService prisma aggregation', () => {
           }
         }),
       },
+      operationLog: { findMany: jest.fn().mockResolvedValue([]) },
     } as unknown as PrismaService;
 
     const service = new ReportService(prismaMock);
@@ -78,7 +79,8 @@ describe('ReportService prisma aggregation', () => {
 
     expect(salesSummary.totals).toMatchObject({
       salesOrderCount: 2,
-      submittedAmount: 350,
+      submittedAmount: 200,
+      voidedAmount: 0,
       shippedAmount: 200,
     });
     expect(salesSummary.totals).not.toHaveProperty('receivedAmount');
@@ -95,15 +97,11 @@ describe('ReportService prisma aggregation', () => {
       financeReviewing: 0,
       closedThisMonth: 1,
     });
-    expect(grossProfit.totalRevenue).toBe(350);
-    expect(grossProfit.totalProcurementCost).toBe(120);
-    expect(grossProfit.totalAfterSalesCost).toBe(0);
-    expect(grossProfit.grossProfit).toBe(230);
-    expect(periodSummary.salesOrdersCreated).toBe(2);
-    expect(periodSummary.purchaseOrdersCreated).toBe(1);
-    expect(periodSummary.shipmentBatchesCreated).toBe(2);
-    expect(periodSummary.afterSalesCreated).toBe(2);
-    expect(periodSummary.closedOrders).toBe(1);
-    expect(periodSummary.reopenedApprovals).toBe(1);
+    expect(grossProfit).toMatchObject({ totalRevenue: null, totalProcurementCost: null,
+      totalAfterSalesCost: null, grossProfit: null, unknownCurrencyCount: 2 });
+    expect(grossProfit.sourceDocuments.map(document => document.amount)).toEqual([200, 120]);
+    expect(periodSummary).toMatchObject({ salesOrdersCreated: 0, purchaseOrdersCreated: 0,
+      shipmentBatchesCreated: 0, afterSalesCreated: 0, closedOrders: 0, reopenedApprovals: 0,
+      undatedCounts: { sales_order: 2, purchase_order: 1, shipment_batch: 2, after_sales: 2 } });
   });
 });

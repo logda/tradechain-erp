@@ -181,12 +181,12 @@ export default async function AppStockInDetailPage({
   if (!allowed) {
     return (
       <AppShell
-        title="正式收货单详情"
+        title="收货单详情"
         subtitle="当前角色不在采购/运营域内，不能查看收货单详情。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限访问正式收货单</h2>
+          <h2>无权限访问收货单</h2>
           <p>请切换到采购、采购主管、老板或管理员视角后再查看。</p>
         </section>
       </AppShell>
@@ -198,7 +198,7 @@ export default async function AppStockInDetailPage({
   if (!detail) {
     return (
       <AppShell
-        title="正式收货单详情"
+        title="收货单详情"
         subtitle="未找到对应的收货单记录。"
         session={session}
       >
@@ -212,7 +212,7 @@ export default async function AppStockInDetailPage({
 
   return (
     <AppShell
-      title="正式收货单详情"
+      title="收货单详情"
       subtitle="查看单据来源、仓库库位和入库商品明细。"
       session={session}
     >

@@ -1,3 +1,4 @@
+import { resolveFormalUserId } from '../../_lib/formal-access';
 import { AppShell } from '../../_components/app-shell';
 import { resolveDemoSession } from '../../_lib/demo-session';
 import { canUseFormalShipmentUpdateActions } from '../../_lib/formal-access';
@@ -182,17 +183,6 @@ const deniedStyle = {
   padding: '24px',
 } satisfies React.CSSProperties;
 
-function resolveUserId(user: string) {
-  if (user === 'Zoe') {
-    return 2001;
-  }
-
-  if (user === 'Leo') {
-    return 2002;
-  }
-
-  return 2000;
-}
 
 function encodeAccessScopes(accessScopes: ReturnType<typeof resolveDemoSession>['accessScopes']) {
   if (!accessScopes) {
@@ -215,12 +205,12 @@ export default async function AppNewFormalShipmentBatchPage({
   if (!canUseFormalShipmentUpdateActions(session)) {
     return (
       <AppShell
-        title="正式新建发货批次"
+        title="新建发货批次"
         subtitle="当前角色不具备发货更新权限，不能创建发货批次。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限创建正式发货批次</h2>
+          <h2>无权限创建发货批次</h2>
           <p>请切换到采购、采购主管或管理员账号后再创建发货批次。</p>
         </section>
       </AppShell>
@@ -231,8 +221,8 @@ export default async function AppNewFormalShipmentBatchPage({
 
   return (
     <AppShell
-      title="正式新建发货批次"
-      subtitle="正式发货页支持按采购执行单据创建首批或新增批次，承接多批次发货演示。"
+      title="新建发货批次"
+      subtitle="按采购单创建首批或新增发货批次。"
       session={session}
     >
       <section style={shellBodyStyle}>
@@ -240,13 +230,13 @@ export default async function AppNewFormalShipmentBatchPage({
         <article style={heroCardStyle}>
           <h3 style={titleStyle}>正式创建发货批次 / Formal Shipment Create</h3>
           <p style={subStyle}>
-            先收口销售单、采购单、数量与发货时间字段，创建成功后直接跳入正式发货批次详情页。
+            先收口销售单、采购单、数量与发货时间字段，创建成功后直接跳入发货批次详情页。
           </p>
         </article>
 
         <article style={formPanelStyle}>
           <CreateFormalShipmentBatchForm
-            createdBy={resolveUserId(session.user)}
+            createdBy={resolveFormalUserId(session)}
             role={session.role}
             user={session.user}
             access={encodeAccessScopes(session.accessScopes)}

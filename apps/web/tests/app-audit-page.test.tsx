@@ -60,7 +60,7 @@ describe('AppAuditPage', () => {
 
     render(<>{await AppAuditPage({ searchParams: Promise.resolve({ role: 'admin', user: 'Admin' }) })}</>);
 
-    expect(screen.getByRole('heading', { name: '正式日志中心' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '日志中心' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '全部模块 (2)' })).toHaveAttribute(
       'href',
@@ -150,7 +150,7 @@ describe('AppAuditPage', () => {
 
     render(<>{await AppAuditPage({ searchParams: Promise.resolve({ role: 'admin', user: 'Admin' }) })}</>);
 
-    expect(screen.getByRole('heading', { name: '正式日志中心' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '日志中心' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.getByText('提交记录')).toBeInTheDocument();
     expect(screen.getByText('财务确认')).toBeInTheDocument();
@@ -250,7 +250,7 @@ describe('AppAuditPage', () => {
       </>,
     );
 
-    expect(screen.getByText('无权限访问正式日志中心')).toBeInTheDocument();
+    expect(screen.getByText('无权限访问日志中心')).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -281,8 +281,8 @@ describe('AppAuditPage', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式日志中心' })).toBeInTheDocument();
-    expect(screen.queryByText('无权限访问正式日志中心')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '日志中心' })).toBeInTheDocument();
+    expect(screen.queryByText('无权限访问日志中心')).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3001/api/audit-logs',
       expect.objectContaining({

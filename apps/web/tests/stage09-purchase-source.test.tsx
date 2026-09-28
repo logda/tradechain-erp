@@ -31,7 +31,7 @@ it('shows linked inquiry comparison below purchase information only at manager a
   });
   render(<>{await AppPurchaseOrderDetailPage({
     params: Promise.resolve({ id: '502' }),
-    searchParams: Promise.resolve({ role: 'purchase_manager', user: 'Manager', access }),
+    searchParams: Promise.resolve({ role: 'purchase_manager', user: 'Manager', userId: '57', access }),
   })}</>);
   expect(screen.getByRole('heading', { name: '来源询价' })).toBeInTheDocument();
   expect(screen.getByText(/IQ801 · 客户 Customer/)).toBeInTheDocument();

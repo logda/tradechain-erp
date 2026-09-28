@@ -1,3 +1,4 @@
+import { resolveFormalUserName, resolveRuntimeFormalUserName } from '../auth/formal-user-name';
 import {
   BadRequestException,
   Inject,
@@ -33,6 +34,7 @@ export type CreatedAfterSalesRecord = {
   shipmentBatchId?: number;
   type: string;
   issueDescription: string;
+  rejectionReason?: string;
   createdBy: number;
   createdAt: string;
   customerName: string;
@@ -136,15 +138,7 @@ function resolveSupplierName(purchaseOrderId: number | undefined) {
 }
 
 function resolveUserName(userId: number) {
-  if (userId === 2001) {
-    return 'Zoe';
-  }
-
-  if (userId === 2002) {
-    return 'Leo';
-  }
-
-  return 'Mia';
+  return resolveRuntimeFormalUserName(userId);
 }
 
 function resolveShipmentBatchNo(shipmentBatchId: number | undefined) {
@@ -224,6 +218,8 @@ function toCreatedAfterSalesListItem(
     supplierName: item.supplierName,
     createdBy: resolveUserName(item.createdBy),
     ownerName: item.ownerName,
+    ownerId: item.createdBy,
+    createdById: item.createdBy,
     type: normalizeAfterSalesType(item.type) ?? 'customer_complaint',
     financeReviewStatus: item.financeReviewStatus,
     receiptCollectionStatus: item.receiptCollectionStatus,
@@ -235,12 +231,7 @@ function canViewAfterSalesListItem(
   session: FormalSession | undefined,
   item: AfterSalesListItem,
 ) {
-  return !(
-    session?.role &&
-    !isFormalAdminOrBoss(session.role) &&
-    session.role !== 'purchase_manager' &&
-    !matchesFormalUser(session, item)
-  );
+  return filterVisibleFormalItems([item], session ?? {}, ['admin', 'boss', 'purchase_manager']).length > 0;
 }
 
 function toFallbackAfterSalesRecord(
@@ -328,8 +319,11 @@ export class AfterSalesService {
 
   private async updateAfterSalesStatus(payload: {
     afterSalesOrderId: number;
+    expectedStatus?: string;
+    session?: FormalSession;
     status: string;
     operationType: string;
+    operatorId?: number;
     mutate?: (record: CreatedAfterSalesRecord) => Partial<CreatedAfterSalesRecord>;
   }) {
     const existing = (await this.prismaDb!.businessDocument.findUnique({
@@ -341,6 +335,12 @@ export class AfterSalesService {
     }
 
     const beforeData = toAfterSalesDocumentPayload(existing);
+    if (payload.session && !canViewAfterSalesListItem(payload.session, toCreatedAfterSalesListItem(beforeData))) {
+      throw new NotFoundException('售后单不存在');
+    }
+    if (payload.expectedStatus && beforeData.status !== payload.expectedStatus) {
+      throw new BadRequestException('After-sales order status has changed; refresh before retrying');
+    }
     const baseNext = {
       ...beforeData,
       status: payload.status,
@@ -350,7 +350,7 @@ export class AfterSalesService {
       ...(payload.mutate ? payload.mutate(baseNext) : {}),
     } as CreatedAfterSalesRecord;
     const updated = (await this.prismaDb!.businessDocument.update({
-      where: { id: existing.id },
+      where: { id: existing.id, ...(payload.expectedStatus ? { status: payload.expectedStatus } : {}) },
       data: {
         status: payload.status,
         payload: nextPayload,
@@ -362,7 +362,7 @@ export class AfterSalesService {
         bizType: 'after_sales',
         bizId: updated.id,
         operationType: payload.operationType,
-        operatorId: existing.createdBy ?? 0n,
+        operatorId: payload.operatorId !== undefined ? BigInt(payload.operatorId) : existing.createdBy ?? 0n,
         beforeData,
         afterData: nextPayload,
       },
@@ -416,7 +416,6 @@ export class AfterSalesService {
         ).map(toAfterSalesDocumentPayload).map(toCreatedAfterSalesListItem)
       : [
           ...this.store.listAfterSalesOrders().map(toCreatedAfterSalesListItem),
-          ...afterSalesListData,
         ];
 
     const filtered = filterVisibleFormalItems(
@@ -584,7 +583,7 @@ export class AfterSalesService {
         createdAt: '2026-07-11T12:00:00.000Z',
         customerName,
         supplierName,
-        ownerName: resolveUserName(payload.createdBy),
+        ownerName: await resolveFormalUserName(payload.createdBy, this.prisma),
         receiptCollectionStatus: 'unpaid',
         shipmentBatchNo,
         title: resolveAfterSalesTitle(payload.type, customerName),
@@ -655,7 +654,7 @@ export class AfterSalesService {
       createdAt: '2026-07-11T12:00:00.000Z',
       customerName,
       supplierName,
-      ownerName: resolveUserName(payload.createdBy),
+      ownerName: await resolveFormalUserName(payload.createdBy, this.prisma),
       receiptCollectionStatus: 'unpaid',
       shipmentBatchNo,
       title: resolveAfterSalesTitle(payload.type, customerName),
@@ -682,10 +681,10 @@ export class AfterSalesService {
     };
   }
 
-  async listAuditLogs() {
+  async listAuditLogs(bizId?: number) {
     if (this.shouldUsePrisma()) {
       const logs = (await this.prismaDb!.operationLog.findMany({
-        where: { bizType: 'after_sales' },
+        where: { bizType: 'after_sales', ...(bizId === undefined ? {} : { bizId: BigInt(bizId) }) },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       })) as PrismaOperationLogRecord[];
 
@@ -695,7 +694,9 @@ export class AfterSalesService {
     }
 
     return {
-      items: this.store.listAuditLogs(),
+      items: this.store.listAuditLogs().filter((item) =>
+        item.bizType === 'after_sales' && (bizId === undefined || item.bizId === bizId),
+      ),
     };
   }
 
@@ -722,6 +723,7 @@ export class AfterSalesService {
           shipmentBatchId: detail.shipmentBatchId,
           type: detail.type,
           issueDescription: detail.issueDescription,
+          rejectionReason: detail.rejectionReason,
           items: detail.items,
         };
       }
@@ -745,6 +747,7 @@ export class AfterSalesService {
         shipmentBatchId: created.shipmentBatchId,
         type: created.type,
         issueDescription: created.issueDescription,
+        rejectionReason: created.rejectionReason,
         items: created.items,
       };
     }
@@ -774,7 +777,7 @@ export class AfterSalesService {
     };
   }
 
-  async submit(payload: { afterSalesOrderId: number; currentStatus: string }) {
+  async submit(payload: { afterSalesOrderId: number; currentStatus: string; operatorId?: number }) {
     if (payload.currentStatus !== 'pending_submit') {
       throw new BadRequestException(
         'Only pending submit after-sales orders can be submitted',
@@ -784,6 +787,7 @@ export class AfterSalesService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updateAfterSalesStatus({
         afterSalesOrderId: payload.afterSalesOrderId,
+        operatorId: payload.operatorId,
         status: 'pending_approval',
         operationType: 'submit_after_sales',
       });
@@ -792,7 +796,7 @@ export class AfterSalesService {
         await this.syncSourceSalesOrderAfterSalesStatus({
           salesOrderId: updated.salesOrderId,
           afterSalesEndStatus: 'pending_approval',
-          operatorId: updated.createdBy,
+          operatorId: payload.operatorId ?? updated.createdBy,
         });
       }
 
@@ -811,14 +815,14 @@ export class AfterSalesService {
         bizType: 'after_sales',
         bizId: created.id,
         operationType: 'submit_after_sales',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
       await this.syncSourceSalesOrderAfterSalesStatus({
         salesOrderId: created.salesOrderId,
         afterSalesEndStatus: 'pending_approval',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
       });
     }
 
@@ -828,7 +832,7 @@ export class AfterSalesService {
     };
   }
 
-  async approve(payload: { afterSalesOrderId: number; currentStatus: string }) {
+  async approve(payload: { afterSalesOrderId: number; currentStatus: string; operatorId?: number }) {
     if (payload.currentStatus !== 'pending_approval') {
       throw new BadRequestException(
         'Only pending approval after-sales orders can be approved',
@@ -838,6 +842,7 @@ export class AfterSalesService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updateAfterSalesStatus({
         afterSalesOrderId: payload.afterSalesOrderId,
+        operatorId: payload.operatorId,
         status: 'processing',
         operationType: 'approve_after_sales',
       });
@@ -846,7 +851,7 @@ export class AfterSalesService {
         await this.syncSourceSalesOrderAfterSalesStatus({
           salesOrderId: updated.salesOrderId,
           afterSalesEndStatus: 'processing',
-          operatorId: updated.createdBy,
+          operatorId: payload.operatorId ?? updated.createdBy,
         });
       }
 
@@ -865,14 +870,14 @@ export class AfterSalesService {
         bizType: 'after_sales',
         bizId: created.id,
         operationType: 'approve_after_sales',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
       await this.syncSourceSalesOrderAfterSalesStatus({
         salesOrderId: created.salesOrderId,
         afterSalesEndStatus: 'processing',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
       });
     }
 
@@ -882,25 +887,35 @@ export class AfterSalesService {
     };
   }
 
-  async reject(payload: { afterSalesOrderId: number; currentStatus: string }) {
+  async reject(payload: { afterSalesOrderId: number; currentStatus: string; rejectionReason: string; operatorId?: number; session?: FormalSession }) {
     if (payload.currentStatus !== 'pending_approval') {
       throw new BadRequestException(
         'Only pending approval after-sales orders can be rejected',
       );
     }
 
+    const rejectionReason = typeof payload.rejectionReason === 'string' ? payload.rejectionReason.trim() : '';
+    if (!rejectionReason) {
+      throw new BadRequestException('请填写驳回修改要求');
+    }
+
     if (this.shouldUsePrisma()) {
       const updated = await this.updateAfterSalesStatus({
         afterSalesOrderId: payload.afterSalesOrderId,
+        operatorId: payload.operatorId,
+        expectedStatus: payload.currentStatus,
+        session: payload.session,
         status: 'pending_submit',
         operationType: 'reject_after_sales',
+        mutate: () => ({ rejectionReason }),
       });
+      if (!updated) throw new NotFoundException('售后单不存在');
 
       if (updated) {
         await this.syncSourceSalesOrderAfterSalesStatus({
           salesOrderId: updated.salesOrderId,
           afterSalesEndStatus: 'pending_submit',
-          operatorId: updated.createdBy,
+          operatorId: payload.operatorId ?? updated.createdBy,
         });
       }
 
@@ -911,22 +926,30 @@ export class AfterSalesService {
     }
 
     const created = this.store.getAfterSalesOrder(payload.afterSalesOrderId);
+    if (!created) throw new NotFoundException('售后单不存在');
+    if (!canViewAfterSalesListItem(payload.session, toCreatedAfterSalesListItem(created))) {
+      throw new NotFoundException('售后单不存在');
+    }
     if (created) {
+      if (created.status !== payload.currentStatus) {
+        throw new BadRequestException('After-sales order status has changed; refresh before retrying');
+      }
       const beforeData = snapshotAuditData(created);
       created.status = 'pending_submit';
+      created.rejectionReason = rejectionReason;
       this.store.upsertAfterSalesOrder(created);
       this.store.recordAuditLog({
         bizType: 'after_sales',
         bizId: created.id,
         operationType: 'reject_after_sales',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
       await this.syncSourceSalesOrderAfterSalesStatus({
         salesOrderId: created.salesOrderId,
         afterSalesEndStatus: 'pending_submit',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
       });
     }
 
@@ -939,6 +962,7 @@ export class AfterSalesService {
   async startProcessing(payload: {
     afterSalesOrderId: number;
     currentStatus: string;
+    operatorId?: number;
   }) {
     if (payload.currentStatus !== 'processing') {
       throw new BadRequestException(
@@ -949,6 +973,7 @@ export class AfterSalesService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updateAfterSalesStatus({
         afterSalesOrderId: payload.afterSalesOrderId,
+        operatorId: payload.operatorId,
         status: 'finance_reviewing',
         operationType: 'start_after_sales_processing',
       });
@@ -957,7 +982,7 @@ export class AfterSalesService {
         await this.syncSourceSalesOrderAfterSalesStatus({
           salesOrderId: updated.salesOrderId,
           afterSalesEndStatus: 'finance_reviewing',
-          operatorId: updated.createdBy,
+          operatorId: payload.operatorId ?? updated.createdBy,
         });
       }
 
@@ -976,14 +1001,14 @@ export class AfterSalesService {
         bizType: 'after_sales',
         bizId: created.id,
         operationType: 'start_after_sales_processing',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
       await this.syncSourceSalesOrderAfterSalesStatus({
         salesOrderId: created.salesOrderId,
         afterSalesEndStatus: 'finance_reviewing',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
       });
     }
 
@@ -996,6 +1021,7 @@ export class AfterSalesService {
   async confirmFinance(payload: {
     afterSalesOrderId: number;
     currentStatus: string;
+    operatorId?: number;
     financeReviewStatus: string;
   }) {
     if (payload.currentStatus !== 'finance_reviewing') {
@@ -1013,6 +1039,7 @@ export class AfterSalesService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updateAfterSalesStatus({
         afterSalesOrderId: payload.afterSalesOrderId,
+        operatorId: payload.operatorId,
         status: 'finance_reviewing',
         operationType: 'confirm_after_sales_finance',
         mutate: (record) => ({
@@ -1026,7 +1053,7 @@ export class AfterSalesService {
           salesOrderId: updated.salesOrderId,
           afterSalesEndStatus: 'finance_reviewing',
           financeStatus: 'confirmed',
-          operatorId: updated.createdBy,
+          operatorId: payload.operatorId ?? updated.createdBy,
         });
       }
 
@@ -1045,7 +1072,7 @@ export class AfterSalesService {
         bizType: 'after_sales',
         bizId: created.id,
         operationType: 'confirm_after_sales_finance',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
@@ -1053,7 +1080,7 @@ export class AfterSalesService {
         salesOrderId: created.salesOrderId,
         afterSalesEndStatus: 'finance_reviewing',
         financeStatus: 'confirmed',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
       });
     }
 
@@ -1063,7 +1090,7 @@ export class AfterSalesService {
     };
   }
 
-  async finish(payload: { afterSalesOrderId: number; currentStatus: string }) {
+  async finish(payload: { afterSalesOrderId: number; currentStatus: string; operatorId?: number }) {
     if (payload.currentStatus !== 'finance_reviewing') {
       throw new BadRequestException(
         'Only finance-reviewing after-sales orders can finish',
@@ -1073,6 +1100,7 @@ export class AfterSalesService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updateAfterSalesStatus({
         afterSalesOrderId: payload.afterSalesOrderId,
+        operatorId: payload.operatorId,
         status: 'finished',
         operationType: 'finish_after_sales',
       });
@@ -1081,7 +1109,7 @@ export class AfterSalesService {
         await this.syncSourceSalesOrderAfterSalesStatus({
           salesOrderId: updated.salesOrderId,
           afterSalesEndStatus: 'finished',
-          operatorId: updated.createdBy,
+          operatorId: payload.operatorId ?? updated.createdBy,
         });
       }
 
@@ -1100,14 +1128,14 @@ export class AfterSalesService {
         bizType: 'after_sales',
         bizId: created.id,
         operationType: 'finish_after_sales',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
       await this.syncSourceSalesOrderAfterSalesStatus({
         salesOrderId: created.salesOrderId,
         afterSalesEndStatus: 'finished',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
       });
     }
 
@@ -1120,6 +1148,7 @@ export class AfterSalesService {
   async close(payload: {
     afterSalesOrderId: number;
     currentStatus: string;
+    operatorId?: number;
     financeReviewStatus: string;
   }) {
     if (payload.currentStatus !== 'finished') {
@@ -1135,6 +1164,7 @@ export class AfterSalesService {
     if (this.shouldUsePrisma()) {
       const updated = await this.updateAfterSalesStatus({
         afterSalesOrderId: payload.afterSalesOrderId,
+        operatorId: payload.operatorId,
         status: 'closed',
         operationType: 'close_after_sales',
       });
@@ -1144,7 +1174,7 @@ export class AfterSalesService {
           salesOrderId: updated.salesOrderId,
           afterSalesEndStatus: 'closed',
           financeStatus: 'confirmed',
-          operatorId: updated.createdBy,
+          operatorId: payload.operatorId ?? updated.createdBy,
         });
       }
 
@@ -1163,7 +1193,7 @@ export class AfterSalesService {
         bizType: 'after_sales',
         bizId: created.id,
         operationType: 'close_after_sales',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
         beforeData,
         afterData: created,
       });
@@ -1171,7 +1201,7 @@ export class AfterSalesService {
         salesOrderId: created.salesOrderId,
         afterSalesEndStatus: 'closed',
         financeStatus: 'confirmed',
-        operatorId: created.createdBy,
+        operatorId: payload.operatorId ?? created.createdBy,
       });
     }
 

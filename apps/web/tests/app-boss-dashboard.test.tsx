@@ -1,6 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AppBossDashboardPage from '../app/app/dashboard/boss/page';
+
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...await importOriginal<typeof import('next/navigation')>(),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 describe('AppBossDashboardPage', () => {
   beforeEach(() => {
@@ -51,7 +56,8 @@ describe('AppBossDashboardPage', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<>{await AppBossDashboardPage({})}</>);
+    render(<>{await AppBossDashboardPage({ searchParams: Promise.resolve({ access: encodeURIComponent(JSON.stringify({ modules: ['boss_dashboard'], dataScope: 'own_sales' })) }) })}</>);
+    await waitFor(() => expect(screen.queryByText("消息待办 Todo: 加载中…")).not.toBeInTheDocument());
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3001/api/dashboard/boss',
@@ -63,7 +69,9 @@ describe('AppBossDashboardPage', () => {
         }),
       }),
     );
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(screen.getByRole('heading', { name: '老板看板' })).toBeInTheDocument();
+    expect(screen.getByText(/数据范围：全部/)).toBeInTheDocument();
     expect(
       screen.getByText((_, element) =>
         element?.textContent === '待老板确认报价：5 条',
@@ -175,11 +183,12 @@ describe('AppBossDashboardPage', () => {
       </>,
     );
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(screen.getByRole('heading', { name: '老板看板' })).toBeInTheDocument();
     expect(screen.queryByText('无权限访问老板看板')).not.toBeInTheDocument();
   });
 
-  it('falls back to zeros when the dashboard response is missing values', async () => {
+  it('shows unavailable instead of zeros when the dashboard response is missing values', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -196,12 +205,9 @@ describe('AppBossDashboardPage', () => {
     );
 
     render(<>{await AppBossDashboardPage({})}</>);
+    await waitFor(() => expect(screen.queryByText("消息待办 Todo: 加载中…")).not.toBeInTheDocument());
 
-    expect(screen.getAllByText('0')).not.toHaveLength(0);
-    expect(
-      screen.getByText('发货异常批次：0 条', {
-        selector: 'li',
-      }),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/经营看板暂不可用/)).toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
 });

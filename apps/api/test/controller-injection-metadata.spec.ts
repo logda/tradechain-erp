@@ -42,10 +42,10 @@ describe('controller dependency injection metadata', () => {
     [DashboardController, [BossDashboardService]],
     [InquiryController, [InquiryService]],
     [PurchaseOrderController, [PurchaseOrderService, InquiryService]],
-    [QuoteController, [QuoteService, SalesOrderService]],
+    [QuoteController, [QuoteService, SalesOrderService, UserManagementService]],
     [ReportController, [ReportService]],
     [SampleOrderController, [SampleOrderService]],
-    [SalesOrderController, [SalesOrderService, PurchaseOrderService, ProductService, QuoteService, InquiryService]],
+    [SalesOrderController, [SalesOrderService, PurchaseOrderService, ProductService, QuoteService, InquiryService, UserManagementService]],
     [ShipmentBatchController, [ShipmentBatchService]],
     [UserManagementController, [UserManagementService]],
   ])('declares explicit providers for %p', (controller, providers) => {

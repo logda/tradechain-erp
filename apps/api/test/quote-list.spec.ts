@@ -1,6 +1,8 @@
+import { useListFixtures } from './helpers/list-fixtures';
 import { QuoteService } from '../src/quote/quote.service';
 
 describe('QuoteService list', () => {
+  useListFixtures('quote');
   it('filters quotes by advanced fields and returns applied filters', async () => {
     const service = new QuoteService();
 
@@ -25,7 +27,7 @@ describe('QuoteService list', () => {
     const service = new QuoteService();
 
     const result = await service.list({
-      status: 'quoted',
+      status: 'pending_customer_feedback',
       page: 1,
       pageSize: 1,
       sortBy: 'docNo',
@@ -33,7 +35,7 @@ describe('QuoteService list', () => {
     });
 
     expect(result.items).toHaveLength(1);
-    expect(result.total).toBe(2);
+    expect(result.total).toBe(1);
     expect(result.page).toBe(1);
     expect(result.pageSize).toBe(1);
   });

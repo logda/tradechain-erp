@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { AfterSalesController } from '../src/after-sales/after-sales.controller';
 import { AfterSalesService } from '../src/after-sales/after-sales.service';
 
 describe('AfterSalesService persistence', () => {
@@ -14,6 +15,18 @@ describe('AfterSalesService persistence', () => {
   afterEach(() => {
     delete process.env.ERP_DATA_DIR;
     rmSync(runtimeDir, { recursive: true, force: true });
+  });
+
+  it('records the authenticated submit and rejection actors rather than the original creator', async () => {
+    const service = new AfterSalesService();
+    const order = await service.create({ salesOrderId: 88, purchaseOrderId: 21, shipmentBatchId: 100, type: 'customer_complaint', issueDescription: 'Damage', createdBy: 57 });
+    const controller = new AfterSalesController(service);
+    await (controller.submit as any)(order.id, { currentStatus: 'pending_submit' }, '57');
+    await (controller.reject as any)(order.id, { currentStatus: 'pending_approval', rejectionReason: '请补充退款明细' }, '1');
+    const logs = await service.listAuditLogs();
+    expect(logs.items.find(item => item.operationType === 'submit_after_sales')?.operatorId).toBe(57);
+    expect(logs.items.find(item => item.operationType === 'reject_after_sales')?.operatorId).toBe(1);
+    expect((await service.list({})).items.find(item => item.docNo === order.afterSalesNo)?.createdById).toBe(57);
   });
 
   it('persists after-sales lifecycle and finance confirmation across service instances', async () => {

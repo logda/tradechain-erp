@@ -53,7 +53,7 @@ describe('AppHomePage', () => {
             description: 'Runtime API generated after-sales todo',
           },
         ],
-        total: 3,
+        total: 3, count: 3,
         closedTotal: 1,
       }),
     });
@@ -72,7 +72,7 @@ describe('AppHomePage', () => {
       }),
     );
     expect(
-      screen.getByRole('heading', { name: 'ERP 正式工作台' }),
+      screen.getByRole('heading', { name: '首页' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: '系统工作区页签' })).toBeInTheDocument();
     expect(screen.getByText('消息待办 Todo: 03')).toBeInTheDocument();
@@ -103,26 +103,26 @@ describe('AppHomePage', () => {
       within(sidebarNav).queryByRole('link', { name: '商品 / SKU 主数据' }),
     ).not.toBeInTheDocument();
     expect(
-      within(sidebarNav).queryByRole('link', { name: '正式报价单' }),
+      within(sidebarNav).queryByRole('link', { name: '报价单' }),
     ).not.toBeInTheDocument();
     expect(
-      within(sidebarNav).queryByRole('link', { name: '正式询价单' }),
+      within(sidebarNav).queryByRole('link', { name: '询价单' }),
     ).not.toBeInTheDocument();
     expect(
-      within(sidebarNav).queryByRole('link', { name: '正式销售单' }),
+      within(sidebarNav).queryByRole('link', { name: '销售单' }),
     ).not.toBeInTheDocument();
     expect(
-      within(sidebarNav).queryByRole('link', { name: '正式样品单' }),
+      within(sidebarNav).queryByRole('link', { name: '样品单' }),
     ).not.toBeInTheDocument();
     expect(
-      within(sidebarNav).queryByRole('link', { name: '正式采购单' }),
+      within(sidebarNav).queryByRole('link', { name: '采购单' }),
     ).not.toBeInTheDocument();
     expect(
-      within(sidebarNav).queryByRole('link', { name: '正式发货批次' }),
+      within(sidebarNav).queryByRole('link', { name: '发货批次' }),
     ).not.toBeInTheDocument();
     expect(within(sidebarNav).getByRole('link', { name: '经营驾驶舱' })).toHaveAttribute('href', '/app/dashboard/boss');
     expect(screen.queryByRole('link', { name: '日志中心' })).not.toBeInTheDocument();
-    expect(within(sidebarNav).getByRole('link', { name: '正式待办中心' })).toHaveAttribute('href', '/app/todos');
+    expect(within(sidebarNav).getByRole('link', { name: '待办中心' })).toHaveAttribute('href', '/app/todos');
     expect(screen.queryByRole('link', { name: '全链路验收中心' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: '返回演示页' }),
@@ -134,7 +134,7 @@ describe('AppHomePage', () => {
       ok: true,
       json: async () => ({
         items: [],
-        total: 0,
+        total: 0, count: 0,
         closedTotal: 0,
       }),
     });
@@ -188,7 +188,7 @@ describe('AppHomePage', () => {
         id: `purchase-${index}`, docNo: `P-${index + 1}`, title: `采购待办 ${index + 1}`,
         domain: 'purchase', moduleLabel: '采购单', statusLabel: '待处理', ownerName: 'Leo',
         href: `/app/purchase/orders/${index + 1}`, priority: 'high', description: '待处理',
-      })), total: 7, closedTotal: 0,
+      })), total: 7, count: 7, closedTotal: 0,
     }) }));
     render(<>{await AppHomePage({})}</>);
     const group = screen.getByRole('region', { name: '采购与运营待办' });

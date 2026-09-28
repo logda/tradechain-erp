@@ -3,9 +3,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getFormalTodos, type FormalTodoItem } from '../app/app/_lib/formal-todos';
 import AppTodosPage from '../app/app/todos/page';
 
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...await importOriginal<typeof import('next/navigation')>(),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 describe('AppTodosPage', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('resets mounted todo query controls when the session actor changes', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ items: [], total: 0, count: 0, closedTotal: 0 }),
+    }));
+    const first = await AppTodosPage({ searchParams: Promise.resolve({ role: 'sales', user: 'Zoe' }) });
+    const view = render(<>{first}</>);
+    fireEvent.change(screen.getByRole('textbox', { name: '关键词' }), { target: { value: 'Zoe待办草稿' } });
+    const next = await AppTodosPage({ searchParams: Promise.resolve({ role: 'purchase', user: 'Leo' }) });
+    view.rerender(<>{next}</>);
+    expect(screen.getByRole('textbox', { name: '关键词' })).toHaveValue('');
   });
 
   it('auto-closes voided or cascaded todos before role filtering', () => {
@@ -82,7 +99,7 @@ describe('AppTodosPage', () => {
             description: 'Runtime API generated purchase todo',
           },
         ],
-        total: 2,
+        total: 2, count: 2,
         closedTotal: 1,
       }),
     });
@@ -100,7 +117,7 @@ describe('AppTodosPage', () => {
         }),
       }),
     );
-    expect(screen.getByRole('heading', { name: '正式待办中心' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '待办中心' })).toBeInTheDocument();
     expect(screen.getByText('Q-RUNTIME-001')).toBeInTheDocument();
     expect(screen.getByText('P-RUNTIME-001')).toBeInTheDocument();
     expect(screen.getByText('消息待办 Todo: 02')).toBeInTheDocument();
@@ -131,7 +148,7 @@ describe('AppTodosPage', () => {
             description: 'Only Zoe should see this sales todo.',
           },
         ],
-        total: 1,
+        total: 1, count: 1,
         closedTotal: 0,
       }),
     });
@@ -187,10 +204,10 @@ describe('AppTodosPage', () => {
     );
 
     expect(screen.getByText('角色 Role: 采购')).toBeInTheDocument();
-    expect(screen.getByText('待办暂时无法加载，请刷新页面重试。')).toBeInTheDocument();
+    expect(screen.getByText(/待办暂不可用/)).toBeInTheDocument();
     expect(screen.queryByText('P202607080002')).not.toBeInTheDocument();
     expect(screen.queryByText('Q202607080002')).not.toBeInTheDocument();
-    expect(screen.getByText('消息待办 Todo: 00')).toBeInTheDocument();
+    expect(screen.getByText('消息待办 Todo: 暂不可用')).toBeInTheDocument();
   });
 
   it('filters the compact list and pages matching todos', async () => {
@@ -200,7 +217,7 @@ describe('AppTodosPage', () => {
         domain: 'sales', moduleLabel: '报价', statusLabel: index === 6 ? '待老板确认' : '待处理',
         ownerName: 'Zoe', href: `/app/sales/quotes/${index + 1}`,
         priority: 'high', description: '待处理', customerName: index === 6 ? '特定客户' : '普通客户',
-      })), total: 7, closedTotal: 0,
+      })), total: 7, count: 7, closedTotal: 0,
     }) }));
     render(<>{await AppTodosPage({})}</>);
     const group = screen.getByRole('region', { name: '销售待办' });
@@ -210,7 +227,7 @@ describe('AppTodosPage', () => {
     fireEvent.change(screen.getByRole('textbox', { name: '关键词' }), { target: { value: '特定客户' } });
     fireEvent.click(screen.getByRole('button', { name: '查询' }));
     expect(within(screen.getByRole('region', { name: '销售待办' })).getAllByRole('link', { name: '打开单据' })).toHaveLength(1);
-    expect(within(screen.getByRole('region', { name: '销售待办' })).getByText('第 1 / 1 页')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: '销售待办' })).queryByRole('navigation', { name: '销售待办分页' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '重置' }));
     expect(within(screen.getByRole('region', { name: '销售待办' })).getAllByRole('link', { name: '打开单据' })).toHaveLength(5);
   });

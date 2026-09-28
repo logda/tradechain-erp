@@ -1,9 +1,12 @@
+import { UserManagementService } from '../user-management/user-management.service';
 import {
   Body,
+  ForbiddenException,
   Controller,
   Headers,
   Get,
   Inject,
+  Optional,
   Param,
   ParseIntPipe,
   Post,
@@ -19,7 +22,7 @@ import { UpdateQuoteDraftDto } from './dto/update-quote-draft.dto';
 import { QuoteService } from './quote.service';
 import { ConvertQuoteToSalesDto } from '../sales-order/dto/convert-quote-to-sales.dto';
 import { SalesOrderService } from '../sales-order/sales-order.service';
-import { readOptionalFormalSession } from '../auth/formal-session';
+import { filterVisibleFormalItems, readOptionalFormalSession } from '../auth/formal-session';
 import type { CustomerFeedbackResult } from './quote-workflow';
 
 function normalizePositiveInteger(value: string | undefined, fallback: number) {
@@ -49,6 +52,9 @@ export class QuoteController {
     private readonly quoteService: QuoteService,
     @Inject(SalesOrderService)
     private readonly salesOrderService: SalesOrderService,
+    @Optional()
+    @Inject(UserManagementService)
+    private readonly userManagementService?: UserManagementService,
   ) {}
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
@@ -57,6 +63,10 @@ export class QuoteController {
     @Query() query: ListQuotesQueryDto,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     const sortBy: (typeof quoteListSortFields)[number] = quoteListSortFields.includes(
       query.sortBy as (typeof quoteListSortFields)[number],
@@ -77,6 +87,10 @@ export class QuoteController {
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -87,11 +101,19 @@ export class QuoteController {
   listAuditLogs(
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.quoteService.listAuditLogs(
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -99,8 +121,9 @@ export class QuoteController {
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
   @FormalActions('sales.quote.write')
   @Post()
-  create(@Body() dto: CreateQuoteDto) {
-    return this.quoteService.create(dto);
+  async create(@Body() dto: CreateQuoteDto, @Headers('x-erp-user-id') userId?: string, @Headers('x-erp-role') role?: string) {
+    await (this.userManagementService ?? new UserManagementService()).assertSalesOwnerSelection(dto.salesUserId, { userId: userId ? Number(userId) : undefined, role });
+    return userId ? this.quoteService.create({ ...dto }, Number(userId)) : this.quoteService.create({ ...dto });
   }
 
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
@@ -109,12 +132,20 @@ export class QuoteController {
     @Param('id', ParseIntPipe) id: number,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.quoteService.getDetail(
       id,
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -162,8 +193,9 @@ export class QuoteController {
   submitDraftQuote(
     @Param('id', ParseIntPipe) id: number,
     @Body() _body: { currentStatus: string },
+    @Headers('x-erp-user-id') userId?: string,
   ) {
-    return this.quoteService.submitDraftQuote(id);
+    return userId ? this.quoteService.submitDraftQuote(id, Number(userId)) : this.quoteService.submitDraftQuote(id);
   }
 
   @FormalRoles('admin', 'boss')
@@ -173,12 +205,20 @@ export class QuoteController {
     @Param('id', ParseIntPipe) id: number,
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.quoteService.approveDemand(
       id,
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -195,6 +235,10 @@ export class QuoteController {
     },
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.quoteService.confirmQuotePrice(
       id,
@@ -202,6 +246,10 @@ export class QuoteController {
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -219,6 +267,10 @@ export class QuoteController {
     },
     @Headers('x-erp-role') role?: string,
     @Headers('x-erp-user') user?: string,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
+    @Headers('x-erp-modules') modules?: string,
   ) {
     return this.quoteService.recordCustomerFeedback(
       id,
@@ -226,6 +278,10 @@ export class QuoteController {
       readOptionalFormalSession({
         'x-erp-role': role,
         'x-erp-user': user,
+        'x-erp-user-id': userId,
+        'x-erp-legacy-user-ids': legacyUserIds,
+        'x-erp-data-scope': dataScope,
+        'x-erp-modules': modules,
       }),
     );
   }
@@ -233,10 +289,20 @@ export class QuoteController {
   @FormalRoles('admin', 'boss', 'sales_manager', 'sales')
   @FormalActions('sales.quote.write')
   @Post(':id/draft')
-  updateDraft(
+  async updateDraft(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateQuoteDraftDto,
+    @Headers('x-erp-user-id') userId?: string,
+    @Headers('x-erp-role') role?: string,
+    @Headers('x-erp-legacy-user-ids') legacyUserIds?: string,
+    @Headers('x-erp-data-scope') dataScope?: string,
   ) {
-    return this.quoteService.updateDraft(id, dto);
+    if (userId) {
+      const existing = await this.quoteService.getDetail(id);
+      const session = readOptionalFormalSession({ 'x-erp-role': role, 'x-erp-user-id': userId, 'x-erp-legacy-user-ids': legacyUserIds, 'x-erp-data-scope': dataScope })!;
+      if (!filterVisibleFormalItems([existing], session, ['admin', 'boss', 'sales_manager']).length) throw new ForbiddenException('无权修改此单据');
+      await (this.userManagementService ?? new UserManagementService()).assertSalesOwnerSelection(dto.salesUserId ?? existing.salesUserId, { userId: Number(userId), role, legacyUserIds: legacyUserIds?.split(',').map(Number) }, existing.salesUserId);
+    }
+    return userId ? this.quoteService.updateDraft(id, dto, Number(userId)) : this.quoteService.updateDraft(id, dto);
   }
 }

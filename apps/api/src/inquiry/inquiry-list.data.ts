@@ -25,6 +25,7 @@ export type InquirySupplierQuote = {
 };
 
 export type InquiryListItem = {
+  createdById?: number;
   id: number;
   inquiryNo: string;
   status: InquiryStatus;
@@ -40,6 +41,7 @@ export type InquiryListItem = {
   customerId?: number;
   createdBy: string;
   comparisonSubmittedBy?: string;
+  comparisonSubmittedById?: number;
   supplierCount: number;
   comparisonSummary: string;
   createdAt: string;

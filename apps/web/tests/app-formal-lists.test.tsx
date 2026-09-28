@@ -1,8 +1,9 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AppQuoteListPage from '../app/app/sales/quotes/page';
 import AppSalesOrdersPage from '../app/app/sales/orders/page';
 import AppSampleOrdersPage from '../app/app/sales/samples/page';
+import { getSalesOrderPreviewResponse } from '../app/sales-orders/sales-order-preview';
 
 describe('formal sales list pages', () => {
   beforeEach(() => {
@@ -91,7 +92,7 @@ describe('formal sales list pages', () => {
         }),
       }),
     );
-    expect(screen.getByRole('heading', { name: '正式需求和报价' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '需求和报价' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回工作台' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新建需求/报价' })).toHaveAttribute(
       'href',
@@ -398,7 +399,7 @@ describe('formal sales list pages', () => {
         }),
       }),
     );
-    expect(screen.getByRole('heading', { name: '正式销售单' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '销售单' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回工作台' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新建销售单' })).toHaveAttribute(
       'href',
@@ -416,7 +417,7 @@ describe('formal sales list pages', () => {
     expect(screen.getByText('销售单状态 Status')).toBeInTheDocument();
     expect(screen.queryByText('审批 / 履约')).not.toBeInTheDocument();
     expect(screen.queryByText('财务 / 售后')).not.toBeInTheDocument();
-    expect(screen.getByText('purchasing / 采购中')).toBeInTheDocument();
+    expect(screen.getByText('purchasing / 采购中', { selector: 'span' })).toBeInTheDocument();
     expect(screen.getByText(/PO-RUNTIME-001/)).toBeInTheDocument();
     expect(screen.getByText(/Runtime Store 02/)).toBeInTheDocument();
     expect(screen.getByText('订货日期 / 截止日期')).toBeInTheDocument();
@@ -436,18 +437,15 @@ describe('formal sales list pages', () => {
       'href',
       '/app/sales/orders?page=1&pageSize=50',
     );
-    expect(
-      screen.getByRole('link', { name: '按来源方式筛选 报价+询价转入' }),
-    ).toHaveAttribute(
-      'href',
-      '/app/sales/orders?sourceMode=from_quote_with_inquiry',
-    );
+    expect(screen.getByText('报价+询价转入')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /按来源方式筛选/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('来源方式 Source Mode')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: '查看详情 S-RUNTIME-001' }),
     ).toHaveAttribute('href', '/app/sales/orders/88');
   });
 
-  it('renders demand-converted sales source wording and filter link', async () => {
+  it('renders one demand-converted source badge and retains the source filter', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((input: RequestInfo | URL) => {
@@ -493,17 +491,17 @@ describe('formal sales list pages', () => {
       <>{await AppSalesOrdersPage({ searchParams: Promise.resolve({}) })}</>,
     );
 
-    expect(screen.getByText('DEMAND / 需求转单')).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '按来源方式筛选 需求转入' }),
-    ).toHaveAttribute(
-      'href',
-      '/app/sales/orders?sourceMode=from_demand',
-    );
+    expect(screen.queryByText('DEMAND / 需求转单')).not.toBeInTheDocument();
+    expect(screen.getByText('需求转入')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /按来源方式筛选/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('来源方式 Source Mode')).toBeInTheDocument();
   });
 
-  it('renders sales finance filters and applied chips', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('preview fallback')));
+  it('renders sales finance filters and the shared applied summary', async () => {
+    const fixture = getSalesOrderPreviewResponse({ receiptStatus: 'deposit_received', financeConfirmStatus: 'pending' });
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: RequestInfo | URL) => ({
+      ok: true, json: async () => String(input).includes('/sales-orders?') ? fixture : { items: [], count: 0 },
+    })));
 
     render(
       <>
@@ -516,10 +514,12 @@ describe('formal sales list pages', () => {
       </>,
     );
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(screen.getByLabelText('收款状态 Receipt')).toBeInTheDocument();
     expect(screen.getByLabelText('财务确认 Finance')).toBeInTheDocument();
-    expect(screen.getByText('receiptStatus: deposit_received')).toBeInTheDocument();
-    expect(screen.getByText('financeConfirmStatus: pending')).toBeInTheDocument();
+    expect(screen.getByText(/已选：.*收款状态：deposit_received/)).toBeInTheDocument();
+    expect(screen.getByText(/已选：.*财务确认：pending/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '清除筛选' })).toBeInTheDocument();
     expect(screen.queryByText('S202607080001')).not.toBeInTheDocument();
     expect(screen.getByText('S202607080002')).toBeInTheDocument();
     expect(screen.getByText('S202607080003')).toBeInTheDocument();
@@ -597,7 +597,7 @@ describe('formal sales list pages', () => {
         }),
       }),
     );
-    expect(screen.getByRole('heading', { name: '正式样品单' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '样品单' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回工作台' })).not.toBeInTheDocument();
     expect(
@@ -679,7 +679,7 @@ describe('formal sales list pages', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式样品单' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '样品单' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回工作台' })).not.toBeInTheDocument();
     expect(screen.getByText('SP-PURCHASE-001')).toBeInTheDocument();
     expect(

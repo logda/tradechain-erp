@@ -28,9 +28,13 @@ export type SalesOrderListQuery = CommonListQuery<SalesOrderListSortField> & {
 };
 
 export type SalesOrderListItem = {
+  ownerId?: number;
+  createdById?: number;
   moduleLabel: string;
   docNo: string;
   title: string;
+  productNames?: string[];
+  amount?: number;
   status: string;
   secondaryStatus?: string;
   counterpartyName?: string;

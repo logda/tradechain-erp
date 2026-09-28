@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceTabs } from '../app/app/_components/workspace-tabs';
 
 let pathname = '/app';
@@ -11,6 +11,44 @@ describe('WorkspaceTabs', () => {
   beforeEach(() => {
     sessionStorage.clear();
     pathname = '/app';
+    history.replaceState({}, '', '/app');
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('keeps business query and page in one pathname tab', () => {
+    pathname = '/app/sales/orders';
+    history.replaceState({}, '', `${pathname}?keyword=Acme&page=3&role=admin&user=Admin`);
+    const mounted = render(<WorkspaceTabs title="销售单列表" sessionKey="Admin:admin" />);
+    expect(screen.getByRole('tab')).toHaveAttribute('href', `${pathname}?keyword=Acme&page=3`);
+    history.replaceState({}, '', `${pathname}?keyword=Acme&page=4`);
+    mounted.rerender(<WorkspaceTabs title="销售单列表" sessionKey="Admin:admin" />);
+    expect(screen.getAllByRole('tab')).toHaveLength(1);
+    expect(screen.getByRole('tab')).toHaveAttribute('href', `${pathname}?keyword=Acme&page=4`);
+    expect(screen.getByRole('tab')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('restores scroll for the same query only after the real page registers', () => {
+    pathname = '/app/sales/orders';
+    history.replaceState({}, '', `${pathname}?page=3`);
+    const mounted = render(<WorkspaceTabs title="销售单列表" sessionKey="Admin:admin" />);
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 420 });
+    fireEvent.scroll(window);
+    pathname = '/app/sales/orders/103';
+    history.replaceState({}, '', pathname);
+    mounted.rerender(<WorkspaceTabs title="销售单详情" sessionKey="Admin:admin" />);
+    vi.mocked(window.scrollTo).mockClear();
+    pathname = '/app/sales/orders';
+    history.replaceState({}, '', `${pathname}?page=3`);
+    mounted.rerender(<WorkspaceTabs title="销售单列表" sessionKey="Admin:admin" registerCurrent={false} />);
+    expect(window.scrollTo).not.toHaveBeenCalled();
+    mounted.rerender(<WorkspaceTabs title="销售单列表" sessionKey="Admin:admin" />);
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 420, left: 0, behavior: 'instant' });
+    vi.mocked(window.scrollTo).mockClear();
+    history.replaceState({}, '', `${pathname}?page=4`);
+    mounted.rerender(<WorkspaceTabs title="销售单列表" sessionKey="Admin:admin" />);
+    expect(window.scrollTo).not.toHaveBeenCalled();
   });
 
   it('opens pages once, switches to an existing page, and closes the active tab', () => {

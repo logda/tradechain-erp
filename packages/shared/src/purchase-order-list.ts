@@ -27,6 +27,8 @@ export type PurchaseOrderListQuery = Omit<CommonListQuery, 'sortBy'> & {
 };
 
 export type PurchaseOrderListItem = {
+  ownerId?: number;
+  createdById?: number;
   moduleLabel: string;
   docNo: string;
   title: string;

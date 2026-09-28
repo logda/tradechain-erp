@@ -1,3 +1,4 @@
+import { seedInquiryFixtures } from './helpers/list-fixtures';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,6 +17,7 @@ describe('stage 09 purchase ownership', () => {
     dataDir = mkdtempSync(join(tmpdir(), 'erp-stage09-'));
     process.env.ERP_DATA_DIR = dataDir;
     delete process.env.ERP_STORAGE_MODE;
+    seedInquiryFixtures();
   });
 
   afterEach(() => {
@@ -288,7 +290,7 @@ describe('stage 09 purchase ownership', () => {
     expect(purchase.createFromSalesOrder).toHaveBeenCalledWith(expect.objectContaining({
       ownerName: 'Leo', allowPendingAssignment: true,
     }));
-    expect(sales.completePurchaseAssignment).toHaveBeenCalledWith(901, 'Leo');
+    expect(sales.completePurchaseAssignment).toHaveBeenCalledWith(901, 'Leo', undefined, 2002);
   });
 
   it('persists the assignment node and selected purchaser in Prisma payload storage', async () => {

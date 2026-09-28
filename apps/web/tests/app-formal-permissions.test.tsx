@@ -1,12 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 import AppAdminUsersPage from '../app/app/admin/users/page';
 import AppPurchaseOrdersPage from '../app/app/purchase-orders/page';
 import AppSalesOrdersPage from '../app/app/sales/orders/page';
+import { getSalesOrderPreviewResponse } from '../app/sales-orders/sales-order-preview';
 
 describe('formal permissions', () => {
   beforeEach(() => {
-    vi.unstubAllGlobals();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [], total: 0, page: 1, pageSize: 20, count: 0 }) }));
   });
 
   afterEach(() => {
@@ -14,7 +15,10 @@ describe('formal permissions', () => {
   });
 
   it('shows only the sales user own sales orders', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('preview fallback')));
+    const fixture = getSalesOrderPreviewResponse({});
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: RequestInfo | URL) => ({
+      ok: true, json: async () => String(input).includes('/sales-orders?') ? fixture : { items: [], count: 0 },
+    })));
 
     render(
       <>
@@ -27,6 +31,7 @@ describe('formal permissions', () => {
       </>,
     );
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(screen.getByText('角色 Role: 销售')).toBeInTheDocument();
     expect(screen.getByText('用户 User: Zoe')).toBeInTheDocument();
     expect(screen.getByText('S202607080001')).toBeInTheDocument();
@@ -46,7 +51,8 @@ describe('formal permissions', () => {
       </>,
     );
 
-    expect(screen.getByText('无权限访问正式采购单')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
+    expect(screen.getByText('无权限访问采购单')).toBeInTheDocument();
   });
 
   it('allows admin users to access full business modules', async () => {
@@ -61,6 +67,7 @@ describe('formal permissions', () => {
       </>,
     );
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(screen.getByText('角色 Role: 管理员')).toBeInTheDocument();
     expect(screen.getByText('用户 User: Admin')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '采购中心' })).toHaveAttribute(
@@ -81,11 +88,15 @@ describe('formal permissions', () => {
       </>,
     );
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(screen.getByText('无权限访问用户管理')).toBeInTheDocument();
   });
 
   it('hides sales order create buttons when dynamic action permission is missing', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('preview fallback')));
+    const fixture = getSalesOrderPreviewResponse({});
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: RequestInfo | URL) => ({
+      ok: true, json: async () => String(input).includes('/sales-orders?') ? fixture : { items: [], count: 0 },
+    })));
 
     render(
       <>
@@ -104,6 +115,7 @@ describe('formal permissions', () => {
       </>,
     );
 
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(screen.getByText('角色 Role: 销售')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '从报价转入' })).toBeInTheDocument();
     expect(

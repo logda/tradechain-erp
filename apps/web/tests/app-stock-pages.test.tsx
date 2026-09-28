@@ -49,7 +49,7 @@ describe('formal stock pages', () => {
 
     render(<>{await AppStockInPage({ searchParams: Promise.resolve({}) })}</>);
 
-    expect(screen.getByRole('heading', { name: '正式收货单' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '收货单' })).toBeInTheDocument();
     expect(screen.getByText('SI202607140601')).toBeInTheDocument();
     expect(
       screen.getAllByText((_, element) =>
@@ -102,7 +102,7 @@ describe('formal stock pages', () => {
 
     render(<>{await AppStockOutPage({ searchParams: Promise.resolve({}) })}</>);
 
-    expect(screen.getByRole('heading', { name: '正式出库单' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '出库单' })).toBeInTheDocument();
     expect(screen.getByText('SO202607140701')).toBeInTheDocument();
     expect(
       screen.getAllByText((_, element) =>

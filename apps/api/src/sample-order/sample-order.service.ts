@@ -1,3 +1,4 @@
+import { resolveFormalUserName, resolveRuntimeFormalUserName } from '../auth/formal-user-name';
 import {
   BadRequestException,
   Inject,
@@ -190,35 +191,7 @@ function createSampleOrderVersionHistoryEntry(payload: {
 }
 
 function resolveSampleUserName(userId: number) {
-  if (userId === 2001) {
-    return 'Zoe';
-  }
-
-  if (userId === 2002) {
-    return 'Leo';
-  }
-
-  if (userId === 2003) {
-    return 'Mia';
-  }
-
-  if (userId === 2004) {
-    return 'Noah';
-  }
-
-  if (userId === 2005) {
-    return 'Ivy';
-  }
-
-  if (userId === 2006) {
-    return 'Liam';
-  }
-
-  if (userId === 9000) {
-    return 'Admin';
-  }
-
-  return `User ${userId}`;
+  return resolveRuntimeFormalUserName(userId);
 }
 
 function resolveSampleCustomerName(customerId: number) {
@@ -445,6 +418,8 @@ function createSampleOrderListItem(record: SampleOrderDetailRecord): SampleListI
     customerName: record.customerName,
     createdBy: resolveSampleUserName(record.createdBy),
     ownerName: record.ownerName,
+    ownerId: record.createdBy,
+    createdById: record.createdBy,
     quoteNo: record.quoteNo,
     isReplacement: record.isReplacement,
     isCancelled: record.isCancelled,
@@ -454,6 +429,8 @@ function createSampleOrderListItem(record: SampleOrderDetailRecord): SampleListI
 }
 
 function canReadSampleOrder(session: FormalSession | undefined, item: SampleListItem) {
+  if (session?.dataScope?.startsWith('own_')) return matchesFormalUser(session, item);
+  if (session?.dataScope === 'all' || session?.dataScope?.endsWith('_team')) return true;
   if (!session?.role || isFormalAdminOrBoss(session.role) ||
       session.role === 'sales_manager' || session.role === 'purchase_manager') {
     return true;
@@ -625,17 +602,7 @@ export class SampleOrderService {
   }
 
   private listRuntimeSampleOrders() {
-    const stored = this.store.listSampleOrders();
-    const storedIds = new Set(stored.map((item) => item.id));
-    const fallback = sampleOrderListData.filter((item) => {
-      const id = Number(item.detailHref.split('/').pop() ?? 0);
-      return !storedIds.has(id);
-    });
-
-    return [
-      ...fallback,
-      ...stored.map(createSampleOrderListItem),
-    ];
+    return this.store.listSampleOrders().map(createSampleOrderListItem);
   }
 
   private async listAllSampleOrderDetails() {
@@ -648,16 +615,7 @@ export class SampleOrderService {
       return records.map(toSampleOrderDocumentPayload);
     }
 
-    const stored = this.store.listSampleOrders();
-    const storedIds = new Set(stored.map((item) => item.id));
-    const fallback = Array.from(fallbackSampleOrders.values()).filter(
-      (item) => !storedIds.has(item.id),
-    );
-
-    return [
-      ...fallback.map(cloneSampleOrder),
-      ...stored.map(cloneSampleOrder),
-    ];
+    return this.store.listSampleOrders().map(cloneSampleOrder);
   }
 
   private getMutableSampleOrder(id: number) {
@@ -1005,7 +963,7 @@ export class SampleOrderService {
     );
 
     const customerName = resolveSampleCustomerName(dto.customerId);
-    const ownerName = resolveSampleUserName(dto.createdBy);
+    const ownerName = await resolveFormalUserName(dto.createdBy, this.prisma);
     let sourceQuoteItem:
       | {
           sku?: string;

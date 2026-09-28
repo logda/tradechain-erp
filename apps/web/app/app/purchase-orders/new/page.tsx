@@ -1,3 +1,4 @@
+import { resolveFormalUserId } from '../../_lib/formal-access';
 import { AppShell } from '../../_components/app-shell';
 import { MutationActionForm } from '../../_components/mutation-action-form';
 import { resolveDemoSession } from '../../_lib/demo-session';
@@ -10,6 +11,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 
 type PurchaseTransferSalesOrder = PurchaseSplitSalesOrder & {
   status: string;
+  purchaseOwnerId?: number;
   currentVersionNo: number;
   purchaseAggregateStatus: string;
   shipmentAggregateStatus: string;
@@ -61,11 +63,11 @@ function hasValidPurchaseOwnerOptions(value: unknown): value is PurchaseOwnerOpt
   );
 }
 
-function buildFallbackPurchaseOwnerOptions(session: { role: string; user: string }) {
+function buildFallbackPurchaseOwnerOptions(session: { role: string; user: string; userId?: number }) {
   if (session.role === 'purchase') {
     return [
       {
-        id: resolveUserId(session.user),
+        id: resolveFormalUserId(session),
         username: session.user.toLowerCase(),
         realName: session.user,
         roleCode: 'purchase',
@@ -76,7 +78,7 @@ function buildFallbackPurchaseOwnerOptions(session: { role: string; user: string
 
   return [
     {
-      id: resolveUserId(session.user),
+      id: resolveFormalUserId(session),
       username: session.user.toLowerCase(),
       realName: session.user,
       roleCode: session.role,
@@ -85,19 +87,8 @@ function buildFallbackPurchaseOwnerOptions(session: { role: string; user: string
   ];
 }
 
-function resolveUserId(user: string) {
-  if (user === 'Leo') {
-    return 2002;
-  }
 
-  if (user === 'Zoe') {
-    return 2001;
-  }
-
-  return 2000;
-}
-
-async function loadSalesOrderDetail(id: string, session: { role: string; user: string }) {
+async function loadSalesOrderDetail(id: string, session: { role: string; user: string; userId?: number }) {
   if (!id.trim()) {
     return null;
   }
@@ -119,7 +110,7 @@ async function loadSalesOrderDetail(id: string, session: { role: string; user: s
   }
 }
 
-async function loadPurchaseOwnerOptions(session: { role: string; user: string }) {
+async function loadPurchaseOwnerOptions(session: { role: string; user: string; userId?: number }) {
   try {
     const response = await fetch(`${getSalesOrderApiBaseUrl()}/purchase-orders/owner-options`, {
       cache: 'no-store',
@@ -278,12 +269,12 @@ export default async function AppNewPurchaseOrderPage({
   if (!canCreateFormalPurchaseOrder(session)) {
     return (
       <AppShell
-        title="正式转采购单"
+        title="转采购单"
         subtitle="当前角色不具备采购提交权限，不能创建采购单。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限创建正式采购单</h2>
+          <h2>无权限创建采购单</h2>
           <p>请切换到采购、采购主管或管理员账号后再创建采购单。</p>
         </section>
       </AppShell>
@@ -296,9 +287,9 @@ export default async function AppNewPurchaseOrderPage({
     loadPurchaseOwnerOptions(session),
   ]);
   const purchaseDraft = salesOrder ? buildPurchaseSplitDraft(salesOrder) : [];
-  const createdBy = resolveUserId(session.user);
+  const createdBy = resolveFormalUserId(session);
   const actionRequestHeaders = buildFormalRequestHeaders(session);
-  const defaultPurchaseOwnerName = purchaseOwnerOptions[0]?.realName ?? session.user;
+  const defaultPurchaseOwnerId = purchaseOwnerOptions.find(owner => owner.id === (salesOrder?.purchaseOwnerId ?? session.userId))?.id ?? purchaseOwnerOptions[0]?.id ?? '';
   const missingPurchaseDataItems = purchaseDraft.filter(
     (item) => item.supplierId <= 0 || item.unitPrice <= 0,
   );
@@ -306,8 +297,8 @@ export default async function AppNewPurchaseOrderPage({
 
   return (
     <AppShell
-      title="正式转采购单"
-      subtitle="支持按销售单加载采购拆单草稿，并直接生成正式采购单。"
+      title="转采购单"
+      subtitle="支持按销售单加载采购拆单草稿，并直接生成采购单。"
       session={session}
     >
       <section style={shellBodyStyle}>
@@ -315,7 +306,7 @@ export default async function AppNewPurchaseOrderPage({
         <article style={heroCardStyle}>
           <h3 style={titleStyle}>销售转采购 / Sales to Purchase</h3>
           <p style={subStyle}>
-            先输入销售单号加载销售明细，再按当前账号生成供应商拆单草稿，适合演示完整转单链路。
+            输入销售单号加载明细，再按供应商生成采购草稿。
           </p>
         </article>
 
@@ -410,9 +401,10 @@ export default async function AppNewPurchaseOrderPage({
                       dataType: 'number',
                     },
                     {
-                      name: 'ownerName',
+                      name: 'ownerId',
+                      dataType: 'number',
                       label: '采购负责人 Purchase Owner',
-                      value: defaultPurchaseOwnerName,
+                      value: defaultPurchaseOwnerId,
                       display: 'select',
                       required: true,
                       helpText:
@@ -421,7 +413,7 @@ export default async function AppNewPurchaseOrderPage({
                           : '可选范围按当前角色权限控制',
                       options: purchaseOwnerOptions.map((owner) => ({
                         label: `${owner.realName} / ${owner.roleCode}`,
-                        value: owner.realName,
+                        value: String(owner.id),
                       })),
                     },
                     {

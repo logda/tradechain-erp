@@ -1,3 +1,5 @@
+import { DataLoadError } from '../_components/data-load-error';
+import { DataScopeNote } from '../_components/data-scope-note';
 import Link from 'next/link';
 import {
   purchaseApprovalStatuses,
@@ -5,7 +7,6 @@ import {
   purchaseOrderIsResubmittedOptions,
   type PurchaseOrderListResponse,
 } from '@erp/shared';
-import { getPurchaseOrderPreviewResponse } from '../../purchase-orders/purchase-order-preview';
 import { AppShell } from '../_components/app-shell';
 import { AuditLogTable } from '../_components/audit-log-table';
 import { FilterPanel } from '../_components/filter-panel';
@@ -246,21 +247,25 @@ export default async function AppPurchaseOrdersPage({
   if (!canViewFormalModule(session, 'purchase')) {
     return (
       <AppShell
-        title="正式采购单"
+        title="采购单"
         subtitle="当前角色不在采购域内，不能查看采购单。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限访问正式采购单</h2>
+          <h2>无权限访问采购单</h2>
           <p>请切换到采购、采购主管或老板视角后再查看。</p>
         </section>
       </AppShell>
     );
   }
 
-  const result =
-    (await loadPurchaseOrderList(purchaseOrderSearchParams, session)) ??
-    getPurchaseOrderPreviewResponse(query);
+  const result = await loadPurchaseOrderList(purchaseOrderSearchParams, session);
+  if (!result) {
+    return <AppShell title="采购单" session={session}>
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
+      <DataLoadError label="采购单列表" />
+    </AppShell>;
+  }
   const auditLogs = (await loadPurchaseOrderAuditLogs(session))?.items ?? [];
   const visibleItems = filterPurchaseOrderRows(result.items, session);
   const purchasingCount = visibleItems.filter(
@@ -303,7 +308,7 @@ export default async function AppPurchaseOrdersPage({
 
   return (
     <AppShell
-      title="正式采购单"
+      title="采购单"
       subtitle="采购页承接销售拆单、采购审批与履约跟进。"
       session={session}
     >
@@ -317,6 +322,7 @@ export default async function AppPurchaseOrdersPage({
           ) : null}
       </div>
 
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
       <StatStrip
         items={[
           { label: '全部', value: visibleItems.length },
@@ -415,7 +421,7 @@ export default async function AppPurchaseOrdersPage({
             >
               {purchaseOrderIsResubmittedOptions.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {value === 'all' ? '全部' : value === 'yes' ? '是' : value === 'no' ? '否' : value}
                 </option>
               ))}
             </select>

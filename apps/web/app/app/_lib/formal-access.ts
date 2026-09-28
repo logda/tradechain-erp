@@ -32,68 +32,68 @@ function isFormalPurchaseOperator(session: DemoSession) {
   );
 }
 
-export function resolveFormalUserId(user: string) {
-  if (user === 'Zoe') {
-    return 2001;
+export function resolveFormalUserId(session: Pick<DemoSession, 'user' | 'userId'> | string) {
+  if (typeof session !== 'string' && Number.isSafeInteger(session.userId) && Number(session.userId) > 0) {
+    return session.userId!;
   }
-
-  if (user === 'Leo') {
-    return 2002;
-  }
-
-  if (user === 'Admin') {
-    return 9000;
-  }
-
-  return 2000;
+  // Unsigned demo identities are supported only by legacy test fixtures.
+  const user = typeof session === 'string' ? session : session.user;
+  const demoId = process.env.NODE_ENV === 'test'
+    ? ({ Zoe: 2001, Leo: 2002, Admin: 9000, Mia: 2000 } as Record<string, number>)[user]
+    : undefined;
+  if (demoId) return demoId;
+  throw new Error('登录身份缺少用户 ID，请重新登录');
 }
 
 export function canViewFormalQuoteDetail(
   session: DemoSession,
   quote: { salesUserId: number },
 ) {
-  if (isFormalAdminOrBoss(session) || session.role === 'sales_manager') {
+  if ((isFormalAdminOrBoss(session) || session.role === 'sales_manager') && !session.accessScopes?.dataScope.startsWith('own')) {
     return true;
   }
 
-  return session.role === 'sales' && quote.salesUserId === resolveFormalUserId(session.user);
+  if (session.role === 'sales' && ['all', 'sales_team'].includes(session.accessScopes?.dataScope ?? '')) return true;
+  return (session.role === 'sales' || session.role === 'sales_manager' || isFormalAdminOrBoss(session)) && [resolveFormalUserId(session), ...(session.legacyUserIds ?? [])].includes(quote.salesUserId);
 }
 
 export function canViewFormalSalesOrderDetail(
   session: DemoSession,
   salesOrder: { salesUserId?: number; createdBy?: number },
 ) {
-  if (isFormalAdminOrBoss(session) || session.role === 'sales_manager') {
+  if ((isFormalAdminOrBoss(session) || session.role === 'sales_manager') && !session.accessScopes?.dataScope.startsWith('own')) {
     return true;
   }
 
-  if (session.role !== 'sales') {
+  if (!['sales', 'sales_manager', 'admin', 'boss'].includes(session.role)) {
     return false;
   }
 
-  const currentUserId = resolveFormalUserId(session.user);
+  if (['all', 'sales_team'].includes(session.accessScopes?.dataScope ?? '')) return true;
+  const currentUserId = resolveFormalUserId(session);
   return (
-    salesOrder.salesUserId === currentUserId ||
-    salesOrder.createdBy === currentUserId
+    [currentUserId, ...(session.legacyUserIds ?? [])].includes(salesOrder.salesUserId ?? 0) ||
+    [currentUserId, ...(session.legacyUserIds ?? [])].includes(salesOrder.createdBy ?? 0)
   );
 }
 
 export function canViewFormalPurchaseOrderDetail(
   session: DemoSession,
-  purchaseOrder: { ownerName?: string; createdBy?: number },
+  purchaseOrder: { ownerName?: string; ownerId?: number; createdBy?: number },
 ) {
-  if (isFormalAdminOrBoss(session) || session.role === 'purchase_manager') {
+  if ((isFormalAdminOrBoss(session) || session.role === 'purchase_manager') && !session.accessScopes?.dataScope.startsWith('own')) {
     return true;
   }
 
-  if (session.role !== 'purchase') {
+  if (!['purchase', 'purchase_manager', 'admin', 'boss'].includes(session.role)) {
     return false;
   }
 
-  const currentUserId = resolveFormalUserId(session.user);
+  if (['all', 'purchase_team'].includes(session.accessScopes?.dataScope ?? '')) return true;
+  const currentUserId = resolveFormalUserId(session);
   return (
-    purchaseOrder.ownerName === session.user ||
-    purchaseOrder.createdBy === currentUserId
+    (session.userId !== undefined ? [currentUserId, ...(session.legacyUserIds ?? [])].includes(purchaseOrder.ownerId ?? 0) : purchaseOrder.ownerName === session.user) ||
+    [currentUserId, ...(session.legacyUserIds ?? [])].includes(purchaseOrder.createdBy ?? 0)
   );
 }
 
@@ -328,24 +328,24 @@ export function canUseFormalAfterSalesProcessActions(session: DemoSession) {
 
 export function getFormalDetailAccessDeniedLabel(kind: FormalDetailKind) {
   if (kind === 'quote') {
-    return '无权限访问正式报价单';
+    return '无权限访问报价单';
   }
 
   if (kind === 'sales_order') {
-    return '无权限访问正式销售单';
+    return '无权限访问销售单';
   }
 
   if (kind === 'shipment_batch') {
-    return '无权限访问正式发货批次';
+    return '无权限访问发货批次';
   }
 
   if (kind === 'after_sales') {
-    return '无权限访问正式售后单';
+    return '无权限访问售后单';
   }
 
   if (kind === 'sample') {
-    return '无权限访问正式样品单';
+    return '无权限访问样品单';
   }
 
-  return '无权限访问正式采购单';
+  return '无权限访问采购单';
 }

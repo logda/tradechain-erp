@@ -427,7 +427,7 @@ model OperationLog {
   id            BigInt   @id @default(autoincrement())
   bizType       String   @db.VarChar(32)
   bizId         BigInt
-  operationType String   @db.VarChar(32)
+  operationType String   @db.VarChar(64)
   operatorId    BigInt
   beforeData    Json?
   afterData     Json?

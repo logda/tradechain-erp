@@ -10,10 +10,6 @@ import { SampleOrderService } from '../sample-order/sample-order.service';
 import { ShipmentBatchService } from '../shipment-batch/shipment-batch.service';
 import { UserManagementService } from '../user-management/user-management.service';
 
-type AuditLogProvider = {
-  listAuditLogs: () => Promise<{ items: AuditLogItem[] }>;
-};
-
 export type AuditLogItem = {
   id: number;
   bizType: string;
@@ -41,7 +37,8 @@ export type AuditModuleSummary = {
 type AuditModuleConfig = {
   key: string;
   label: string;
-  provider: AuditLogProvider;
+  bizType: string;
+  loadLogs: (bizId?: number) => Promise<{ items: AuditLogItem[] }>;
 };
 
 @Injectable()
@@ -71,16 +68,21 @@ export class AuditService {
     private readonly userManagementService?: UserManagementService,
   ) {}
 
-  async list() {
-    const modules = this.buildModules();
+  async list(filter: { bizType?: string; bizId?: number } = {}) {
+    const modules = this.buildModules().filter((module) =>
+      filter.bizType === undefined || module.bizType === filter.bizType,
+    );
     const operatorNameMap = await this.loadOperatorNameMap();
     const loadedModules = await Promise.all(
       modules.map(async (module) => {
         try {
-          const result = await module.provider.listAuditLogs();
-          const items = result.items.map((item) => ({
+          const result = await module.loadLogs(filter.bizId);
+          const items = result.items.filter((item) =>
+            (filter.bizType === undefined || item.bizType === filter.bizType) &&
+            (filter.bizId === undefined || item.bizId === filter.bizId),
+          ).map((item) => ({
             ...item,
-            operatorName: operatorNameMap.get(item.operatorId),
+            operatorName: operatorNameMap.get(item.operatorId) ?? item.operatorName,
             moduleKey: module.key,
             moduleLabel: module.label,
           }));
@@ -118,31 +120,35 @@ export class AuditService {
 
   private buildModules(): AuditModuleConfig[] {
     return [
-      { key: 'quotes', label: '报价 Quote', provider: this.quoteService },
-      { key: 'quote-inquiries', label: '询价 Inquiry', provider: this.inquiryService },
-      { key: 'samples', label: '样品 Sample', provider: this.sampleOrderService },
+      { key: 'quotes', label: '报价 Quote', bizType: 'quote', loadLogs: () => this.quoteService.listAuditLogs() },
+      { key: 'quote-inquiries', label: '询价 Inquiry', bizType: 'quote_inquiry', loadLogs: () => this.inquiryService.listAuditLogs() },
+      { key: 'samples', label: '样品 Sample', bizType: 'sample_order', loadLogs: () => this.sampleOrderService.listAuditLogs() },
       {
         key: 'sales-orders',
+        bizType: 'sales_order',
         label: '销售单 Sales Order',
-        provider: this.salesOrderService,
+        loadLogs: (bizId) => this.salesOrderService.listAuditLogs(bizId),
       },
       {
         key: 'purchase-orders',
+        bizType: 'purchase_order',
         label: '采购单 Purchase Order',
-        provider: this.purchaseOrderService,
+        loadLogs: (bizId) => this.purchaseOrderService.listAuditLogs(bizId),
       },
       {
         key: 'shipment-batches',
+        bizType: 'shipment_batch',
         label: '发货批次 Shipment',
-        provider: this.shipmentBatchService,
+        loadLogs: (bizId) => this.shipmentBatchService.listAuditLogs(bizId),
       },
-      { key: 'after-sales', label: '售后 After-sales', provider: this.afterSalesService },
+      { key: 'after-sales', label: '售后 After-sales', bizType: 'after_sales', loadLogs: (bizId) => this.afterSalesService.listAuditLogs(bizId) },
       {
         key: 'counterparties',
+        bizType: 'counterparty',
         label: '往来单位 Counterparty',
-        provider: this.counterpartyService,
+        loadLogs: () => this.counterpartyService.listAuditLogs(),
       },
-      { key: 'products', label: '商品 Product', provider: this.productService },
+      { key: 'products', label: '商品 Product', bizType: 'product', loadLogs: () => this.productService.listAuditLogs() },
     ];
   }
 

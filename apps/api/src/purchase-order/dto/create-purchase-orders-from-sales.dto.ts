@@ -27,6 +27,7 @@ export class CreatePurchaseOrdersFromSalesDto {
   factoryEstimatedDeliveryDate?: string;
   shipTo?: string;
   ownerName?: string;
+  ownerId?: number;
   purchaseOrderAttachments?: Array<{
     key?: string;
     fileName: string;

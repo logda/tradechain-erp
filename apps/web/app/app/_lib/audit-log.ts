@@ -514,18 +514,6 @@ const statusValueLabels: Record<string, string> = {
   void: '已作废',
 };
 
-const fallbackOperatorNames: Record<number, string> = {
-  0: '系统',
-  1: 'Admin',
-  2: 'Mia',
-  3: 'Zoe',
-  4: 'Leo',
-  2000: 'Mia',
-  2001: 'Zoe',
-  2002: 'Leo',
-  9000: 'Admin',
-};
-
 function isAuditLogItem(value: unknown): value is AuditLogItem {
   return (
     typeof value === 'object' &&
@@ -615,42 +603,13 @@ export function formatAuditBizObject(item: Pick<AuditLogItem, 'bizType' | 'bizId
   return `${label} #${item.bizId}`;
 }
 
-function readNameFromAuditData(value: unknown) {
-  if (!isPlainRecord(value)) {
-    return undefined;
-  }
-
-  const candidateKeys = [
-    'operatorName',
-    'updatedBy',
-    'createdBy',
-    'salesUserName',
-    'ownerName',
-    'sentByName',
-    'receiptSentByName',
-  ];
-
-  for (const key of candidateKeys) {
-    const candidate = value[key];
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return undefined;
-}
-
 export function formatAuditOperator(item: {
   operatorId: number;
   operatorName?: string;
   beforeData?: unknown;
   afterData?: unknown;
 }) {
-  const name =
-    item.operatorName?.trim() ||
-    readNameFromAuditData(item.afterData) ||
-    readNameFromAuditData(item.beforeData) ||
-    fallbackOperatorNames[item.operatorId];
+  const name = item.operatorName?.trim() || (item.operatorId === 0 ? '系统' : undefined);
   return name ? `${name} #${item.operatorId}` : `操作人 #${item.operatorId}`;
 }
 

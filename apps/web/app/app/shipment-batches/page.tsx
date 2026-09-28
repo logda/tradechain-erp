@@ -1,3 +1,5 @@
+import { DataLoadError } from '../_components/data-load-error';
+import { DataScopeNote } from '../_components/data-scope-note';
 import Link from 'next/link';
 import {
   receiptSendStatuses,
@@ -5,7 +7,6 @@ import {
   shipmentBatchStatuses,
   type ShipmentBatchListResponse,
 } from '@erp/shared';
-import { getShipmentBatchPreviewResponse } from '../../shipment-batches/shipment-batch-preview';
 import { AppShell } from '../_components/app-shell';
 import { AuditLogTable } from '../_components/audit-log-table';
 import { FilterPanel } from '../_components/filter-panel';
@@ -23,6 +24,8 @@ import {
   canUseFormalShipmentUpdateActions,
   canViewFormalShipmentBatchModule,
 } from '../_lib/formal-access';
+
+const shipmentOptionLabels: Record<string, string> = { shipped: '已发货', to_forwarder: '待货代', forwarder_shipped: '货代已发出', arrived: '已到货', exception: '异常', pending: '待发送', sent: '已发送' };
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -225,21 +228,25 @@ export default async function AppShipmentBatchesPage({
   if (!canViewFormalShipmentBatchModule(session)) {
     return (
       <AppShell
-        title="正式发货批次"
+        title="发货批次"
         subtitle="当前角色不在销售或采购履约域内，不能查看发货批次。"
         session={session}
       >
         <section style={deniedStyle}>
-          <h2>无权限访问正式发货批次</h2>
+          <h2>无权限访问发货批次</h2>
           <p>请切换到销售、采购、主管或老板视角后再查看。</p>
         </section>
       </AppShell>
     );
   }
 
-  const result =
-    (await loadShipmentBatchList(shipmentBatchSearchParams, session)) ??
-    getShipmentBatchPreviewResponse(query);
+  const result = await loadShipmentBatchList(shipmentBatchSearchParams, session);
+  if (!result) {
+    return <AppShell title="发货批次" session={session}>
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
+      <DataLoadError label="发货批次列表" />
+    </AppShell>;
+  }
   const auditLogs = (await loadShipmentBatchAuditLogs(session))?.items ?? [];
   const visibleItems = result.items;
   const shippedCount = visibleItems.filter((item) => item.status === 'shipped').length;
@@ -274,7 +281,7 @@ export default async function AppShipmentBatchesPage({
 
   return (
     <AppShell
-      title="正式发货批次"
+      title="发货批次"
       subtitle="正式发货页强调多批次发货、异常追踪、回单发送与销售采购双向追溯。"
       session={session}
     >
@@ -291,6 +298,7 @@ export default async function AppShipmentBatchesPage({
         </div>
       </div>
 
+      <DataScopeNote session={session} timeRange={query.dateFrom || query.dateTo ? `${query.dateFrom || "不限"} 至 ${query.dateTo || "不限"}` : "all_time"} />
       <StatStrip
         items={[
           { label: '全部', value: visibleItems.length },
@@ -319,7 +327,7 @@ export default async function AppShipmentBatchesPage({
               <option value="">全部</option>
               {shipmentBatchStatuses.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {`${status} / ${shipmentOptionLabels[status] ?? status}`}
                 </option>
               ))}
             </select>
@@ -358,7 +366,7 @@ export default async function AppShipmentBatchesPage({
               <option value="">全部</option>
               {receiptSendStatuses.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {`${status} / ${shipmentOptionLabels[status] ?? status}`}
                 </option>
               ))}
             </select>
@@ -372,7 +380,7 @@ export default async function AppShipmentBatchesPage({
             >
               {shipmentBatchHasExceptionOptions.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {value === 'all' ? '全部' : value === 'yes' ? '是' : value === 'no' ? '否' : value}
                 </option>
               ))}
             </select>

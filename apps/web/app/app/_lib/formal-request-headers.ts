@@ -84,7 +84,9 @@ export type FormalRequestSession = {
   role: string;
   user: string;
   username?: string;
-  accessScopes?: { modules?: string[]; actions?: string[] };
+  userId?: number;
+  legacyUserIds?: number[];
+  accessScopes?: { modules?: string[]; actions?: string[]; dataScope?: string };
 };
 
 export function parseFormalAccessScopes(value: string | null) {
@@ -139,7 +141,10 @@ export function buildFormalRequestHeaders(session: FormalRequestSession) {
 
   return {
     'x-erp-role': session.role,
-    'x-erp-user': session.user,
+    'x-erp-user': /[^\x20-\x7e]/.test(session.user) ? encodeURIComponent(session.user) : session.user,
+    ...(session.legacyUserIds ? { 'x-erp-legacy-user-ids': session.legacyUserIds.join(',') } : {}),
+    ...(session.userId ? { 'x-erp-user-id': String(session.userId) } : {}),
+    ...(session.accessScopes?.dataScope ? { 'x-erp-data-scope': session.accessScopes.dataScope } : {}),
     ...(modules.length ? { 'x-erp-modules': modules.join(',') } : {}),
     ...(actions.length ? { 'x-erp-actions': actions.join(',') } : {}),
   };

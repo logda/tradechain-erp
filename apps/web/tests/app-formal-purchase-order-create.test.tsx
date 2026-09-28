@@ -160,15 +160,15 @@ describe('formal purchase order create page', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式转采购单' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '返回正式采购单列表' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '转采购单' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '返回采购单列表' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('销售单 ID Sales Order')).toHaveValue(101);
     expect(screen.getByRole('heading', { name: '销售单 S202607080101' })).toBeInTheDocument();
     expect(screen.getByText('采购拆单预览')).toBeInTheDocument();
     expect(screen.getAllByText('未配置供应商').length).toBeGreaterThan(0);
     expect(screen.getByText('待补采购价')).toBeInTheDocument();
     expect(screen.getByText('SH Boninoe')).toBeInTheDocument();
-    expect(screen.getByLabelText(/采购负责人 Purchase Owner/)).toHaveValue('Leo');
+    expect(screen.getByLabelText(/采购负责人 Purchase Owner/)).toHaveValue('2002');
     expect(screen.getByText('普通采购只能选择自己')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '生成采购单' })).toBeInTheDocument();
   });
@@ -243,8 +243,8 @@ describe('formal purchase order create page', () => {
       </>,
     );
 
-    expect(screen.getByRole('heading', { name: '正式转采购单' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '无权限创建正式采购单' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '转采购单' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '无权限创建采购单' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '返回正式首页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '生成采购单' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('销售单 ID Sales Order')).not.toBeInTheDocument();

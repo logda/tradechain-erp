@@ -1,6 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { resolveSalesOrderStore } from '../src/sales-order/sales-order.store';
+import { resolvePurchaseOrderStore } from '../src/purchase-order/purchase-order.store';
 import { SalesOrderService } from '../src/sales-order/sales-order.service';
 import { AfterSalesService } from '../src/after-sales/after-sales.service';
 import { resolveQuoteStore } from '../src/quote/quote.store';
@@ -834,14 +836,11 @@ describe('SalesOrderService', () => {
     expect(result.status).toBe('pending_purchase_assignment');
   });
 
-  it('rejects a pending sales order into a rejected editable state', async () => {
+  it('rejects a saved pending sales order into a rejected editable state', async () => {
     const service = new SalesOrderService();
-
-    const result = await service.reject({
-      salesOrderId: 9,
-      currentStatus: 'pending_sales_manager_approval',
-    });
-
+    const created = await service.create({ customerName: 'Acme Trading', title: 'Rejection', salesUserId: 2001, createdBy: 2001 });
+    await service.submit({ salesOrderId: created.id, currentStatus: 'draft' });
+    const result = await service.reject({ salesOrderId: created.id, currentStatus: 'pending_sales_manager_approval', rejectionReason: '请调整单价' });
     expect(result.status).toBe('rejected');
   });
 
@@ -859,6 +858,7 @@ describe('SalesOrderService', () => {
       currentStatus: 'draft',
     });
     await service.reject({
+      rejectionReason: '请调整单价',
       salesOrderId: created.id,
       currentStatus: 'pending_sales_manager_approval',
     });
@@ -987,7 +987,15 @@ describe('SalesOrderService', () => {
     await service.approve({
       salesOrderId: created.id,
       currentStatus: 'pending_sales_manager_approval',
+      purchaseOwnerName: 'Leo',
     });
+
+    for (const id of [3001, 3002]) {
+      resolvePurchaseOrderStore().upsertPurchaseOrder({ id, purchaseNo: `P${id}`, sourceSalesOrderId: created.id,
+        supplierId: 1, supplierName: 'Factory', ownerName: 'Leo', currentVersionNo: 1, status: 'purchasing',
+        itemCount: 0, createdBy: 2002, createdAt: new Date().toISOString(), salesOrderNo: created.salesNo,
+        currentBatchCount: 0, versionHistory: [], items: [] });
+    }
 
     const result = await service.cancel({
       salesOrderId: created.id,
@@ -1022,6 +1030,7 @@ describe('SalesOrderService', () => {
     await service.approve({
       salesOrderId: created.id,
       currentStatus: 'pending_sales_manager_approval',
+      purchaseOwnerName: 'Leo',
     });
     await service.cancel({
       salesOrderId: created.id,
@@ -1043,25 +1052,21 @@ describe('SalesOrderService', () => {
     );
   });
 
-  it('rejects cancellation when unshipped purchase order ids are missing', async () => {
+  it('derives unshipped purchase ids from saved data when the request omits them', async () => {
     const service = new SalesOrderService();
-
-    await expect(
-      service.cancel({
-        salesOrderId: 9,
-        currentStatus: 'purchasing',
-        hasShipmentBatches: false,
-        cancelReason: '客户取消订单',
-        unshippedPurchaseOrderIds: undefined as never,
-      }),
-    ).rejects.toThrow('Unshipped purchase order ids are required');
+    const created = await service.create({ customerName: 'Acme Trading', title: 'Cancellation', salesUserId: 2001, createdBy: 2001 });
+    resolveSalesOrderStore().upsertSalesOrder({ ...created, status: 'purchasing' });
+    const result = await service.cancel({ salesOrderId: created.id, currentStatus: 'purchasing', cancelReason: 'Actual cancellation reason' });
+    expect(result.autoVoidedPurchaseOrderIds).toEqual([]);
+    expect(result.status).toBe('void');
   });
 
   it('updates sales receipt status using the confirmed receipt collection contract', async () => {
     const service = new SalesOrderService();
 
+    const created = await service.create({ customerName: 'Acme Trading', title: 'Receipt', salesUserId: 2001, createdBy: 2001 });
     const result = await service.updateReceiptStatus({
-      salesOrderId: 9,
+      salesOrderId: created.id,
       receiptStatus: 'fully_paid',
     });
 
@@ -1095,9 +1100,10 @@ describe('SalesOrderService', () => {
   it('confirms finance only after receipt status is no longer unpaid', async () => {
     const service = new SalesOrderService();
 
+    const created = await service.create({ customerName: 'Acme Trading', title: 'Finance', salesUserId: 2001, createdBy: 2001 });
     await expect(
       service.confirmFinance({
-        salesOrderId: 9,
+        salesOrderId: created.id,
         receiptStatus: 'unpaid',
         financeStatus: 'pending',
       }),
