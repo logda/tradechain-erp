@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useId, useRef } from 'react';
+import { useContext, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { WorkspacePageActiveContext } from './workspace-page-context';
 
 const overlayStyle = {
   position: 'fixed' as const,
@@ -36,15 +37,18 @@ export function ConfirmDialog({ message, title = '请确认操作', confirmLabel
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const dialogId = useId();
+  const active = useContext(WorkspacePageActiveContext);
 
   useEffect(() => {
+    if (!active) return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     (notice ? confirmRef : cancelRef).current?.focus();
     return () => {
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, []);
+  }, [active]);
 
+  if (!active) return null;
   return createPortal(
     <div style={overlayStyle}>
       <div

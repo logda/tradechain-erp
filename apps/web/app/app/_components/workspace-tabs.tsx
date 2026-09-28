@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { readWorkspaceScroll, saveWorkspaceScroll, useWorkspaceSearch, workspaceContentReadyEvent, workspaceHref } from '../_lib/workspace-navigation';
+import { workspacePageClosedEvent } from '../_lib/workspace-editing';
 
 type WorkspaceTab = { href: string; label: string };
 
@@ -70,6 +71,7 @@ export function WorkspaceTabs({ title, tabLabel, sessionKey, registerCurrent = t
   function closeTab(href: string) {
     const index = tabs.findIndex((tab) => tab.href === href);
     if (index < 0) return;
+    window.dispatchEvent(new CustomEvent(workspacePageClosedEvent, { detail: href.split('?')[0] }));
     const next = tabs.filter((tab) => tab.href !== href);
     if (next.length === 0) {
       const home = [{ href: '/app', label: '首页' }];
@@ -94,6 +96,7 @@ export function WorkspaceTabs({ title, tabLabel, sessionKey, registerCurrent = t
               className="erp-workspace-tabs__close"
               aria-label={`关闭${tab.label}页签`} title={`关闭${tab.label}页签`}
               data-workspace-close-only={tab.href.split('?')[0] !== pathname || (tabs.length === 1 && pathname === '/app') ? 'true' : undefined}
+              data-workspace-close-path={tab.href.split('?')[0]}
               onClick={(event) => {
                 if (tab.href.split('?')[0] !== pathname || (tabs.length === 1 && pathname === '/app')) event.preventDefault();
                 closeTab(tab.href);
