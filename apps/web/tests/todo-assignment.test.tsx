@@ -24,6 +24,14 @@ describe('待办分工与交期', () => {
     expect(screen.queryByText('S-NEW')).not.toBeInTheDocument();
   });
 
+  it('shows a real handler username and preserves the role handler and total', () => {
+    render(<TodoGroup title="销售待办" todos={[tasks[0], { ...tasks[1], userDisplayNames: { handlerLabel: 'new-sales' } }]} />);
+    expect(screen.getByText('当前处理人：new-sales')).toBeInTheDocument();
+    expect(screen.getByText('当前处理人：销售主管')).toBeInTheDocument();
+    expect(screen.getByText('共 2 条')).toBeInTheDocument();
+    expect(screen.queryByText('当前处理人：小李')).not.toBeInTheDocument();
+  });
+
   it('paginates after selecting the relation and resets the page when switching', () => {
     const todos = Array.from({ length: 12 }, (_, i) => ({ ...tasks[i % 2], id: String(i), docNo: `S-${i}` }));
     render(<TodoGroup title="销售待办" todos={todos} />);

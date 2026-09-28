@@ -73,6 +73,8 @@ describe('formal todos batch 5', () => {
     expect(purchase.items.map(item => item.docNo)).toEqual(['P-100', 'P-101']);
     expect((await service.listFormalTodos({ role: 'sales_manager', userId: 57,
       dataScope: 'own_sales', modules: ['sales'] })).items.map(item => item.docNo)).toEqual(['S-100', 'S-101']);
+    expect(await service.countFormalTodos({ role: 'sales', userId: 57, dataScope: 'own_sales', modules: ['sales'] })).toEqual({ count: 2 });
+    expect(await service.countFormalTodos({ role: 'purchase', userId: 57, dataScope: 'own_purchase', modules: ['purchase'] })).toEqual({ count: 2 });
   });
 
   it('uses paginated Prisma lists to retain old tasks and never reads runtime records in Prisma mode', async () => {
@@ -93,6 +95,7 @@ describe('formal todos batch 5', () => {
     const result = await service.listFormalTodos({ role: 'boss', dataScope: 'all' });
     expect(result.items.map(item => item.docNo)).toEqual(['S-100', 'P-100', 'S-101', 'P-101', 'S-102', 'P-102']);
     expect(result.total).toBe(6);
+    expect(await service.countFormalTodos({ role: 'boss', dataScope: 'all' })).toEqual({ count: 6 });
   });
 
   it('does not return a false zero when a later source page fails', async () => {
@@ -101,6 +104,41 @@ describe('formal todos batch 5', () => {
       return { items: Array.from({ length: 100 }, (_, index) => ({ docNo: `S-${index}`, status: 'draft' })), total: 101 };
     }) };
     await expect(createService(sales).listFormalTodos()).rejects.toThrow('读取第二页失败');
+    await expect(createService(sales).countFormalTodos()).rejects.toThrow('读取第二页失败');
+  });
+
+  it('counts the same authorized tasks without loading document details or handler names', async () => {
+    const sales = { ...list([
+      { docNo: 'S-OWN', title: '我的订单', status: 'pending_sales_manager_approval', ownerId: 57, createdById: 57, detailHref: '/sales-orders/1' },
+      { docNo: 'S-OTHER', title: '其他订单', status: 'pending_sales_manager_approval', ownerId: 58, createdById: 58, detailHref: '/sales-orders/2' },
+    ]), getDetail: jest.fn().mockResolvedValue({ items: [] }) };
+    const quote = { ...list([{ docNo: 'Q-OWN', title: '报价', status: 'pending_customer_feedback', bossConfirmed: true, ownerId: 57, createdById: 57, createdBy: '销售', detailHref: '/quotes/3' }]), getDetail: jest.fn().mockResolvedValue({ items: [] }) };
+    const service = createService(sales, list([]), quote);
+    for (const query of [
+      { role: 'sales' as const, userId: 57, dataScope: 'own_sales' as const, modules: ['sales'], actions: [] },
+      { role: 'sales_manager' as const, dataScope: 'sales_team' as const, modules: ['sales'] },
+      { role: 'boss' as const, dataScope: 'all' as const },
+    ]) {
+      const total = (await service.listFormalTodos(query)).total;
+      sales.getDetail.mockClear();
+      quote.getDetail.mockClear();
+      expect(await service.countFormalTodos(query)).toEqual({ count: total });
+      expect(sales.getDetail).not.toHaveBeenCalled();
+      expect(quote.getDetail).not.toHaveBeenCalled();
+    }
+  });
+
+  it('keeps the required assignment check without extra display details or Prisma handler lookups', async () => {
+    process.env.ERP_STORAGE_MODE = 'prisma';
+    const prisma = { user: { findUnique: jest.fn() } } as unknown as PrismaService;
+    const purchase = { ...list([{ docNo: 'P-OWN', title: '采购', status: 'pending_purchase_claim',
+      ownerName: '采购员', ownerId: 57, detailHref: '/purchase-orders/1' }]), getDetail: jest.fn() };
+    const service = new FormalTodoService(list([]) as never, list([]) as never, purchase as never,
+      list([]) as never, list([]) as never, undefined, undefined, prisma);
+    expect(await service.countFormalTodos({ role: 'purchase', userId: 57, dataScope: 'own_purchase', modules: ['purchase'] })).toEqual({ count: 1 });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(purchase.getDetail).toHaveBeenCalledTimes(1);
+    expect(purchase.getDetail).toHaveBeenCalledWith(1);
   });
 
   it('continues past the first 100 records for each of the seven sources', async () => {

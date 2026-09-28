@@ -10,6 +10,7 @@ import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import {
   buildCounterpartyOwnerOptions,
   filterCounterpartyOwnerOptions,
+  resolveCounterpartyOwnerUsername,
   type CounterpartyAssignableUser,
   type CounterpartyType,
 } from './owner-options';
@@ -27,6 +28,7 @@ type CounterpartyEditableItem = CounterpartyExtraValues & {
   shortName: string;
   region: string;
   ownerName: string;
+  userDisplayNames?: Record<string, string>;
   contactName: string;
   phone: string;
   address: string;
@@ -263,6 +265,11 @@ export function UpdateCounterpartyForm({
       onSuccess?.({
         ...nextItem,
         ...responseItem,
+        userDisplayNames: {
+          ...item.userDisplayNames,
+          ownerName: nextItem.ownerName === item.ownerName && item.userDisplayNames?.ownerName
+            ? item.userDisplayNames.ownerName : resolveCounterpartyOwnerUsername(ownerOptions, nextItem.ownerName),
+        },
       });
       setMessage('保存成功');
       attempt.succeed();

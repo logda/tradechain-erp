@@ -454,9 +454,9 @@ describe('formal sales order create page', () => {
     );
 
     expect(screen.getByLabelText('销售负责人 Sales Owner')).not.toBeDisabled();
-    expect(screen.getByRole('option', { name: 'Zoe / 销售 Zoe' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Leo / 销售 Leo' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Mia / 销售主管 Mia' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'zoe / 销售' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'leo / 销售' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Mia / 销售主管' })).toBeInTheDocument();
     expect(screen.getByLabelText('销售负责人 Sales Owner')).toHaveValue('2000');
   });
 
@@ -497,10 +497,10 @@ describe('formal sales order create page', () => {
     );
 
     expect(screen.getByLabelText('销售负责人 Sales Owner')).not.toBeDisabled();
-    expect(screen.getByRole('option', { name: 'Zoe / 销售 Zoe' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Leo / 销售 Leo' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Ana / 销售主管 Ana' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Mia / 老板 Mia' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'zoe / 销售' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'leo / 销售' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'ana / 销售主管' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Mia / 老板' })).toBeInTheDocument();
     expect(screen.getByLabelText('销售负责人 Sales Owner')).toHaveValue('2000');
   });
 

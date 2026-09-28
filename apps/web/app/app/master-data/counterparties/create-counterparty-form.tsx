@@ -10,6 +10,7 @@ import { useMutationAttempt } from '../../_lib/use-mutation-attempt';
 import {
   buildCounterpartyOwnerOptions,
   filterCounterpartyOwnerOptions,
+  resolveCounterpartyOwnerUsername,
   type CounterpartyAssignableUser,
   type CounterpartyType,
 } from './owner-options';
@@ -275,6 +276,7 @@ export function CreateCounterpartyForm({
         shortName: payload.shortName.trim(),
         region: payload.region.trim(),
         ownerName: payload.ownerName.trim(),
+        userDisplayNames: { ownerName: resolveCounterpartyOwnerUsername(ownerOptions, payload.ownerName) },
         contactName: payload.contactName.trim(),
         phone: payload.phone.trim(),
         address: payload.address.trim(),

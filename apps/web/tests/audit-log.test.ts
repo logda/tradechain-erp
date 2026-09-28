@@ -93,17 +93,17 @@ describe('audit log helpers', () => {
     expect(formatAuditBizObject({ bizType: 'quote', bizId: 120 })).toBe(
       '需求单 / 报价单 #120',
     );
-    expect(formatAuditOperator({ operatorId: 2, operatorName: 'Mia' })).toBe('Mia #2');
-    expect(formatAuditOperator({ operatorId: 3 })).toBe('操作人 #3');
-    expect(formatAuditOperator({ operatorId: 2001 })).toBe('操作人 #2001');
-    expect(formatAuditOperator({ operatorId: 2002 })).toBe('操作人 #2002');
-    expect(formatAuditOperator({ operatorId: 9000 })).toBe('操作人 #9000');
+    expect(formatAuditOperator({ operatorId: 2, operatorName: 'Mia' })).toBe('Mia');
+    expect(formatAuditOperator({ operatorId: 3 })).toBe('历史账号未关联');
+    expect(formatAuditOperator({ operatorId: 2001 })).toBe('历史账号未关联');
+    expect(formatAuditOperator({ operatorId: 2002 })).toBe('历史账号未关联');
+    expect(formatAuditOperator({ operatorId: 9000 })).toBe('历史账号未关联');
     expect(
       formatAuditOperator({
         operatorId: 7000,
         afterData: { salesUserName: 'Zoe' },
       }),
-    ).toBe('操作人 #7000');
+    ).toBe('历史账号未关联');
     expect(formatAuditCreatedAt(item.createdAt)).toContain('2026');
     expect(buildAuditChangeSummary(item)).toEqual({
       title: '字段变更',

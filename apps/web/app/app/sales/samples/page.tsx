@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from '../../_lib/formal-user-display';
 import { DataLoadError } from '../../_components/data-load-error';
 import { DataScopeNote } from '../../_components/data-scope-note';
 import Link from 'next/link';
@@ -407,7 +408,7 @@ export default async function AppSampleOrdersPage({
                 <td style={tableCellStyle}>
                   {formatCounterpartyChineseDisplay(item.customerName)}
                 </td>
-                <td style={tableCellStyle}>{item.ownerName}</td>
+                <td style={tableCellStyle}>{formatFormalUserLabel(item, 'ownerName')}</td>
                 <td style={tableCellStyle}>
                   {formatSampleOrderStatus(item.status)}
                 </td>

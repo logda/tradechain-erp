@@ -18,9 +18,12 @@ describe('AppPurchasePage', () => {
     expect(
       screen.getByRole('heading', { name: '采购工作台' }),
     ).toBeInTheDocument();
-    expect(screen.getAllByText('采购待办').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('发货待办').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('售后待办').length).toBeGreaterThan(0);
+    expect(screen.queryByText('采购待办')).not.toBeInTheDocument();
+    expect(screen.queryByText('发货待办')).not.toBeInTheDocument();
+    expect(screen.queryByText('售后待办')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-todo-block]')).toBeNull();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/todos/formal'))).toBe(false);
+    expect(screen.getByRole('link', { name: '待办中心' })).toHaveAttribute('href', '/app/todos');
     expect(screen.getByRole('link', { name: '采购单模块' })).toHaveAttribute(
       'href',
       '/app/purchase-orders',
@@ -60,6 +63,16 @@ describe('AppPurchasePage', () => {
       'href',
       '/app/sales/inquiries?status=pending_inquiry',
     );
+  });
+
+  it('opens business entries without waiting for any todo request', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('待办服务不可用')));
+    const page = await AppPurchasePage({});
+    expect(fetch).not.toHaveBeenCalled();
+    render(page);
+    await waitFor(() => expect(screen.getByText('消息待办 Todo: 暂不可用')).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: '采购单模块' })).toBeInTheDocument();
+    expect(screen.queryByText('待办加载失败')).not.toBeInTheDocument();
   });
 
   it('blocks sales-only users from the purchase workbench', async () => {

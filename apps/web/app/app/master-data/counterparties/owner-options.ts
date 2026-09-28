@@ -104,6 +104,12 @@ function resolveOwnerRoleConfig(user: CounterpartyAssignableUser) {
   );
 }
 
+export function resolveCounterpartyOwnerUsername(users: CounterpartyAssignableUser[], ownerName: string) {
+  const reference = ownerName.trim().toLowerCase();
+  const usernames = new Set(users.filter(user => [user.realName, user.username].some(name => name.trim().toLowerCase() === reference)).map(user => user.username));
+  return usernames.size === 1 ? [...usernames][0] : '历史账号未关联';
+}
+
 export function buildCounterpartyOwnerOptions(
   users: CounterpartyAssignableUser[],
 ): CounterpartyOwnerOption[] {
@@ -127,7 +133,7 @@ export function buildCounterpartyOwnerOptions(
     const existing = uniqueOptions.get(realName);
     const nextOption: CounterpartyOwnerOption = {
       value: realName,
-      label: `${realName} / ${roleLabels[user.roleCode] ?? user.roleCode}`,
+      label: `${user.username} / ${roleLabels[user.roleCode] ?? user.roleCode}`,
       roleCode: user.roleCode,
       supportsCustomer: roleConfig.supportsCustomer,
       supportsSupplier: roleConfig.supportsSupplier,

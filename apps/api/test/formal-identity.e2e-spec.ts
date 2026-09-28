@@ -44,6 +44,25 @@ describe('real employee metadata route', () => {
     } finally { delete process.env.ERP_REQUIRE_SIGNED_FORMAL_SESSION; }
   });
 
+  it('decorates authorized own-sales HTTP rows with usernames while preserving scope and stored IDs', async () => {
+    const users = app.get(UserManagementService);
+    const employee = await users.create({ username: 'new-sales', realName: '员工姓名', password: 'secret', roleCode: 'sales', createdBy: 'admin' });
+    const sales = app.get(SalesOrderService);
+    const own = await sales.create({ customerName: 'Own customer', title: 'Own order', salesUserId: employee.id, createdBy: employee.id });
+    const other = await sales.create({ customerName: 'Other customer', title: 'Other order', salesUserId: 3, createdBy: 3 });
+    const response = await request(app.getHttpServer()).get('/sales-orders')
+      .set('x-erp-role', 'sales').set('x-erp-user', encodeURIComponent('员工姓名'))
+      .set('x-erp-user-id', String(employee.id)).set('x-erp-modules', 'sales').set('x-erp-data-scope', 'own_sales').expect(200);
+    expect(response.body.total).toBe(1);
+    expect(response.body.items[0]).toMatchObject({ ownerName: '员工姓名', userDisplayNames: { ownerName: 'new-sales' } });
+    expect(response.body.items[0].detailHref).toContain(String(own.id));
+    expect(JSON.stringify(response.body.items)).not.toContain('Other order');
+    await request(app.getHttpServer()).get(`/sales-orders/${other.id}`)
+      .set('x-erp-role', 'sales').set('x-erp-user', encodeURIComponent('员工姓名'))
+      .set('x-erp-user-id', String(employee.id)).set('x-erp-modules', 'sales').set('x-erp-data-scope', 'own_sales').expect(404);
+    expect(await sales.getDetail(own.id)).toMatchObject({ salesUserId: employee.id, createdBy: employee.id });
+  });
+
   it('serves active real employee IDs before the generic quote detail route', async () => {
     const created = await app.get(UserManagementService).create({ username: 'newperson', realName: '张三', password: 'secret', roleCode: 'sales', createdBy: 'admin' });
     const response = await request(app.getHttpServer()).get('/quotes/create-metadata')

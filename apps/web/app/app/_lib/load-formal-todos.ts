@@ -28,3 +28,18 @@ export async function loadFormalTodos(session: DemoSession): Promise<FormalTodoA
     return null;
   }
 }
+
+export async function loadFormalTodoCount(session: DemoSession): Promise<number | null> {
+  const baseUrl = process.env.ERP_API_BASE_URL ?? 'http://127.0.0.1:3001/api';
+  try {
+    const response = await fetch(`${baseUrl}/todos/formal/count`, {
+      cache: 'no-store',
+      headers: buildFormalApiRequestHeaders(session),
+    });
+    if (!response.ok) return null;
+    const result = await response.json() as { count?: number } | null;
+    return typeof result?.count === 'number' && Number.isInteger(result.count) && result.count >= 0 ? result.count : null;
+  } catch {
+    return null;
+  }
+}

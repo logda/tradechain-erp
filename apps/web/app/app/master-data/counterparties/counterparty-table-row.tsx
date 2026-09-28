@@ -1,5 +1,6 @@
 'use client';
 
+import { formatFormalUserLabel } from '../../_lib/formal-user-display';
 import { useEffect, useState } from 'react';
 import { MutationActionForm } from '../../_components/mutation-action-form';
 import { normalizeCounterpartyDisplayItem } from './counterparty-display';
@@ -70,7 +71,7 @@ export function CounterpartyTableRow({ item, canManageMasterData, canChangeStatu
         <td style={cellStyle}>{typeLabels[currentItem.type]}</td>
         <td style={cellStyle}>{currentItem.code}</td>
         <td style={cellStyle}><strong>{currentItem.name}</strong><br /><span style={{ color: '#64748b' }}>{value(currentItem.shortName)}</span></td>
-        <td style={cellStyle}>{value(currentItem.ownerName)}</td>
+        <td style={cellStyle}>{formatFormalUserLabel(currentItem, 'ownerName', '-')}</td>
         <td style={cellStyle}>{currentItem.type === 'customer' ? '—' : currentItem.cooperationStatus === 'cooperated' ? '已合作供应商' : '未合作供应商'}</td>
         <td style={cellStyle}>{currentItem.status === 'active' ? '启用' : '停用'}</td>
         <td style={cellStyle}>

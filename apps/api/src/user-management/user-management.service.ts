@@ -1,3 +1,4 @@
+import { formalUserAliases } from '../auth/formal-user-aliases';
 import {
   BadRequestException,
   Inject,
@@ -316,11 +317,7 @@ export class UserManagementService {
   }
 
   private async resolveLegacyUserIds(record: { id: number | bigint; username: string }) {
-    const aliases: Record<string, { id: number; legacyId: number }> = {
-      admin: { id: 1, legacyId: 9000 }, mia: { id: 2, legacyId: 2000 },
-      zoe: { id: 3, legacyId: 2001 }, leo: { id: 4, legacyId: 2002 },
-    };
-    const alias = aliases[record.username];
+    const alias = formalUserAliases[record.username];
     if (!alias || Number(record.id) !== alias.id) return [];
     const allocated = this.shouldUsePrisma()
       ? await this.prisma!.user.findUnique({ where: { id: BigInt(alias.legacyId) } })

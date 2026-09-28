@@ -52,4 +52,16 @@ describe('FormalTodoController', () => {
     });
     expect(listFormalTodos).toHaveBeenCalledWith({ role: 'sales', user: 'Zoe' });
   });
+
+  it('protects the lightweight count with the same roles and passes the authenticated scope', async () => {
+    expect(Reflect.getMetadata(FORMAL_ROLES_KEY, FormalTodoController.prototype.countFormalTodos))
+      .toEqual(Reflect.getMetadata(FORMAL_ROLES_KEY, FormalTodoController.prototype.listFormalTodos));
+    const countFormalTodos = jest.fn().mockResolvedValue({ count: 2 });
+    const controller = new FormalTodoController({ countFormalTodos } as unknown as FormalTodoService);
+    await expect(controller.countFormalTodos({ headers: {
+      'x-erp-role': 'sales', 'x-erp-user': '销售', 'x-erp-user-id': '57',
+      'x-erp-data-scope': 'own_sales', 'x-erp-modules': 'sales',
+    } })).resolves.toEqual({ count: 2 });
+    expect(countFormalTodos).toHaveBeenCalledWith(expect.objectContaining({ role: 'sales', userId: 57, dataScope: 'own_sales' }));
+  });
 });

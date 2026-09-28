@@ -21,6 +21,7 @@ describe('warehouse and stock formal pages pagination', () => {
             status: 'active',
             locationCount: 4,
             ownerName: 'Leo',
+            userDisplayNames: { ownerName: 'leo' },
             updatedAt: '2026-07-16T08:00:00.000Z',
           },
         ],
@@ -48,6 +49,7 @@ describe('warehouse and stock formal pages pagination', () => {
         cache: 'no-store',
       }),
     );
+    expect(screen.getByText('leo')).toBeInTheDocument();
     expect(screen.getByText('第 2 / 2 页，共 21 条')).toBeInTheDocument();
   });
 

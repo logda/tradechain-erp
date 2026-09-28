@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import type { FormalTodoItem } from '../_lib/formal-todos';
+import { formatFormalUserLabel } from '../_lib/formal-user-display';
 import { FilterPanel } from './filter-panel';
 import { TodoGroup } from './todo-group';
 
@@ -17,7 +18,7 @@ function isFilters(value: unknown): value is Filters {
 function matches(todo: FormalTodoItem, filters: Filters) {
   const keyword = filters.keyword.trim().toLocaleLowerCase();
   const text = [todo.docNo, todo.title, todo.moduleLabel, todo.statusLabel,
-    todo.ownerName, todo.handlerLabel, todo.nextAction, todo.description, todo.customerName, todo.supplierName,
+    formatFormalUserLabel(todo, 'ownerName'), formatFormalUserLabel(todo, 'handlerLabel'), todo.nextAction, todo.description, todo.customerName, todo.supplierName,
     ...(todo.productNames ?? [])].join(' ').toLocaleLowerCase();
   return (!keyword || text.includes(keyword)) &&
     (!filters.domain || todo.domain === filters.domain) &&

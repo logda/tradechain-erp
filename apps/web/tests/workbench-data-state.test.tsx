@@ -36,22 +36,33 @@ describe('真实工作台数据与请求状态', () => {
   });
 
   it.each([
-    ['销售', SalesPage, ['REAL-sales']],
-    ['采购', PurchasePage, ['REAL-purchase', 'REAL-operations', 'REAL-after_sales']],
-    ['运营', OperationsPage, ['REAL-operations', 'REAL-after_sales']],
-  ] as const)('%s workbench shows API tasks and their document links', async (_, Page, documents) => {
+    ['首页', HomePage],
+    ['待办中心', TodosPage],
+  ] as const)('%s shows API tasks and their document links', async (_, Page) => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => ({ ok: true, json: async () => url.includes('/reports/') ? summary : live })));
     render(<>{await Page({})}</>);
-    for (const doc of documents) expect(screen.getByText(doc)).toBeInTheDocument();
+    for (const item of live.items) expect(screen.getByText(item.docNo)).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: '打开单据' })[0]).toHaveAttribute('href', '/app/purchase-orders/104');
     expect(screen.getByText('消息待办 Todo: 04')).toBeInTheDocument();
     expect(screen.queryByText('Q202607080002')).not.toBeInTheDocument();
     expect(screen.queryByText('P202607080002')).not.toBeInTheDocument();
   });
 
+  it.each([['销售', SalesPage], ['采购', PurchasePage], ['运营', OperationsPage]] as const)('%s business center keeps entries and sidebar count without task blocks', async (_, Page) => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => ({ ok: true, json: async () => url.includes('/reports/') ? summary : live }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(await Page({}));
+    await waitFor(() => expect(screen.getByText('消息待办 Todo: 04')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: '核心模块' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '打开单据' })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-todo-block]')).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/todos/formal'))).toBe(false);
+  });
+
   it.each([['首页', HomePage], ['待办中心', TodosPage], ['采购', PurchasePage], ['运营', OperationsPage]] as const)('%s failure has retry and no empty-success state', async (_, Page) => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     render(<>{await Page({})}</>);
+    await waitFor(() => expect(screen.getByText('消息待办 Todo: 暂不可用')).toBeInTheDocument());
     expect(screen.getAllByRole('button', { name: /重试/ }).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/暂不可用/).length).toBeGreaterThan(0);
     expect(screen.queryByText('暂无待办')).not.toBeInTheDocument();
@@ -60,20 +71,24 @@ describe('真实工作台数据与请求状态', () => {
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
 
-  it('sales summary failure leaves its real todo block available', async () => {
+  it('sales summary failure leaves business entries and the independent sidebar count available', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => ({ ok: !url.includes('/reports/'), json: async () => live })));
     render(<>{await SalesPage({})}</>);
+    await waitFor(() => expect(screen.getByText('消息待办 Todo: 04')).toBeInTheDocument());
     expect(screen.getByText(/销售统计暂不可用/)).toBeInTheDocument();
-    expect(screen.getByText('REAL-sales')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '销售单模块' })).toBeInTheDocument();
+    expect(screen.queryByText('REAL-sales')).not.toBeInTheDocument();
     expect(screen.queryByText('销售单总数')).not.toBeInTheDocument();
     expect(screen.queryByText('未同步')).not.toBeInTheDocument();
   });
 
-  it('sales todo time is independent from the sales summary time', async () => {
+  it('sales summary keeps its own scope and timestamp after removing center tasks', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => ({ ok: true, json: async () => url.includes('/reports/') ? summary : { ...live, generatedAt: '2026-09-28T09:00:00.000Z' } })));
     render(<>{await SalesPage({})}</>);
-    const group = screen.getByRole('region', { name: '销售待办' });
-    expect(group.closest('[data-todo-block]')?.textContent).toContain(new Date('2026-09-28T09:00:00.000Z').toLocaleString('zh-CN'));
+    await waitFor(() => expect(screen.getByText('消息待办 Todo: 04')).toBeInTheDocument());
+    expect(screen.queryByRole('region', { name: '销售待办' })).not.toBeInTheDocument();
+    expect(screen.getByText(new Date(summary.generatedAt).toLocaleString('zh-CN'))).toBeInTheDocument();
+    expect(screen.queryByText(new Date('2026-09-28T09:00:00.000Z').toLocaleString('zh-CN'))).not.toBeInTheDocument();
     expect(screen.getAllByText(/数据范围：销售团队/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/统计时间：全部时间/).length).toBeGreaterThan(0);
   });

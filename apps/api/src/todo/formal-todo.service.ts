@@ -221,6 +221,7 @@ export class FormalTodoService {
 
   async listFormalTodos(
     query?: FormalTodoListQuery,
+    includeContext = true,
   ): Promise<FormalTodoResponse> {
     const [
       quotes,
@@ -692,15 +693,28 @@ export class FormalTodoService {
       ...shipmentBatches.items, ...afterSalesOrders.items,
       ...inquiries.items, ...sampleOrders.items,
     ] as unknown as TodoSourceContext[];
+    const sourcesByNo = new Map<string | undefined, TodoSourceContext>();
+    for (const source of sources) {
+      const docNo = source.docNo ?? source.inquiryNo;
+      if (!sourcesByNo.has(docNo)) sourcesByNo.set(docNo, source);
+    }
     const uniqueItems = [...new Map(items.map(item => [item.id, item])).values()];
     const visibleItems = await Promise.all(uniqueItems
       .map(item => {
-        const source = sources.find(entry => (entry.docNo ?? entry.inquiryNo) === item.docNo);
+        const source = sourcesByNo.get(item.docNo);
         return { ...item, ownerId: source?.ownerId ?? source?.salesUserId ?? (source?.ownerUserId == null ? undefined : Number(source.ownerUserId)), createdById: source?.createdById ?? undefined };
       })
       .filter((item) => canSeeFormalTodo(query, item))
       .map(async (item) => {
-        const source = sources.find((entry) => (entry.docNo ?? entry.inquiryNo) === item.docNo);
+        const action = actionForTodo(item);
+        const canAct = (!query?.role || action.roles.includes(query.role))
+          && (query?.actions === undefined || action.actions.some(value => query.actions!.includes(value)))
+          && (!action.module || query?.modules === undefined || query.modules.includes(action.module));
+        if (!includeContext) return {
+          ...item, relation: canAct ? 'action' as const : 'following' as const,
+          nextAction: action.nextAction, handlerLabel: action.handlerLabel,
+        };
+        const source = sourcesByNo.get(item.docNo);
         const sourceItems = source?.items ?? [];
         const sourceContext = {
           productNames: sourceItems.map((entry) => entry.productName ?? '').filter(Boolean),
@@ -722,10 +736,6 @@ export class FormalTodoService {
           }
         }
         const detailData = detailContext(detail);
-        const action = actionForTodo(item);
-        const canAct = (!query?.role || action.roles.includes(query.role))
-          && (query?.actions === undefined || action.actions.some(value => query.actions!.includes(value)))
-          && (!action.module || query?.modules === undefined || query.modules.includes(action.module));
         let handlerLabel = action.handlerLabel;
         if (item.ownerName && action.handlerLabel === item.ownerName && item.ownerId !== undefined
           && (resolveStorageMode() !== 'prisma' || this.prisma)) {
@@ -735,6 +745,7 @@ export class FormalTodoService {
           relation: canAct ? 'action' as const : 'following' as const,
           nextAction: action.nextAction,
           handlerLabel,
+          handlerUserId: item.ownerName && action.handlerLabel === item.ownerName ? item.ownerId : undefined,
           ...item,
           createdAt: item.createdAt ?? source?.createdAt,
           customerName: item.customerName ?? source?.customerName ?? source?.counterpartyName,
@@ -757,5 +768,10 @@ export class FormalTodoService {
       followingTotal: visibleItems.filter(item => item.relation === 'following').length,
       generatedAt: new Date().toISOString(),
     };
+  }
+
+  async countFormalTodos(query?: FormalTodoListQuery): Promise<{ count: number }> {
+    const result = await this.listFormalTodos(query, false);
+    return { count: result.total };
   }
 }

@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from '../../_lib/formal-user-display';
 import Link from 'next/link';
 import { Fragment, type ReactNode } from 'react';
 import { AuditLogTable } from '../../_components/audit-log-table';
@@ -170,26 +171,6 @@ async function loadSourceDocumentNo(module: 'sales' | 'purchase', id: number, se
   } catch {
     return null;
   }
-}
-
-const userNameById: Record<number, string> = {
-  1: 'Admin',
-  2: 'Mia',
-  3: 'Zoe',
-  4: 'Leo',
-  2000: 'Mia',
-  2001: 'Zoe',
-  2002: 'Leo',
-  9000: 'Admin',
-};
-
-function formatUserDisplay(userId: number | null | undefined) {
-  if (!userId) {
-    return '未发送';
-  }
-
-  const name = userNameById[userId];
-  return name ? `${name} #${userId}` : `操作人 #${userId}`;
 }
 
 function buildAfterSalesDraft(
@@ -489,7 +470,7 @@ export default async function AppShipmentBatchDetailPage({
           <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginTop: '12px', color: '#475569', fontSize: '13px' }}>
             <span>状态：<strong>{formatShipmentStageLabel(shipmentBatch.status)}</strong></span>
             <span>回单：<strong>{formatReceiptLabel(shipmentBatch.receiptSendStatus)}</strong></span>
-            <span>发送人：<span>{formatUserDisplay(shipmentBatch.receiptSentBy)}</span></span>
+            <span>发送人：<span>{shipmentBatch.receiptSentBy ? formatFormalUserLabel(shipmentBatch, 'receiptSentBy') : '未发送'}</span></span>
           </div>
           <p style={{ margin: '10px 0 0', fontSize: '13px' }}>
             回单地址：{shipmentBatch.receiptDocUrl ? <Link href={shipmentBatch.receiptDocUrl} style={subtleLinkStyle}>{shipmentBatch.receiptDocUrl}</Link> : '未上传'}

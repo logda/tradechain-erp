@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from '../../_lib/formal-user-display';
 import Link from 'next/link';
 import { AppShell } from '../../_components/app-shell';
 import {
@@ -233,7 +234,7 @@ export default async function AppStockOutDetailPage({
           </article>
           <article style={metaItemStyle}>
             <p style={metaLabelStyle}>创建人</p>
-            <p style={metaValueStyle}>{detail.createdByName}</p>
+            <p style={metaValueStyle}>{formatFormalUserLabel(detail, 'createdByName')}</p>
           </article>
         </div>
         <p>

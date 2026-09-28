@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from '../../_lib/formal-user-display';
 import { DataLoadError } from '../../_components/data-load-error';
 import { DataScopeNote } from '../../_components/data-scope-note';
 import Link from 'next/link';
@@ -341,6 +342,16 @@ const sourceBadgeStyle = {
   border: '1px solid #bae6fd',
 } satisfies React.CSSProperties;
 
+const sourceFilterLinkStyle = {
+  display: 'inline-flex',
+  width: 'fit-content',
+  color: '#0f172a',
+  textDecoration: 'none',
+  fontWeight: 800,
+  fontSize: '12px',
+  borderBottom: '1px solid #94a3b8',
+} satisfies React.CSSProperties;
+
 const statusBadgeStyle = {
   ...badgeBaseStyle,
   maxWidth: '190px',
@@ -608,40 +619,34 @@ export default async function AppSalesOrdersPage({
         <div style={tableScrollStyle}>
           <table style={tableStyle}>
             <colgroup>
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '14%' }} />
               <col style={{ width: '13%' }} />
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '8%' }} />
               <col style={{ width: '14%' }} />
+              <col style={{ width: '10%' }} />
               <col style={{ width: '8%' }} />
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '6%' }} />
+              <col style={{ width: '10%' }} />
             </colgroup>
             <thead>
               <tr>
                 <th style={tableHeadCellStyle}>销售单号 / 标题</th>
-                <th style={tableHeadCellStyle}>产品</th>
-                <th style={tableHeadCellStyle}>单据金额</th>
                 <th style={tableHeadCellStyle}>销售单状态 Status</th>
-                <th style={tableHeadCellStyle}>负责人</th>
-                <th style={tableHeadCellStyle}>客户 / 订单 / 门店</th>
+                <th style={tableHeadCellStyle}>客户 Customer</th>
+                <th style={tableHeadCellStyle}>客户订单 / 门店</th>
                 <th style={tableHeadCellStyle}>订货日期 / 截止日期</th>
                 <th style={tableHeadCellStyle}>来源 Source</th>
+                <th style={tableHeadCellStyle}>负责人</th>
                 <th style={stickyActionHeadCellStyle}>操作</th>
               </tr>
             </thead>
             <tbody>
-              {visibleItems.map((item) => {
-                const repeatedTitleValues = [item.docNo, item.counterpartyName, item.counterpartyFullName, ...(item.productNames ?? [])].filter((value): value is string => Boolean(value));
-                const showTitle = item.title && !repeatedTitleValues.some((value) => item.title.includes(value));
-                return <tr key={item.detailHref}>
+              {visibleItems.map((item) => (
+                <tr key={item.detailHref}>
                   <td style={tableCellStyle}>
-                    <strong style={docNoStyle} title={item.title}>{item.docNo}</strong>
-                    {showTitle ? <span style={titleStyle}>{item.title}</span> : null}
+                    <strong style={docNoStyle}>{item.docNo}</strong>
+                    <span style={titleStyle} title={item.title}>{item.title}</span>
                   </td>
-                  <td style={tableCellStyle}><span style={subtleTextStyle}>{item.productNames?.length ? item.productNames.join('、') : '-'}</span></td>
-                  <td style={tableCellStyle}>{typeof item.amount === 'number' && Number.isFinite(item.amount) ? item.amount : '-'}</td>
                   <td style={tableCellStyle}>
                     <span
                       style={{
@@ -652,16 +657,21 @@ export default async function AppSalesOrdersPage({
                       {formatSalesOrderStatus(item.status)}
                     </span>
                   </td>
-                  <td style={tableCellStyle}>{item.ownerName}</td>
+                  <td style={tableCellStyle}>
+                    {formatCounterpartyBilingualDisplay(item.counterpartyName, {
+                      fullName: item.counterpartyFullName,
+                    })}
+                  </td>
                   <td style={tableCellStyle}>
                     <div style={twoLineCellStyle}>
-                      <span>{formatCounterpartyBilingualDisplay(item.counterpartyName, { fullName: item.counterpartyFullName })}</span>
-                      {item.customerOrderNo?.trim() && item.customerOrderNo !== item.docNo ? <span>
-                        <span style={mutedCellLabelStyle}>订单：</span>{item.customerOrderNo}
-                      </span> : null}
-                      {item.storeName?.trim() ? <span>
-                        <span style={mutedCellLabelStyle}>门店：</span>{item.storeName}
-                      </span> : null}
+                      <span>
+                        <span style={mutedCellLabelStyle}>订单：</span>
+                        {formatListValue(item.customerOrderNo)}
+                      </span>
+                      <span>
+                        <span style={mutedCellLabelStyle}>门店：</span>
+                        {formatListValue(item.storeName)}
+                      </span>
                     </div>
                   </td>
                   <td style={tableCellStyle}>
@@ -677,8 +687,25 @@ export default async function AppSalesOrdersPage({
                     </div>
                   </td>
                   <td style={tableCellStyle}>
-                    <span style={sourceBadgeStyle} title={item.sourceSummary}>{formatSalesDocumentSourceMode(resolveSalesDocumentSourceMode(item.sourceSummary))}</span>
+                    <div style={twoLineCellStyle}>
+                      <span style={subtleTextStyle}>{item.sourceSummary}</span>
+                      <span style={sourceBadgeStyle}>
+                        {formatSalesDocumentSourceMode(
+                          resolveSalesDocumentSourceMode(item.sourceSummary),
+                        )}
+                      </span>
+                    </div>
+                    <Link
+                      href={`/app/sales/orders?sourceMode=${resolveSalesDocumentSourceMode(item.sourceSummary)}`}
+                      style={sourceFilterLinkStyle}
+                      aria-label={`按来源方式筛选 ${formatSalesDocumentSourceMode(
+                        resolveSalesDocumentSourceMode(item.sourceSummary),
+                      )}`}
+                    >
+                      筛选此来源
+                    </Link>
                   </td>
+                  <td style={tableCellStyle}>{formatFormalUserLabel(item, 'ownerName')}</td>
                   <td style={stickyActionCellStyle}>
                     <Link
                       href={toFormalSalesOrderDetailHref(item.detailHref)}
@@ -688,8 +715,8 @@ export default async function AppSalesOrdersPage({
                       详情
                     </Link>
                   </td>
-                </tr>;
-              })}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

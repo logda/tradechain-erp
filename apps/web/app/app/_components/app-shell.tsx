@@ -180,7 +180,7 @@ function ShellView({
 
           <div className="erp-shell__account" aria-label="当前账号">
             <div className="erp-shell__account-identity">
-              <span>{`用户 User: ${session.user}`}</span>
+              <span>{`用户 User: ${session.username ?? session.user}`}</span>
               <span>{`角色 Role: ${roleLabel}`}</span>
             </div>
             <LiveTodoCount initialCount={todoCountOverride} sessionKey={`${session.username ?? session.user}:${session.role}`} refreshKey={Date.now()} />

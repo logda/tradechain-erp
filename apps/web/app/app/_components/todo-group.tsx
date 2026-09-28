@@ -1,5 +1,6 @@
 'use client';
 
+import { formatFormalUserLabel } from '../_lib/formal-user-display';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { FormalTodoItem } from '../_lib/formal-todos';
@@ -66,8 +67,12 @@ export function TodoGroup({ title, todos, cacheKey }: { title: string; todos: Fo
         <span>共 {todos.length} 条</span>
       </div>
       {expanded ? <>
-        {actionCount + followingCount > 0 ? <div className="erp-todo-filters__actions" role="group" aria-label="处理分工">
-          {([['all', '全部', todos.length], ['action', '待我处理', actionCount], ['following', '我在跟进', followingCount]] as const).map(([value, label, count]) => <button key={value} type="button" className="erp-todo-button" aria-pressed={relation === value} onClick={() => { setRelation(value); setRequestedPage(1); }}>{label} {count}</button>)}
+        {actionCount + followingCount > 0 ? <div className="erp-home-todo-group__toolbar">
+          <div className="erp-home-todo-views" role="group" aria-label="处理分工">
+            {([['all', '全部', todos.length], ['action', '待我处理', actionCount], ['following', '我在跟进', followingCount]] as const).map(([value, label, count]) => <button key={value} type="button" className="erp-home-todo-views__button" aria-pressed={relation === value} onClick={() => { setRelation(value); setRequestedPage(1); }}>
+              <span>{label}</span>{' '}<span className="erp-home-todo-views__count">{count}</span>
+            </button>)}
+          </div>
         </div> : null}
         {filtered.length === 0 ? <p className="erp-home-todo-empty">{relation === 'following' ? '暂无跟进任务' : '暂无待办'}</p> : (
           <ul className="erp-home-todo-list">
@@ -84,7 +89,7 @@ export function TodoGroup({ title, todos, cacheKey }: { title: string; todos: Fo
                     {todo.customerName ? <span>客户：{todo.customerName}</span> : null}
                     {todo.supplierName ? <span>供应商：{todo.supplierName}</span> : null}
                     {todo.nextAction ? <span>下一步：{todo.nextAction}</span> : null}
-                    {todo.handlerLabel ? <span>当前处理人：{todo.handlerLabel}</span> : null}
+                    {todo.handlerLabel ? <span>当前处理人：{formatFormalUserLabel(todo, 'handlerLabel')}</span> : null}
                     {todo.dueDate ? <span>交期：{todo.dueDate}</span> : null}
                     {typeof todo.dueInDays === 'number' ? <strong>{todo.dueInDays < 0 ? `已逾期 ${-todo.dueInDays} 天` : todo.dueInDays === 0 ? '今天到期' : `还有 ${todo.dueInDays} 天`}</strong> : null}
                   </div>

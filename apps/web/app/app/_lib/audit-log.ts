@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from './formal-user-display';
 import { formatQuoteStatus } from './quote-status';
 
 export type AuditLogItem = {
@@ -7,6 +8,9 @@ export type AuditLogItem = {
   operationType: string;
   operatorId: number;
   operatorName?: string;
+  userDisplayNames?: Record<string, string>;
+  userDisplayNamesById?: Record<string, string>;
+  userDisplayNamesByName?: Record<string, string>;
   beforeData?: unknown;
   afterData?: unknown;
   createdAt: string;
@@ -606,11 +610,11 @@ export function formatAuditBizObject(item: Pick<AuditLogItem, 'bizType' | 'bizId
 export function formatAuditOperator(item: {
   operatorId: number;
   operatorName?: string;
+  userDisplayNames?: Record<string, string>;
   beforeData?: unknown;
   afterData?: unknown;
 }) {
-  const name = item.operatorName?.trim() || (item.operatorId === 0 ? '系统' : undefined);
-  return name ? `${name} #${item.operatorId}` : `操作人 #${item.operatorId}`;
+  return formatFormalUserLabel(item, 'operatorName', item.operatorId === 0 ? '系统' : '历史账号未关联');
 }
 
 export function formatAuditFieldName(field: string) {
@@ -699,6 +703,13 @@ function buildDetailedAuditChanges(item: AuditLogItem): AuditChangeSummary {
   };
   const display = (field: string, value: unknown): string => {
     if (value === undefined || value === null || value === '') return '-';
+    if (['salesUserId', 'ownerId', 'ownerUserId', 'purchaseOwnerId', 'createdById', 'createdBy', 'operatorId', 'comparisonSubmittedById', 'receiptSentBy', 'updatedById'].includes(field) &&
+      (typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value)))) {
+      return item.userDisplayNamesById?.[String(value)] ?? '历史账号未关联';
+    }
+    if (['ownerName', 'salesUserName', 'purchaseOwnerName', 'createdBy', 'createdByName', 'operatorName', 'comparisonSubmittedBy', 'updatedBy'].includes(field) && typeof value === 'string') {
+      return item.userDisplayNamesByName?.[value] ?? formatFormalUserLabel({ [field]: value }, field);
+    }
     if (typeof value === 'boolean') return value ? '是' : '否';
     if (typeof value === 'string') {
       if (field === 'status' && item.bizType === 'quote') {
@@ -729,7 +740,7 @@ function buildDetailedAuditChanges(item: AuditLogItem): AuditChangeSummary {
     } else {
       const beforeValue = display(field, before);
       const afterValue = display(field, after);
-      if (beforeValue !== afterValue) rows.push({ field: path || '记录内容', before: beforeValue, after: afterValue });
+      if (beforeValue !== afterValue || beforeValue === '历史账号未关联') rows.push({ field: path || '记录内容', before: beforeValue, after: afterValue });
     }
   };
   visit(item.beforeData, item.afterData, '', '');
@@ -744,7 +755,12 @@ export function buildAuditChangeSummary(item: AuditLogItem, detailed = false): A
   const beforeRecord = isPlainRecord(item.beforeData) ? item.beforeData : null;
   const afterRecord = isPlainRecord(item.afterData) ? item.afterData : null;
   const formatFieldValue = (field: string, value: unknown) =>
-    item.bizType === 'quote' && field === 'status' && typeof value === 'string'
+    ['salesUserId', 'ownerId', 'ownerUserId', 'purchaseOwnerId', 'createdById', 'createdBy', 'operatorId', 'comparisonSubmittedById', 'receiptSentBy', 'updatedById'].includes(field) &&
+    (typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value)))
+      ? item.userDisplayNamesById?.[String(value)] ?? '历史账号未关联'
+      : ['ownerName', 'salesUserName', 'purchaseOwnerName', 'createdBy', 'createdByName', 'operatorName', 'comparisonSubmittedBy', 'updatedBy'].includes(field) && typeof value === 'string'
+      ? item.userDisplayNamesByName?.[value] ?? formatFormalUserLabel({ [field]: value }, field)
+      : item.bizType === 'quote' && field === 'status' && typeof value === 'string'
       ? formatQuoteStatus(value)
       : formatAuditValue(value);
 

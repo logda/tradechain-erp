@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from '../../_lib/formal-user-display';
 import Link from 'next/link';
 import type { ShipmentBatchListResponse } from '@erp/shared';
 import { ActionPermissionNote } from '../../_components/action-permission-note';
@@ -886,7 +887,7 @@ export default async function AppPurchaseOrderDetailPage({
           {purchaseOrder.title && !purchaseOrder.title.includes(purchaseOrder.purchaseNo) ? <p style={valueStyle}>{purchaseOrder.title}</p> : null}
           <div style={{ ...gridStyle, marginTop: '16px' }}>
             <div><p style={labelStyle}>供应商 Supplier</p><p style={valueStyle}>{formatCounterpartyChineseDisplay(purchaseOrder.supplierName, { fallback: '未提供' })}</p></div>
-            <div><p style={labelStyle}>采购负责人 Purchase Owner</p><p style={valueStyle}>{purchaseOrder.ownerName ?? '未提供'}</p></div>
+            <div><p style={labelStyle}>采购负责人 Purchase Owner</p><p style={valueStyle}>{formatFormalUserLabel(purchaseOrder, 'ownerName', '未提供')}</p></div>
             <div><p style={labelStyle}>状态 Status</p><p style={valueStyle}>{formatPurchaseOrderStatus(purchaseOrder.status)}</p></div>
             <p style={valueStyle}>{`采购金额：${formatPurchaseValue(orderAmount)}`}</p>
           </div>
@@ -945,7 +946,7 @@ export default async function AppPurchaseOrderDetailPage({
                       { value: '', label: '请选择采购负责人' },
                       ...purchaseOwnerOptions.filter((owner) => owner.status === 'active' && owner.id > 0).map((owner) => ({
                         value: String(owner.id),
-                        label: owner.realName,
+                        label: owner.username ?? owner.realName,
                       })),
                     ],
                   },
@@ -1166,7 +1167,7 @@ export default async function AppPurchaseOrderDetailPage({
           <article style={infoCardStyle}>
             <h3 style={{ marginTop: 0 }}>来源询价</h3>
             <p style={heroSubStyle}>
-              {sourceInquiry.inquiryNo} · 客户 {sourceInquiry.customerName} · 来源报价 {sourceInquiry.quoteOrderNo} · 比价提交人 {sourceInquiry.comparisonSubmittedBy ?? '未记录'}
+              {sourceInquiry.inquiryNo} · 客户 {sourceInquiry.customerName} · 来源报价 {sourceInquiry.quoteOrderNo} · 比价提交人 {formatFormalUserLabel(sourceInquiry, 'comparisonSubmittedBy', '未记录')}
             </p>
             <div style={tableWrapStyle}>
               <table style={tableStyle}>

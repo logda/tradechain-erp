@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from '../_lib/formal-user-display';
 import Link from 'next/link';
 import { AppShell } from '../_components/app-shell';
 import { FormalDataTable } from '../_components/formal-data-table';
@@ -313,7 +314,7 @@ export default async function AppStockOutPage({
                     <td style={cellStyle}>
                       {item.warehouseName} / {item.locationName}
                     </td>
-                    <td style={cellStyle}>{item.createdByName}</td>
+                    <td style={cellStyle}>{formatFormalUserLabel(item, 'createdByName')}</td>
                     <td style={cellStyle}>{formatDateTime(item.updatedAt)}</td>
                     <td style={cellStyle}>
                       <Link href={`/app/stock-out/${item.id}`} style={rowLinkStyle}>

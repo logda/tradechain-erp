@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from './formal-user-display';
 import { resolveFormalUserId } from './formal-access';
 import { type DemoRole } from './demo-session';
 
@@ -71,12 +72,12 @@ function matchesSessionUser(option: { id: number; username: string; label: strin
 }
 
 function filterSalesUsersByRole(
-  session: { role: DemoRole; user: string; userId?: number },
+  session: { role: DemoRole; user: string; userId?: number; username?: string },
   items: SalesUserOption[],
 ) {
   const mayOwn = session.role === 'sales_manager' || session.role === 'boss';
   const normalizedItems = mayOwn && !items.some(item => matchesSessionUser(item, session))
-    ? [...items, { id: resolveFormalUserId(session), username: session.user, roleCode: session.role as 'sales_manager' | 'boss', label: `${session.user} / ${roleLabel(session.role)} ${session.user}` }]
+    ? [...items, { id: resolveFormalUserId(session), username: session.username ?? session.user, roleCode: session.role as 'sales_manager' | 'boss', label: `${session.username ?? session.user} / ${roleLabel(session.role)}` }]
     : items;
 
   if (session.role === 'sales') {
@@ -129,7 +130,7 @@ export function resolveDefaultSalesUserId(
   return matched?.id ?? items[0]?.id ?? 0;
 }
 
-export async function loadSalesUserOptions(session: { role: string; user: string; userId?: number }, retainedOwner?: { id: number; name?: string }) {
+export async function loadSalesUserOptions(session: { role: string; user: string; userId?: number; username?: string }, retainedOwner?: { id: number; name?: string }) {
   try {
     const response = await fetch(`${getQuoteApiBaseUrl()}/quotes/create-metadata`, {
       cache: 'no-store',
@@ -151,12 +152,12 @@ export async function loadSalesUserOptions(session: { role: string; user: string
         id: item.id,
         username: item.username,
         roleCode: normalizeRoleCode(item.roleCode),
-        label: `${item.realName} / ${roleLabel(item.roleCode)} ${item.realName}`,
+        label: `${item.username} / ${roleLabel(item.roleCode)}`,
       }));
 
     const visible = filterSalesUsersByRole(session as { role: DemoRole; user: string; userId?: number }, options);
     if (retainedOwner && !visible.some(item => item.id === retainedOwner.id)) {
-      const name = retainedOwner.name ?? `用户 #${retainedOwner.id}`;
+      const name = formatFormalUserLabel({ ownerName: retainedOwner.name }, 'ownerName', '历史账号未关联');
       visible.push({ id: retainedOwner.id, username: '', label: `${name} / 原销售负责人`, roleCode: 'sales' });
     }
     return sortSalesUsers(visible);

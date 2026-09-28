@@ -24,4 +24,10 @@ export class FormalTodoController {
   listFormalTodos(@Req() request: { headers: Record<string, string | string[] | undefined> }) {
     return this.formalTodoService.listFormalTodos(readFormalSession(request.headers));
   }
+
+  @FormalRoles('admin', 'boss', 'sales_manager', 'sales', 'purchase_manager', 'purchase')
+  @Get('formal/count')
+  countFormalTodos(@Req() request: { headers: Record<string, string | string[] | undefined> }) {
+    return this.formalTodoService.countFormalTodos(readFormalSession(request.headers));
+  }
 }

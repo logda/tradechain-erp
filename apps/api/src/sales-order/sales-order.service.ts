@@ -2187,15 +2187,44 @@ export class SalesOrderService {
           where: { bizType: 'sales_order', status: 'pending_purchase_assignment' },
         })) as PrismaBusinessDocumentRecord[]).map(toSalesOrderDocumentPayload)
       : this.store.listSalesOrders().filter((item) => item.status === 'pending_purchase_assignment');
-    return orders.map((item) => ({
+    return Promise.all(orders.map(async (item) => ({
       id: item.id,
       salesNo: item.salesNo,
       title: item.title,
       customerName: item.customerName,
+      customerFullName: item.customerFullName,
+      salesUserId: item.salesUserId,
+      salesUserName: item.salesUserId ? await resolveFormalUserName(item.salesUserId, this.prisma) : item.salesUserName,
+      createdBy: item.createdBy,
+      customerOrderNo: item.customerOrderNo,
+      orderingUnit: item.orderingUnit,
+      storeName: item.storeName,
+      orderDate: item.orderDate,
+      estimatedDeliveryDate: item.estimatedDeliveryDate,
+      shipTo: item.shipTo,
+      salesOrderRemark: item.salesOrderRemark,
+      salesOrderAttachments: item.salesOrderAttachments,
+      sourceInquiryId: item.sourceInquiryId,
+      ...(item.sourceMode === 'from_quote' ? {
+        sourceQuoteOrderId: item.sourceQuoteOrderId,
+        sourceQuoteNo: item.sourceQuoteNo,
+        sourceQuoteVersionNo: item.sourceQuoteVersionNo,
+      } : {}),
+      items: (item.items ?? []).map((line) => ({
+        lineNo: line.lineNo,
+        sku: line.sku,
+        productName: line.productName,
+        unit: line.unit,
+        quantity: line.quantity,
+        packageQuantity: line.packageQuantity,
+        unitsPerPackage: line.unitsPerPackage,
+        totalQuantity: line.totalQuantity,
+        factoryPicUrls: line.factoryPicUrls,
+      })),
       status: item.status,
       purchaseOwnerName: item.purchaseOwnerName,
       purchaseOwnerId: item.purchaseOwnerId,
-    }));
+    })));
   }
 
   async completePurchaseAssignment(id: number, purchaseOwnerName: string, actorId?: number, purchaseOwnerId?: number) {

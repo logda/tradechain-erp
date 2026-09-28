@@ -43,7 +43,7 @@ describe('正式页面内容区加载', () => {
     const page = delayedPage('销售工作台');
     render(await FormalAppLayout({ children: page.children }));
     const sidebar = screen.getByRole('complementary');
-    expect(within(sidebar).getByText('用户 User: 张三')).toBeInTheDocument();
+    expect(within(sidebar).getByText('用户 User: zhangsan')).toBeInTheDocument();
     expect(within(sidebar).getByRole('link', { name: '销售中心' })).toBeInTheDocument();
     expect(within(sidebar).queryByRole('link', { name: '采购中心' })).not.toBeInTheDocument();
     expect(screen.getByRole('status').closest('.erp-shell__body')).toBeInTheDocument();

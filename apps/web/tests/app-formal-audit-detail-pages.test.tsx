@@ -25,6 +25,7 @@ function stubDetailAndAudit(detail: unknown, auditOperation = 'create', failed =
                 operationType: auditOperation,
                 operatorId: 2001,
                 operatorName: '新员工',
+                userDisplayNames: { operatorName: 'new-sales' },
                 beforeData: { status: 'draft' },
                 afterData: { status: 'confirmed' },
                 createdAt: '2026-07-11T10:00:00.000Z',
@@ -52,7 +53,7 @@ const auditAccess = encodeURIComponent(JSON.stringify({ modules: ['sales', 'purc
 function expectScopedAudit(bizType: string) {
   expect(fetch).toHaveBeenCalledWith(expect.stringContaining(`/audit-logs?bizType=${bizType}&bizId=101`), expect.anything());
   expect(screen.queryByText('审批驳回 / reject')).not.toBeInTheDocument();
-  expect(screen.getByText('新员工 #2001')).toBeInTheDocument();
+  expect(screen.getByText('new-sales')).toBeInTheDocument();
   const toggle = screen.getByText('展开字段变更');
   expect(toggle.closest('details')).not.toHaveAttribute('open');
   fireEvent.click(toggle);
@@ -233,6 +234,7 @@ describe('formal detail audit sections', () => {
         purchaseOrderId: 21,
         receiptDocUrl: 'https://files.example.com/receipt-001.pdf',
         receiptSentBy: 2002,
+        userDisplayNames: { receiptSentBy: 'leo' },
         hasException: false,
         items: [],
       },
@@ -255,7 +257,7 @@ describe('formal detail audit sections', () => {
     expect(screen.getByRole('heading', { name: '发货批次详情' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '审计日志' })).toBeInTheDocument();
     expect(screen.getByText('创建发货批次 / create_shipment_batch')).toBeInTheDocument();
-    expect(screen.getByText('Leo #2002')).toBeInTheDocument();
+    expect(screen.getByText('leo')).toBeInTheDocument();
     expectScopedAudit('shipment_batch');
   });
 
@@ -373,7 +375,8 @@ describe('formal detail audit sections', () => {
   it('shows recent actions first and keeps each detailed change expandable', () => {
     const items = Array.from({ length: 10 }, (_, index) => ({
       id: index + 1, bizType: 'sales_order', bizId: 101, operationType: `action-${index + 1}`, operatorId: 7001,
-      operatorName: '新员工', createdAt: `2026-09-${String(index + 1).padStart(2, '0')}T01:00:00.000Z`,
+      operatorName: '新员工',
+                userDisplayNames: { operatorName: 'new-sales' }, createdAt: `2026-09-${String(index + 1).padStart(2, '0')}T01:00:00.000Z`,
       beforeData: { quantity: index }, afterData: { quantity: index + 1 },
     }));
     render(<AuditLogTable items={items} session={{ role: 'admin', user: 'Admin' }} collapseChanges />);
@@ -387,7 +390,8 @@ describe('formal detail audit sections', () => {
   it('expanded document changes show nested values and changes beyond the fifth field', () => {
     render(<AuditLogTable session={{ role: 'admin', user: 'Admin' }} collapseChanges items={[{
       id: 1, bizType: 'sales_order', bizId: 101, operationType: 'update_sales_order',
-      operatorId: 7001, operatorName: '新员工', createdAt: '2026-09-28T01:00:00.000Z',
+      operatorId: 7001, operatorName: '新员工',
+                userDisplayNames: { operatorName: 'new-sales' }, createdAt: '2026-09-28T01:00:00.000Z',
       beforeData: { title: '旧标题', customerName: '旧客户', currency: 'USD', remark: '旧备注', salesUserId: 7001, status: 'draft', items: [{ salePrice: 10 }] },
       afterData: { title: '新标题', customerName: '新客户', currency: 'CNY', remark: '新备注', salesUserId: 7002, status: 'pending_sales_manager_approval', items: [{ salePrice: 25 }] },
     }]} />);

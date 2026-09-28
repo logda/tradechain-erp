@@ -438,14 +438,14 @@ describe('formal sales list pages', () => {
       '/app/sales/orders?page=1&pageSize=50',
     );
     expect(screen.getByText('报价+询价转入')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /按来源方式筛选/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '按来源方式筛选 报价+询价转入' })).toHaveAttribute('href', '/app/sales/orders?sourceMode=from_quote_with_inquiry');
     expect(screen.getByLabelText('来源方式 Source Mode')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: '查看详情 S-RUNTIME-001' }),
     ).toHaveAttribute('href', '/app/sales/orders/88');
   });
 
-  it('renders one demand-converted source badge and retains the source filter', async () => {
+  it('retains the original demand source summary, badge and row filter', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((input: RequestInfo | URL) => {
@@ -491,9 +491,9 @@ describe('formal sales list pages', () => {
       <>{await AppSalesOrdersPage({ searchParams: Promise.resolve({}) })}</>,
     );
 
-    expect(screen.queryByText('DEMAND / 需求转单')).not.toBeInTheDocument();
+    expect(screen.getByText('DEMAND / 需求转单')).toBeInTheDocument();
     expect(screen.getByText('需求转入')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /按来源方式筛选/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '按来源方式筛选 需求转入' })).toHaveAttribute('href', '/app/sales/orders?sourceMode=from_demand');
     expect(screen.getByLabelText('来源方式 Source Mode')).toBeInTheDocument();
   });
 

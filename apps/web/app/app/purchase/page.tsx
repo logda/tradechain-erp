@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { AppShell } from '../_components/app-shell';
-import { StatStrip } from '../_components/stat-strip';
 import { WorktileCard } from '../_components/worktile-card';
 import {
   canViewFormalModule,
@@ -10,11 +9,6 @@ import {
   canCreateFormalPurchaseOrder,
   canUseFormalShipmentUpdateActions,
 } from '../_lib/formal-access';
-import { getFormalTodos } from '../_lib/formal-todos';
-import { loadFormalTodos } from '../_lib/load-formal-todos';
-import { TodoGroup } from '../_components/todo-group';
-import { DataLoadError } from '../_components/data-load-error';
-import { DataScopeNote } from '../_components/data-scope-note';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -89,46 +83,12 @@ export default async function AppPurchasePage({
     );
   }
 
-  const liveTodos = await loadFormalTodos(session);
-  const todos = getFormalTodos(session, liveTodos?.items ?? []);
-  const purchaseTodos = todos.filter(
-    (todo) => todo.domain === 'purchase',
-  );
-  const operationsTodos = todos.filter(
-    (todo) => todo.domain === 'operations',
-  );
-  const afterSalesTodos = todos.filter(
-    (todo) => todo.domain === 'after_sales',
-  );
-
   return (
     <AppShell
       title="采购工作台"
-      subtitle="采购入口先聚合采购单、发货协同、售后协同与待办，再进入具体列表。"
+      subtitle="查看询价、采购、发货和售后业务。"
       session={session}
-      todoCountOverride={liveTodos?.total ?? null}
     >
-      <DataScopeNote session={session} generatedAt={liveTodos?.generatedAt} />
-      {liveTodos ? <StatStrip
-        items={[
-          { label: '采购待办', value: purchaseTodos.length },
-          { label: '发货待办', value: operationsTodos.length },
-          { label: '售后待办', value: afterSalesTodos.length },
-          {
-            label: '采购运营合计',
-            value:
-              purchaseTodos.length +
-              operationsTodos.length +
-              afterSalesTodos.length,
-          },
-        ]}
-      /> : <DataLoadError label="待办" />}
-      {liveTodos ? <div data-todo-block className="erp-home-todo-groups">
-        <TodoGroup title="采购待办" todos={purchaseTodos} />
-        <TodoGroup title="发货待办" todos={operationsTodos} />
-        <TodoGroup title="售后待办" todos={afterSalesTodos} />
-      </div> : null}
-
       <section style={sectionStyle}>
         <div>
           <h2 style={titleStyle}>核心模块</h2>
@@ -164,12 +124,6 @@ export default async function AppPurchasePage({
             href="/app/after-sales"
             description="售后申请、处理、财务复核、收款状态与闭环追溯。"
             badge="After-sales"
-          />
-          <WorktileCard
-            title="采购待办"
-            href="/app/todos#purchase"
-            description="按当前采购账号聚合审批、发货与异常协同待办。"
-            badge="Todo"
           />
         </div>
       </section>

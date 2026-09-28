@@ -190,8 +190,8 @@ describe('formal counterparty master data page', () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: '查看详情' })[0]!);
     expect(screen.getByText('开户银行：Bank of America')).toBeInTheDocument();
-    expect(screen.getAllByRole('option', { name: 'Zoe / 销售' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('option', { name: 'Leo / 采购' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('option', { name: 'zoe / 销售' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('option', { name: 'leo / 采购' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: '新增往来单位' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '查询' })).toHaveClass(
       'erp-button',
@@ -648,22 +648,22 @@ describe('formal counterparty master data page', () => {
       />,
     );
 
-    expect(screen.getByRole('option', { name: 'Zoe / 销售' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Leo / 采购' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'zoe / 销售' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'leo / 采购' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('类型 Type'), {
       target: { value: 'supplier' },
     });
 
-    expect(screen.getByRole('option', { name: 'Leo / 采购' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Zoe / 销售' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'leo / 采购' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'zoe / 销售' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('类型 Type'), {
       target: { value: 'both' },
     });
 
-    expect(screen.getByRole('option', { name: 'Zoe / 销售' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Leo / 采购' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'zoe / 销售' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'leo / 采购' })).toBeInTheDocument();
   });
 
   it('shows unified required field validation before submitting create form', async () => {
@@ -742,8 +742,8 @@ describe('formal counterparty master data page', () => {
     expect(screen.getByText('地址 Address')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('请输入地址')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('请输入开户银行')).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Sara / 销售主管' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Leo / 采购' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'sara / 销售主管' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'leo / 采购' })).toBeInTheDocument();
     fireEvent.click(screen.getByText('更多资料与自定义字段'));
     expect(screen.getByText('入库时间').parentElement?.querySelector('time')).toHaveAttribute('dateTime', '2026-09-24T09:00:00.000Z');
     expect(screen.queryByRole('textbox', { name: '入库时间' })).not.toBeInTheDocument();
@@ -764,7 +764,7 @@ describe('formal counterparty master data page', () => {
       filterStyle={{}}
       filterButtonStyle={{}}
     />);
-    expect(screen.getByRole('combobox', { name: '筛选归属人 Owner' })).toHaveTextContent('Leo / 采购');
+    expect(screen.getByRole('combobox', { name: '筛选归属人 Owner' })).toHaveTextContent('leo / 采购');
   });
 
   it('keeps update form core required fields and aligned control heights', () => {

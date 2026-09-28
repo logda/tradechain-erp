@@ -11,13 +11,14 @@ afterEach(() => vi.unstubAllGlobals());
 describe('工作台入口去重', () => {
   it.each([
     ['销售', SalesPage, ['/app/sales/quotes']],
-    ['采购', PurchasePage, ['/app/warehouses', '/app/todos#purchase']],
+    ['采购', PurchasePage, ['/app/warehouses']],
     ['运营', OperationsPage, ['/app/inventory']],
   ] as const)('%s keeps one entry per destination and no demonstration copy', async (_name, page, destinations) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
     const { container } = render(await page({}));
     const body = container.querySelector('.erp-shell__body')!;
     for (const destination of destinations) expect(body.querySelectorAll(`a[href="${destination}"]`)).toHaveLength(1);
+    expect(body.querySelectorAll('a[href^="/app/todos"]')).toHaveLength(0);
     expect(body.textContent).not.toMatch(/正式模块|已接通|演示完整闭环|跳转到正式/);
   });
 });

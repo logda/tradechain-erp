@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from '../_lib/formal-user-display';
 import type { WarehouseListItem, WarehouseListResponse } from '@erp/shared';
 import Link from 'next/link';
 import { AppShell } from '../_components/app-shell';
@@ -122,7 +123,7 @@ function normalizeWarehouseResult(value: unknown): WarehouseListResponse | null 
       return [];
     }
 
-    const entry = item as Partial<WarehouseListItem>;
+    const entry = item as Partial<WarehouseListItem> & { userDisplayNames?: Record<string, string> };
 
     return [
       {
@@ -132,6 +133,7 @@ function normalizeWarehouseResult(value: unknown): WarehouseListResponse | null 
         status: typeof entry.status === 'string' ? entry.status : '',
         locationCount: normalizeNumber(entry.locationCount),
         ownerName: typeof entry.ownerName === 'string' ? entry.ownerName : '',
+        userDisplayNames: entry.userDisplayNames,
         updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : '',
       },
     ];
@@ -307,7 +309,7 @@ export default async function AppWarehousesPage({
                       </span>
                     </td>
                     <td style={cellStyle}>{item.locationCount}</td>
-                    <td style={cellStyle}>{item.ownerName || '-'}</td>
+                    <td style={cellStyle}>{formatFormalUserLabel(item, 'ownerName', '-')}</td>
                     <td style={cellStyle}>{formatDateTime(item.updatedAt)}</td>
                   </tr>
                 ))}

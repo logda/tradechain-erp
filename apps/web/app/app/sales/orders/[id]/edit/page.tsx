@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from '../../../../_lib/formal-user-display';
 import React from 'react';
 
 import { AppShell } from '../../../../_components/app-shell';
@@ -181,7 +182,7 @@ export default async function AppEditSalesOrderDraftPage({
   const [customerOptions, productOptions, salesUsers] = await Promise.all([
     loadActiveCounterpartyOptions('customer', session),
     loadActiveProductOptions(session),
-    loadSalesUserOptions(session, salesOrder.salesUserId ? { id: salesOrder.salesUserId, name: salesOrder.salesUserName } : undefined),
+    loadSalesUserOptions(session, salesOrder.salesUserId ? { id: salesOrder.salesUserId, name: formatFormalUserLabel(salesOrder, 'salesUserName') } : undefined),
   ]);
   const defaultSalesUserId = resolveDefaultSalesUserId(session, salesUsers);
   const currentUserId = resolveFormalUserId(session);

@@ -73,7 +73,7 @@ describe('AppAuditPage', () => {
     expect(within(screen.getByRole('table')).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['动作', '操作人', '字段变更', '操作时间']);
     expect(screen.getByText('提交记录')).toBeInTheDocument();
     expect(screen.getByText('财务确认')).toBeInTheDocument();
-    expect(screen.getByText('Mia #9000')).toBeInTheDocument();
+    expect(screen.getByText('Mia')).toBeInTheDocument();
     expect(screen.queryByText('模块审计概览')).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3001/api/audit-logs',

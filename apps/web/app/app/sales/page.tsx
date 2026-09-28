@@ -6,11 +6,8 @@ import {
   canViewFormalModule,
   resolveDemoSession,
 } from '../_lib/demo-session';
-import { getFormalTodos } from '../_lib/formal-todos';
-import { loadFormalTodos } from '../_lib/load-formal-todos';
 import { DataScopeNote } from '../_components/data-scope-note';
 import { DataLoadError } from '../_components/data-load-error';
-import { TodoGroup } from '../_components/todo-group';
 import { canUseFormalSalesOrderActions } from '../_lib/formal-access';
 import { buildFormalApiRequestHeaders } from '../_lib/formal-api-request-headers';
 
@@ -64,14 +61,6 @@ const sectionMetaStyle = {
   color: '#64748b',
   fontSize: '13px',
   lineHeight: 1.7,
-} satisfies React.CSSProperties;
-
-const todoStyle = {
-  border: '1px solid #d7e0ea',
-  borderRadius: '20px',
-  background: 'rgba(255,255,255,0.88)',
-  padding: '22px',
-  boxShadow: '0 16px 52px rgba(15, 23, 42, 0.05)',
 } satisfies React.CSSProperties;
 
 const quickActionStyle = {
@@ -204,15 +193,13 @@ export default async function AppSalesPage({
     );
   }
 
-  const [liveTodos, salesSummary] = await Promise.all([loadFormalTodos(session), loadSalesSummary(session)]);
-  const todoItems = getFormalTodos(session, liveTodos?.items ?? []).filter((todo) => todo.domain === 'sales');
+  const salesSummary = await loadSalesSummary(session);
 
   return (
     <AppShell
       title="销售工作台"
-      subtitle="查看销售进度、常用业务和待办。"
+      subtitle="查看销售进度和常用业务。"
       session={session}
-      todoCountOverride={liveTodos?.total ?? null}
     >
       <DataScopeNote session={session} dataScope={salesSummary?.scope?.dataScope} generatedAt={salesSummary?.generatedAt} timeRange={salesSummary?.scope?.timeRange} />
       {salesSummary ? <StatStrip
@@ -228,7 +215,7 @@ export default async function AppSalesPage({
       <section style={sectionStyle}>
         <div>
           <h2 style={sectionTitleStyle}>核心模块</h2>
-          <p style={sectionMetaStyle}>先进入报价、销售单与待办，减少首页噪音。</p>
+          <p style={sectionMetaStyle}>查看报价、销售单和发货进度。</p>
         </div>
         <div style={gridStyle}>
           <WorktileCard
@@ -249,12 +236,6 @@ export default async function AppSalesPage({
             description="销售只读查看货代发货日期、预计到货时间、客户、货物名称、到货情况与备注。"
             badge="Shipment"
           />
-          <WorktileCard
-            title="销售待办"
-            href="/app/todos"
-            description="查看需要处理和正在跟进的销售业务。"
-            badge="Todo"
-          />
         </div>
       </section>
 
@@ -273,9 +254,8 @@ export default async function AppSalesPage({
         </div>
       </section>
 
-      <section id="todo" style={todoStyle} data-todo-block>
-        <DataScopeNote session={session} generatedAt={liveTodos?.generatedAt} />
-        {liveTodos ? <TodoGroup title="销售待办" todos={todoItems} /> : <DataLoadError label="待办" />}
+      <section style={sectionStyle}>
+        <h2 style={sectionTitleStyle}>快捷入口</h2>
         <div style={quickActionStyle}>
           {canCreateSalesOrder ? (
             <Link

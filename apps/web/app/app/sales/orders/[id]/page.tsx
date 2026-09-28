@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from '../../../_lib/formal-user-display';
 import { resolveFormalUserId } from '../../../_lib/formal-access';
 import Link from 'next/link';
 import { ActionPermissionNote } from '../../../_components/action-permission-note';
@@ -719,7 +720,7 @@ export default async function AppSalesOrderDetailPage({
     ? await Promise.all([
         loadActiveCounterpartyOptions('customer', session),
         loadActiveProductOptions(session),
-        loadSalesUserOptions(session, salesOrder.salesUserId ? { id: salesOrder.salesUserId, name: salesOrder.salesUserName } : undefined),
+        loadSalesUserOptions(session, salesOrder.salesUserId ? { id: salesOrder.salesUserId, name: formatFormalUserLabel(salesOrder, 'salesUserName') } : undefined),
       ])
     : null;
   const sourceDocumentType = resolveSalesOrderSourceDocumentType(salesOrder);

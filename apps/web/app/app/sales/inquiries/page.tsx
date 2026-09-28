@@ -1,3 +1,4 @@
+import { formatFormalUserLabel } from '../../_lib/formal-user-display';
 import { DataLoadError } from '../../_components/data-load-error';
 import { DataScopeNote } from '../../_components/data-scope-note';
 import Link from 'next/link';
@@ -389,7 +390,7 @@ export default async function AppFormalInquiryPage({
                   </td>
                   <td style={tableCellStyle}>{toStatusLabel(item.status)}</td>
                   <td style={tableCellStyle}>{item.supplierCount}</td>
-                  <td style={tableCellStyle}>{item.createdBy}</td>
+                  <td style={tableCellStyle}>{formatFormalUserLabel(item, 'createdBy')}</td>
                   <td style={tableCellStyle}>
                     <Link className="erp-button erp-button--secondary erp-button--compact erp-row-action" href={item.detailHref}>
                       查看详情 {item.inquiryNo}

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AppSalesPage from '../app/app/sales/page';
 
@@ -52,6 +52,7 @@ describe('AppSalesPage', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(<>{await AppSalesPage({})}</>);
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3001/api/reports/sales-summary',
@@ -94,10 +95,10 @@ describe('AppSalesPage', () => {
       '/app/sales/samples',
     );
     expect(screen.queryByRole('link', { name: '询价模块' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '销售待办' })).toHaveAttribute(
-      'href',
-      '/app/todos',
-    );
+    expect(screen.queryByText('销售待办')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-todo-block]')).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/todos/formal'))).toBe(false);
+    expect(screen.getByRole('link', { name: '待办中心' })).toHaveAttribute('href', '/app/todos');
     expect(screen.getByRole('heading', { name: '辅助模块' })).toBeInTheDocument();
     expect(screen.getByText('作废金额')).toBeInTheDocument();
     expect(screen.queryByText('售后待闭环')).not.toBeInTheDocument();
@@ -114,6 +115,7 @@ describe('AppSalesPage', () => {
   it('shows unavailable when the void amount is missing rather than inventing zero', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ totals: { salesOrderCount: 0, submittedAmount: 0, shippedAmount: 0 }, afterSalesOverview: { openCases: 0 }, count: 0, total: 0, closedTotal: 0, items: [] }) }));
     render(<>{await AppSalesPage({})}</>);
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
     expect(screen.getByText(/销售统计暂不可用/)).toBeInTheDocument();
     expect(screen.queryByText('作废金额')).not.toBeInTheDocument();
   });
@@ -140,6 +142,7 @@ describe('AppSalesPage', () => {
     );
 
     render(<>{await AppSalesPage({})}</>);
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
 
     expect(screen.getByText(/销售统计暂不可用/)).toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();

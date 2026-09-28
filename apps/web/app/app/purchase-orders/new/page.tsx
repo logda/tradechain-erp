@@ -412,7 +412,7 @@ export default async function AppNewPurchaseOrderPage({
                           ? '普通采购只能选择自己'
                           : '可选范围按当前角色权限控制',
                       options: purchaseOwnerOptions.map((owner) => ({
-                        label: `${owner.realName} / ${owner.roleCode}`,
+                        label: `${owner.username ?? owner.realName} / ${owner.roleCode}`,
                         value: String(owner.id),
                       })),
                     },

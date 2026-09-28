@@ -10,6 +10,7 @@ export type FormalTodoItem = {
   moduleLabel: string;
   statusLabel: string;
   ownerName: string;
+  userDisplayNames?: Record<string, string>;
   href: string;
   priority: 'high' | 'medium' | 'low';
   description: string;

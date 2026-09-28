@@ -1,5 +1,6 @@
 'use client';
 
+import { formatFormalUserLabel } from '../../_lib/formal-user-display';
 import { useState } from 'react';
 import { AuditLogTable } from '../../_components/audit-log-table';
 import { FormalPagination } from '../../_components/formal-pagination';
@@ -313,7 +314,7 @@ export function AdminUsersClient({
                 </td>
                 <td style={cellStyle}>{formatActionScope(item)}</td>
                 <td style={cellStyle}>
-                  {item.createdBy}
+                  {formatFormalUserLabel(item, 'createdBy')}
                   <br />
                   <span style={{ color: '#64748b' }}>{item.createdAt}</span>
                 </td>
