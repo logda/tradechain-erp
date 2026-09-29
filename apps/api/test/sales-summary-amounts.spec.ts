@@ -100,9 +100,52 @@ describe.each(['runtime', 'prisma'])('sales amounts in %s', (mode) => {
     expect(result.totals).toMatchObject({ salesOrderCount: 0, submittedAmount: 0, voidedAmount: 0, shippedAmount: 0 });
   });
 
-  it('refuses to publish a misleading zero if a real shipment has no matching sales price', async () => {
+  it('keeps independent totals available without publishing a misleading shipment zero', async () => {
+    order.status = 'purchasing';
     shipments = [batch(1, 'shipped', 2, 99)];
-    await expect(report().getSalesSummary()).rejects.toThrow('发货明细');
+    const result = await report().getSalesSummary();
+    expect(result.totals).toEqual({ salesOrderCount: 1, submittedAmount: 223.5, voidedAmount: 0, shippedAmount: null });
+    expect(result).toHaveProperty('shippedAmountIssues', [{
+      batchNo: 'SH-1', salesOrderId: order.id, salesOrderNo: order.salesNo,
+      reason: '发货明细与销售明细无法对应，请核对来源和售价',
+    }]);
+  });
+
+  it('reports all incomplete batches without presenting a known subtotal as the total', async () => {
+    order.status = 'purchasing';
+    shipments = [batch(1, 'shipped', 2), { ...batch(2, 'shipped', 3), items: [] }, batch(3, 'arrived', 1, 99)];
+    const result = await report().getSalesSummary();
+    expect(result.totals).toMatchObject({ salesOrderCount: 1, submittedAmount: 223.5, shippedAmount: null });
+    expect(result).toHaveProperty('shippedAmountIssues', [
+      { batchNo: 'SH-2', salesOrderId: order.id, salesOrderNo: order.salesNo, reason: '发货明细不完整，无法核对已发货金额' },
+      { batchNo: 'SH-3', salesOrderId: order.id, salesOrderNo: order.salesNo, reason: '发货明细与销售明细无法对应，请核对来源和售价' },
+    ]);
+    expect(resolveShipmentBatchStore().getShipmentBatch(2)?.items).toEqual([]);
+    shipments[1] = batch(2, 'shipped', 3);
+    shipments[2] = batch(3, 'arrived', 1, 2);
+    const recovered = await report().getSalesSummary();
+    expect(recovered.totals.shippedAmount).toBe(81.75);
+    expect(recovered).toHaveProperty('shippedAmountIssues', []);
+  });
+
+  it.each(['missing price', 'missing source', 'invalid quantity'] as const)('marks shipped value unknown for %s', async (invalid) => {
+    shipments = [batch(1, 'shipped', 2)];
+    if (invalid === 'missing price') delete (order.items![0] as { salePrice?: number }).salePrice;
+    else if (invalid === 'missing source') {
+      delete (order.items![0] as { lineNo?: number }).lineNo;
+      delete (shipments[0].items[0] as { sourceSalesItemId?: number }).sourceSalesItemId;
+    }
+    else shipments[0].items[0].shippedQty = 0;
+    const result = await report().getSalesSummary();
+    expect(result.totals.shippedAmount).toBeNull();
+    expect(result).toMatchObject({ shippedAmountIssues: [expect.anything()] });
+  });
+
+  it('does not expose incomplete shipment issues outside the account scope', async () => {
+    shipments = [{ ...batch(1, 'shipped', 2), items: [] }];
+    const result = await report().getSalesSummary({ role: 'sales', userId: 2002, dataScope: 'own_sales' });
+    expect(result.totals).toEqual({ salesOrderCount: 0, submittedAmount: 0, voidedAmount: 0, shippedAmount: 0 });
+    expect(result).toHaveProperty('shippedAmountIssues', []);
   });
 
   it('ignores unrelated shipments without importing their amounts or errors', async () => {

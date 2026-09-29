@@ -192,13 +192,14 @@ export class ReportService {
     const afterSalesSource = this.shouldUsePrisma()
       ? await this.getBusinessDocuments('after_sales')
       : resolveAfterSalesStore().listAfterSalesOrders().map((item) => ({ payload: item }));
-    const shipmentSource = this.shouldUsePrisma()
+    const shipmentSource: PrismaBusinessDocumentRecord[] = this.shouldUsePrisma()
       ? await this.getBusinessDocuments('shipment_batch')
       : resolveShipmentBatchStore().listShipmentBatches().map((item) => ({ payload: item }));
     const salesOrders = filterVisibleFormalItems(
       salesSource.map((record) => ({
         payload: record.payload,
         id: record.payload.id ?? Number(record.id),
+        detailId: documentId(record),
         salesUserId: record.payload.salesUserId ?? Number(record.ownerUserId),
         createdById: record.payload.createdBy,
       })),
@@ -222,24 +223,41 @@ export class ReportService {
       submittedStatuses.has(item.payload.status ?? '') ? sumDocumentItems(item.payload.items) : 0);
     const voidedAmount = sumBy(salesOrders, (item) =>
       item.payload.status === 'void' ? sumDocumentItems(item.payload.items) : 0);
-    const salesById = new Map(salesOrders.map((record) => [record.id, record.payload]));
+    const salesById = new Map(salesOrders.map((record) => [record.id, record]));
     const shippedStatuses = new Set(['shipped', 'to_forwarder', 'forwarder_shipped', 'arrived', 'exception', 'closed']);
-    const shippedAmount = sumBy(shipmentSource, (record) => {
+    const shippedAmountIssues: Array<{ batchNo: string; salesOrderId: number; salesOrderNo: string; reason: string }> = [];
+    let shippedAmount = 0;
+    for (const record of shipmentSource) {
       const batch = record.payload;
-      const sales = salesById.get(batch.salesOrderId ?? -1);
-      if (!sales || !shippedStatuses.has(batch.status ?? '')) return 0;
-      if (!batch.items?.length) {
-        throw new BadRequestException('发货明细不完整，无法核对已发货金额');
-      }
-      return sumBy(batch.items, (line) => {
-        const salesLine = sales.items?.find((item) => item.lineNo === line.sourceSalesItemId);
-        if (!salesLine || typeof salesLine.salePrice !== 'number' || !Number.isFinite(salesLine.salePrice) ||
-            typeof line.shippedQty !== 'number' || !Number.isFinite(line.shippedQty) || line.shippedQty <= 0) {
-          throw new BadRequestException('发货明细与销售明细无法对应，请核对来源和售价');
+      const salesRecord = salesById.get(batch.salesOrderId ?? -1);
+      if (!salesRecord || !shippedStatuses.has(batch.status ?? '')) continue;
+      const sales = salesRecord.payload;
+      let reason = '';
+      let batchAmount = 0;
+      if (!Array.isArray(batch.items) || !batch.items.length) {
+        reason = '发货明细不完整，无法核对已发货金额';
+      } else {
+        for (const line of batch.items) {
+          const salesLine = typeof line.sourceSalesItemId === 'number' && Number.isSafeInteger(line.sourceSalesItemId) &&
+            line.sourceSalesItemId > 0 && Array.isArray(sales.items)
+            ? sales.items.find((item) => item.lineNo === line.sourceSalesItemId) : undefined;
+          if (!salesLine || typeof salesLine.salePrice !== 'number' || !Number.isFinite(salesLine.salePrice) ||
+              typeof line.shippedQty !== 'number' || !Number.isFinite(line.shippedQty) || line.shippedQty <= 0) {
+            reason = '发货明细与销售明细无法对应，请核对来源和售价';
+            break;
+          }
+          batchAmount += Number((line.shippedQty * salesLine.salePrice).toFixed(2));
         }
-        return Number((line.shippedQty * salesLine.salePrice).toFixed(2));
-      });
-    });
+      }
+      if (reason) {
+        shippedAmountIssues.push({
+          batchNo: record.docNo ?? batch.batchNo ?? '单号未记录',
+          salesOrderId: salesRecord.detailId, salesOrderNo: sales.salesNo ?? '单号未记录', reason,
+        });
+      } else {
+        shippedAmount += batchAmount;
+      }
+    }
     const afterSalesStatus = (item: AfterSalesStatusRecord) => item.payload.status ?? '';
     const receiptStatus = (item: SalesStatusRecord) => item.payload.receiptStatus ?? 'unpaid';
     const shipmentStatus = (item: SalesStatusRecord) =>
@@ -255,9 +273,10 @@ export class ReportService {
       totals: {
         salesOrderCount,
         submittedAmount: Number(submittedAmount.toFixed(2)),
-        shippedAmount: Number(shippedAmount.toFixed(2)),
+        shippedAmount: shippedAmountIssues.length ? null : Number(shippedAmount.toFixed(2)),
         voidedAmount: Number(voidedAmount.toFixed(2)),
       },
+      shippedAmountIssues,
       afterSalesOverview: {
         openCases: afterSalesOrders.filter((item) => afterSalesStatus(item) !== 'closed').length,
         pendingApproval:

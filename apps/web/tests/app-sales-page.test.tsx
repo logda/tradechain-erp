@@ -120,6 +120,37 @@ describe('AppSalesPage', () => {
     expect(screen.queryByText('作废金额')).not.toBeInTheDocument();
   });
 
+  it('shows available totals and actionable shipment issues without a false zero or subtotal', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      generatedAt: '2026-09-29T00:30:00.000Z', currency: 'CNY',
+      totals: { salesOrderCount: 6, submittedAmount: 223.5, shippedAmount: null, voidedAmount: 100 },
+      shippedAmountIssues: [{ batchNo: 'SH-OLD', salesOrderId: 101, salesOrderNo: 'S-101',
+        reason: '发货明细不完整，无法核对已发货金额' }],
+    }) }));
+    render(<>{await AppSalesPage({})}</>);
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
+    expect(screen.getByText('223.5')).toBeInTheDocument();
+    expect(screen.getByText('100')).toBeInTheDocument();
+    expect(screen.getByText('暂无法核对')).toBeInTheDocument();
+    expect(screen.getByText(/1 张发货单/)).toBeInTheDocument();
+    expect(screen.getByText(/SH-OLD/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'S-101' })).toHaveAttribute('href', '/app/sales/orders/101');
+    expect(screen.queryByText(/销售统计暂不可用/)).not.toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '刷新销售统计' })).toBeInTheDocument();
+  });
+
+  it('does not accept an unexplained null shipped amount as a valid summary', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      totals: { salesOrderCount: 6, submittedAmount: 223.5, shippedAmount: null, voidedAmount: 100 },
+      shippedAmountIssues: [],
+    }) }));
+    render(<>{await AppSalesPage({})}</>);
+    await waitFor(() => expect(screen.queryByText('消息待办 Todo: 加载中…')).not.toBeInTheDocument());
+    expect(screen.getByText(/销售统计暂不可用/)).toBeInTheDocument();
+    expect(screen.queryByText('223.5')).not.toBeInTheDocument();
+  });
+
   it('shows unavailable instead of zeros when the formal summary response is missing values', async () => {
     vi.stubGlobal(
       'fetch',

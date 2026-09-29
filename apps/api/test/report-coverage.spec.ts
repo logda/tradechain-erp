@@ -136,6 +136,18 @@ describe.each(['runtime', 'prisma'] as const)('report coverage (%s)', (mode) => 
       expect(report).toMatchObject({ salesOrdersCreated: 1, undatedCounts: { sales_order: 0 } });
     });
   } else {
+    it('keeps legacy missing shipment lines unknown and links to the actual database sales ID', async () => {
+      const report = await service([
+        document(11, 'sales_order', 'purchasing', { payload: { id: 130101 } }),
+        document(12, 'shipment_batch', 'shipped', { payload: { salesOrderId: 130101, items: undefined } }),
+      ]).getSalesSummary({ role: 'admin', userId: 1, dataScope: 'all' });
+      expect(report.totals).toEqual({ salesOrderCount: 1, submittedAmount: 100, voidedAmount: 0, shippedAmount: null });
+      expect(report.shippedAmountIssues).toEqual([{
+        batchNo: 'shipment_batch-12', salesOrderId: 11, salesOrderNo: 'SO-11',
+        reason: '发货明细不完整，无法核对已发货金额',
+      }]);
+    });
+
     it('does not read runtime documents when Prisma is empty or unavailable', async () => {
       const reports = service([]);
       writeFileSync(join(directory, 'sales-order-runtime.json'), JSON.stringify({ salesOrders: [document(99, 'sales_order').payload] }));

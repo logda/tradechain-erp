@@ -18,9 +18,10 @@ type SalesSummary = {
   totals: {
     salesOrderCount: number;
     submittedAmount: number;
-    shippedAmount: number;
+    shippedAmount: number | null;
     voidedAmount: number;
   };
+  shippedAmountIssues: Array<{ batchNo: string; salesOrderId: number; salesOrderNo: string; reason: string }>;
   afterSalesOverview: {
     openCases: number;
     pendingApproval: number;
@@ -132,9 +133,10 @@ function normalizeSalesSummary(value: unknown): SalesSummary {
     totals: {
       salesOrderCount: normalizeNumber(summary.totals?.salesOrderCount),
       submittedAmount: normalizeNumber(summary.totals?.submittedAmount),
-      shippedAmount: normalizeNumber(summary.totals?.shippedAmount),
+      shippedAmount: summary.totals?.shippedAmount === null ? null : normalizeNumber(summary.totals?.shippedAmount),
       voidedAmount: normalizeNumber(summary.totals?.voidedAmount),
     },
+    shippedAmountIssues: summary.shippedAmountIssues ?? [],
     afterSalesOverview: {
       openCases: normalizeNumber(summary.afterSalesOverview?.openCases),
       pendingApproval: normalizeNumber(summary.afterSalesOverview?.pendingApproval),
@@ -160,7 +162,14 @@ async function loadSalesSummary(session: Parameters<typeof buildFormalApiRequest
 
     const value = (await response.json().catch(() => null)) as unknown;
     const data = value as Partial<SalesSummary> | null;
-    if (!data?.totals || ![data.totals.salesOrderCount, data.totals.submittedAmount, data.totals.shippedAmount, data.totals.voidedAmount].every((item) => typeof item === 'number' && Number.isFinite(item))) return null;
+    if (!data?.totals || ![data.totals.salesOrderCount, data.totals.submittedAmount, data.totals.voidedAmount].every((item) => typeof item === 'number' && Number.isFinite(item))) return null;
+    const issues = data.shippedAmountIssues;
+    if (issues !== undefined && (!Array.isArray(issues) || !issues.every((issue) =>
+      issue && Number.isSafeInteger(issue.salesOrderId) && issue.salesOrderId > 0 &&
+      [issue.batchNo, issue.salesOrderNo, issue.reason].every((text) => typeof text === 'string' && text.trim())))) return null;
+    if (data.totals.shippedAmount === null) {
+      if (!issues?.length) return null;
+    } else if (typeof data.totals.shippedAmount !== 'number' || !Number.isFinite(data.totals.shippedAmount) || issues?.length) return null;
     return normalizeSalesSummary(data);
   } catch {
     return null;
@@ -206,11 +215,20 @@ export default async function AppSalesPage({
         items={[
           { label: '销售单总数', value: salesSummary.totals.salesOrderCount },
           { label: '提交金额', value: salesSummary.totals.submittedAmount.toLocaleString('zh-CN') },
-          { label: '已发货金额', value: salesSummary.totals.shippedAmount.toLocaleString('zh-CN') },
+          { label: '已发货金额', value: salesSummary.totals.shippedAmount === null ? '暂无法核对' : salesSummary.totals.shippedAmount.toLocaleString('zh-CN') },
           { label: '作废金额', value: salesSummary.totals.voidedAmount.toLocaleString('zh-CN') },
         ]}
       /> : <DataLoadError label="销售统计" />}
       {salesSummary ? <p style={sectionMetaStyle}>金额单位：人民币元。提交金额不含草稿、驳回和作废；已发货金额按采购实际发货数量与销售价计算；作废金额按作废销售单整单计算。</p> : null}
+      {salesSummary?.shippedAmountIssues.length ? <DataLoadError label="销售统计" retryLabel="刷新销售统计"
+        message={`${salesSummary.shippedAmountIssues.length} 张发货单的明细或来源信息不完整，已发货金额暂无法核对。其他统计正常显示。`}>
+        <details style={{ marginBottom: '14px' }}>
+          <summary>查看需核对的单据</summary>
+          <ul>{salesSummary.shippedAmountIssues.map((issue, index) => <li key={`${issue.batchNo}-${index}`}>
+            {issue.batchNo} · 销售单 <Link href={`/app/sales/orders/${issue.salesOrderId}`}>{issue.salesOrderNo}</Link>：{issue.reason}
+          </li>)}</ul>
+        </details>
+      </DataLoadError> : null}
 
       <section style={sectionStyle}>
         <div>
